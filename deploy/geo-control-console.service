@@ -1,0 +1,29 @@
+[Unit]
+Description=招商产园 GEO 智控台（Python HTTP server）
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/geo_control_console/system
+ExecStart=/usr/bin/python3 server.py --port 8340 --db /var/lib/geo-control/geodesk.db
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:/var/log/geo-control/stdout.log
+StandardError=append:/var/log/geo-control/stderr.log
+
+# 安全加固
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/geo-control /var/log/geo-control /var/www/geo_control_console
+
+# 环境变量
+EnvironmentFile=/etc/geo-control/geo-control.env
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

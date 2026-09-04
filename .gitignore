@@ -26,3 +26,7 @@ V2.1 招商产园GEO智控系统V2.html
 
 # 给甲方的交付物报告（不进版本库）
 *.docx
+
+# Python 缓存
+__pycache__/
+*.pyc

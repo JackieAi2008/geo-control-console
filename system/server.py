@@ -20,7 +20,13 @@ import argparse, json, os, re, sqlite3, subprocess, sys, threading, time, urllib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-OLLAMA = "http://localhost:11434"
+# ===== LLM 后端（启动时确定，运行时按需切换） =====
+# 优先级：远端 API（DeepSeek 等） > 本机 Ollama > 不可用
+# 远端配置从环境变量读取（不要硬编码 key 到仓库里）
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").strip()
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat").strip()
+OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 # 性能实测(2026-09-04)：qwen3.5:9b 内容首字16.2s(思考型,太慢)；qwen3:4b-instruct 无思考、首字快，指导类任务够用 → 默认4b，9b备用
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
@@ -438,6 +444,12 @@ class Handler(BaseHTTPRequestHandler):
         qs = dict(p.split("=", 1) for p in urlparse(self.path).query.split("&") if "=" in p)
         if path == "/api/ping":
             return self._send(200, {"ok": True, "server": "geodesk", "version": "4.0"})
+        if path == "/api/llm/status":
+            # 给运维/前端用：当前聊天后端是远端 API 还是本地 Ollama
+            if DEEPSEEK_API_KEY:
+                return self._send(200, {"backend": "remote", "provider": "deepseek", "model": DEEPSEEK_MODEL})
+            local = pick_chat_model()
+            return self._send(200, {"backend": "local" if local else "none", "provider": "ollama", "model": local or ""})
         if path == "/api/projects":
             plist = projects_ensure(self.conn)
             out = [dict(p, summary=proj_summary(self.conn, p)) for p in plist if not p.get("archived")]
@@ -587,37 +599,69 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(404, {"error": "not found"})
 
     def _chat(self):
-        """对话助手：代理本机Ollama模型，注入系统手册+当前项目实时状态，流式返回纯文本"""
-        model = pick_chat_model()
-        if not model:
-            return self._send(503, {"error": "本机未检测到可用的 Ollama 对话模型。请安装并运行：ollama pull qwen3:4b-instruct-2507-q4_K_M 后重试"})
+        """对话助手：优先远端 API（DeepSeek），无 key 时回退本机 Ollama；流式返回纯文本"""
+        # 选择后端
+        backend = None
+        if DEEPSEEK_API_KEY:
+            backend = ("remote", DEEPSEEK_MODEL)
+        else:
+            m = pick_chat_model()
+            if m:
+                backend = ("local", m)
+        if not backend:
+            return self._send(503, {"error": "暂无可用的大模型后端。请在服务器环境变量里设置 DEEPSEEK_API_KEY，或在本机运行 ollama 并拉取 qwen3:4b 模型。"})
         try:
             body = self._body() or {}
             msgs = [{"role": "system", "content": CHAT_SYSTEM + "\n【用户当前系统状态（实时）】" + state_summary(self.conn, body.get("project"))}]
             msgs += [m for m in (body.get("messages") or []) if m.get("role") in ("user", "assistant") and m.get("content")][-12:]
             if not any(m["role"] == "user" for m in msgs[1:]):
                 return self._send(400, {"error": "messages 需要至少一条 user 消息"})
-            payload = {"model": model, "messages": msgs, "stream": True,
-                       "options": {"temperature": 0.4, "num_predict": 450}, "think": False,
-                       "keep_alive": "30m"}
-            req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(payload).encode(),
-                                         headers={"Content-Type": "application/json"})
+
+            kind, model_name = backend
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("X-Model", model)
-            self.close_connection = True   # HTTP/1.0 风格：连接关闭即结束流
+            self.send_header("X-Model", model_name)
+            self.close_connection = True
             self.end_headers()
+
+            if kind == "remote":
+                # DeepSeek 兼容 OpenAI 协议
+                payload = {"model": model_name, "messages": msgs, "stream": True,
+                           "temperature": 0.4, "max_tokens": 1024}
+                req = urllib.request.Request(DEEPSEEK_BASE_URL.rstrip("/") + "/chat/completions",
+                    data=json.dumps(payload).encode(),
+                    headers={"Content-Type": "application/json",
+                             "Authorization": "Bearer " + DEEPSEEK_API_KEY})
+            else:
+                payload = {"model": model_name, "messages": msgs, "stream": True,
+                           "options": {"temperature": 0.4, "num_predict": 450}, "think": False,
+                           "keep_alive": "30m"}
+                req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(payload).encode(),
+                                             headers={"Content-Type": "application/json"})
+
             with urllib.request.urlopen(req, timeout=180) as up:
-                for line in up:
+                for raw in up:
                     try:
+                        line = raw.decode("utf-8", "ignore").strip()
+                        if not line or line.startswith(":"): continue
+                        if line.startswith("data:"): line = line[5:].strip()
+                        if line == "[DONE]": break
                         chunk = json.loads(line)
                     except Exception:
                         continue
                     if chunk.get("error"):
-                        self.wfile.write(("【模型错误】" + chunk["error"]).encode()); break
-                    text = (chunk.get("message") or {}).get("content", "")
+                        err = chunk["error"]
+                        if isinstance(err, dict): err = err.get("message") or json.dumps(err, ensure_ascii=False)
+                        self.wfile.write(("【模型错误】" + str(err)).encode("utf-8")); break
+                    # DeepSeek/OpenAI 格式：choices[0].delta.content
+                    text = ""
+                    if "choices" in chunk:
+                        delta = chunk["choices"][0].get("delta") or {}
+                        text = delta.get("content", "")
+                    elif "message" in chunk:   # Ollama 兼容格式
+                        text = (chunk.get("message") or {}).get("content", "")
                     if text:
                         self.wfile.write(text.encode("utf-8")); self.wfile.flush()
         except urllib.error.URLError as e:

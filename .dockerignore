@@ -1,0 +1,19 @@
+# 镜像里不要这些（.dockerignore 让 docker build 跳过）
+.DS_Store
+.git/
+.gitignore
+output/
+agent/
+*.docx
+*.bak
+node_modules/
+backups/
+README.md
+DEPLOY.md
+.github/
+V2.1 *.html
+GEO实操方案V2-*.md
+系统升级实施计划V4.1.md
+*.swp
+.env
+.env.local

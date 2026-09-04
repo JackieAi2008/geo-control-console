@@ -1,0 +1,69 @@
+# GitHub Actions: push main 自动部署到阿里云 ECS
+# 触发方式：push 到 main 分支，或手动 dispatch
+#
+# 前置配置（在 GitHub 仓库 Settings → Secrets and variables → Actions 加）：
+#   DEPLOY_SSH_KEY     阿里云 ECS 的 SSH 私钥（推荐 deploy key，非用户主密钥）
+#   DEPLOY_HOST        ECS 公网 IP（当前 118.178.120.99）或域名
+#   DEPLOY_USER        SSH 用户名（root 或 www-data）
+#   DEPLOY_PATH        服务器部署目录（如 /var/www/geo_control_console）
+#
+# 服务端一次性配置：
+#   1. ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N ""  # 在服务器上生成 deploy key
+#   2. 把 ~/.ssh/github_deploy.pub 公钥贴到 GitHub 仓库 Settings → Deploy keys（勾 Allow write access）
+#   3. 把 ~/.ssh/github_deploy 私钥内容复制到 GitHub Secret DEPLOY_SSH_KEY
+
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Rsync to ECS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 5m
+          source: "system/ .env.example"
+          target: "${{ secrets.DEPLOY_PATH }}/"
+          strip_components: 0
+
+      - name: Deploy .env（仅在服务器存在 .env 时同步）
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            # 如果服务器上 .env 已存在则保留（避免覆盖 LLM key 等敏感配置）
+            if [ ! -f "${{ secrets.DEPLOY_PATH }}/system/.env" ]; then
+              cp ${{ secrets.DEPLOY_PATH }}/.env.example ${{ secrets.DEPLOY_PATH }}/system/.env
+              echo ".env created from example, edit before service start"
+            fi
+
+      - name: Restart systemd service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            # 确保数据目录存在
+            sudo mkdir -p /var/lib/geo-control /var/log/geo-control
+            sudo chown -R www-data:www-data /var/lib/geo-control /var/log/geo-control || true
+            # reload systemd（不安装；安装是一次性的）
+            sudo systemctl restart geo-control-console || echo "service not installed, manual start needed"
+            sleep 2
+            curl -sf http://127.0.0.1:8340/api/ping && echo "✓ service healthy" || echo "✗ service not responding"
