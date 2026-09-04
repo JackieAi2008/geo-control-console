@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# 本地运行产物（不进版本库）
+geodesk.db
+geodesk.db.bak-*
+backups/
+node_modules/
+
+# 诊断产物（运行时生成）
+output/
+
+# Skill 源码备份（已注册到 ~/.zcode/skills/）
+agent/
+
+# 编辑器/临时
+*.swp
+*.bak
+.DS_Store
+
+# 凭据（请用环境变量）
+.env
+.env.local
+# 废弃 V2（仅存档，不进版本库）
+V2.1 招商产园GEO智控系统V2.html
+
+# 给甲方的交付物报告（不进版本库）
+*.docx

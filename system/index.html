@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>招商产园 GEO 智控台 V4</title>
+<meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="brand-wrap">
+      <div class="brand">
+        <span class="brand-seal">招商产园</span>
+        <span class="brand-name">GEO 智控台</span>
+      </div>
+      <button class="proj-chip" id="projChip" type="button" aria-haspopup="page" aria-label="切换项目" title="切换项目">
+        <span class="pc-name" id="pcName">—</span>
+        <svg class="pc-caret" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+  <nav class="tabs" id="mainNav" aria-label="主导航">
+    <button class="tab on" data-view="dashboard">工作台</button>
+    <button class="tab" data-view="diag"><i class="no">Ⅰ</i>诊断</button>
+    <button class="tab" data-view="act"><i class="no">Ⅱ</i>执行</button>
+    <button class="tab" data-view="monitor"><i class="no">Ⅲ</i>监测</button>
+    <button class="tab" data-view="knowledge">知识库</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- ═══ 项目总览（多项目启动页：切换 / 新建 / 一屏看清所有园区）═══ -->
+<section class="view" id="view-projects" hidden>
+  <div class="page-head">
+    <h2>项目列表</h2>
+    <p>每个园区/客户一个独立项目，数据完全隔离。</p>
+  </div>
+  <div class="proj-grid" id="projGrid"></div>
+  <div class="grid grid-2" style="margin-top:16px">
+    <div class="card">
+      <h3>操作留痕 <span class="hint">系统自动记录 · 最近100条</span></h3>
+      <div id="auditBox"><p class="muted">加载中…</p></div>
+    </div>
+    <div class="card">
+      <h3>备份与恢复 <span class="hint">每日自动备份 backups/ · 保留30份</span></h3>
+      <p class="muted" style="font-size:var(--text-sm)">服务器每日自动导出全量备份到 <span class="num">system/backups/geodesk-日期.json</span>。数据恢复：选择备份文件 → 确认覆盖。</p>
+      <label class="btn btn-ghost" style="cursor:pointer;margin-top:8px">选择备份文件恢复…
+        <input type="file" id="restoreFile" accept=".json" style="display:none"></label>
+      <p class="muted" style="font-size:11px;margin-top:6px">恢复会覆盖服务器全部项目数据（本机 电脑保存的数据 不受影响，重新进入项目时以服务器为准）。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 工作台（只放状态与下一步，不罗列功能）═══ -->
+<section class="view" id="view-dashboard">
+  <div class="page-head">
+    <h2>概览</h2>
+    <p>系统当前状态与下一步建议。</p>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <h3>三步上手向导 <span class="hint">每步都是真实动作：点按钮 → 真实探测/生成/搜索，不是演示</span></h3>
+    <div class="grid grid-3">
+      <div class="wizard-col">
+        <p style="font-size:var(--text-sm)"><b>① 诊断园区</b>：填官方承载页域名（园区多无独立官网，填上级官网即可），点「一键诊断」——系统联网检查网站能否被 AI 读取、是否允许 AI 爬取、是否有 AI 说明文件、网页内容是否在源码里、是否有结构化数据标签、图片是否有说明文字、品牌词搜索排第几，每项附证据，自动填入体检表。</p>
+        <a class="btn btn-primary" href="#/diag/scan" style="width:100%">去一键诊断 →</a>
+      </div>
+      <div class="wizard-col">
+        <p style="font-size:var(--text-sm)"><b>② 生成优化文件</b>：点「一键生成」——产出 6 个可直接使用的文件：网站 AI 可读配置（交网站管理员）、AI 说明文件（传官网根目录）、结构化数据标签（贴页面）、一园一档内容页、选址 FAQ20 问（过评分器再发）、渠道分发指南（8 个渠道真实入口与首发内容）。</p>
+        <a class="btn btn-primary" href="#/act/toolkit" style="width:100%">去拿优化文件 →</a>
+      </div>
+      <div class="wizard-col">
+        <p style="font-size:var(--text-sm)"><b>③ 跑一轮监测</b>：点「跑一轮 30 问」——逐条真实搜索 30 问并自动写入台账，统计官网/公众号等自有渠道的命中率；双周一轮看趋势。</p>
+        <a class="btn btn-primary" href="#/monitor" style="width:100%">去跑监测 →</a>
+      </div>
+    </div>
+  </div>
+  <div class="grid grid-3">
+    <div class="card" id="dashScore">—</div>
+    <div class="card" id="dashMon">—</div>
+    <div class="card" id="dashCal">—</div>
+  </div>
+  <div class="grid grid-2" style="margin-top:16px">
+    <div class="card">
+      <h3>下一步（按系统状态推导）</h3>
+      <ul class="rule-list" id="dashTodo"></ul>
+    </div>
+    <div class="card">
+      <h3>基线发现 <span class="hint">2026-09-04 蛇口网谷信源侧实测</span></h3>
+      <ul class="rule-list" id="dashBase"></ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Ⅰ 诊断（审）═══ -->
+<section class="view" id="view-diag" hidden>
+  <div class="page-head">
+    <h2>诊断</h2>
+    <p>检查网站 AI 可读性、统一对外口径、验证内容质量。</p>
+  </div>
+  <div class="subnav" data-subnav="diag">
+    <button data-sub="scan" class="on"><i class="sn-step">1</i>一键诊断</button>
+    <button data-sub="report"><i class="sn-step">2</i>诊断报告</button>
+    <button data-sub="audit"><i class="sn-step">3</i>30项体检</button>
+    <button data-sub="caliber"><i class="sn-step">4</i>口径表</button>
+    <button data-sub="score"><i class="sn-step">5</i>内容评分</button>
+    <button data-sub="evidence"><i class="sn-step">6</i>证据库</button>
+  </div>
+
+  <!-- 子页：一键诊断（真实探测） -->
+  <div class="sub-view" id="sub-scan">
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>发起诊断 <span class="hint">真实联网检查 + 真实搜索，约10–30秒</span></h3>
+        <div class="form-grid">
+          <label class="full lb">官方承载页域名（园区若无独立官网，填上级官网——蛇口网谷填招商蛇口官网 www.cmsk1979.com）<input id="dgUrl" class="inp" placeholder="www.cmsk1979.com"></label>
+          <label class="full lb">品牌词（用于真实搜索验证官网/公众号等自有渠道）<input id="dgBrand" class="inp" placeholder="如：蛇口网谷"></label>
+        </div>
+        <button class="btn btn-primary" id="dgRun" style="margin-top:12px">开始一键诊断</button>
+        <p class="muted" style="margin-top:8px">检查项：网站能否被 AI 读取 · 网站响应 · 是否允许 AI 爬取 · AI 说明文件 · 网页内容是否在源码里 · 结构化数据标签 · 标题描述 · 图片说明文字 · 品牌词搜索前 10。结果自动填入 30 项体检表。</p>
+      </div>
+      <div class="card">
+        <h3>诊断结果（附证据）</h3>
+        <div id="dgOut"><p class="muted">点击左侧「开始一键诊断」后，这里逐项显示真实探测结果与证据（网页数据/搜索前10域名），可直接下载报告发给网站管理员或外包执行整改。</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 子页：诊断报告（查阅） -->
+  <div class="sub-view" id="sub-report" hidden>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>报告档案 <span class="hint">按时间倒序，点击查阅</span></h3>
+        <div id="reportList"></div>
+      </div>
+      <div class="card">
+        <h3>报告查阅 <span class="hint" id="rptMeta"></span>
+          <span style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-ghost" id="rptPrint">打印</button>
+            <button class="btn btn-sm btn-ghost" id="rptCopy">复制</button>
+            <button class="btn btn-sm btn-ghost" id="rptDl">下载.md</button>
+          </span>
+        </h3>
+        <div class="filter-row" id="rptMode" style="margin-bottom:10px"></div>
+        <div id="reportView"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 子页：体检 -->
+  <div class="sub-view" id="sub-audit" hidden>
+    <div class="grid-side grid">
+      <div>
+        <div class="card">
+          <h3>总分</h3>
+          <div id="scoreRing" style="display:flex;justify-content:center"></div>
+          <p class="muted" style="text-align:center;margin-top:6px"><b id="scoreLevel">未开始</b></p>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <h3>五维雷达</h3>
+          <div id="radarBox" style="display:flex;justify-content:center"></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <h3>操作</h3>
+          <button class="btn btn-primary" id="auditExport" style="width:100%;margin-bottom:8px">导出体检报告(.md)</button>
+          <button class="btn btn-ghost" id="auditReset" style="width:100%">清空重评</button>
+          <p class="muted" style="margin-top:8px">逐项 0/1/2 打分；技术项请结合技术核查。</p>
+        </div>
+      </div>
+      <div id="auditChecklist"></div>
+    </div>
+  </div>
+
+  <!-- 子页：口径表 -->
+  <div class="sub-view" id="sub-caliber" hidden>
+    <div class="card">
+      <h3>口径总览 <span class="hint" id="caliberSummary"></span>
+        <span style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-ghost" id="calExport">导出JSON</button>
+          <button class="btn btn-sm btn-primary" id="calAdd">+ 添加字段</button>
+        </span>
+      </h3>
+      <div class="tbl-wrap tbl-cards"><table class="tbl">
+        <thead><tr><th>园区</th><th>字段</th><th>官方口径（唯一权威）</th><th>数据时点</th><th>来源</th><th>外部冲突口径（待清理）</th><th>操作</th></tr></thead>
+        <tbody id="caliberBody"></tbody>
+      </table></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>口径治理 SOP</h3>
+      <ul class="rule-list">
+        <li><b>P0 定稿：</b>官方口径列由园区台账责任人定稿，带时点与来源；冲突字段优先处理。</li>
+        <li><b>P0 同步：</b>定稿后两周内更新百度百科、官网、公众号历史文章更正；旧数据媒体稿联系更新或发布新口径覆盖。</li>
+        <li><b>P1 巡检：</b>季度巡检各渠道与口径表的一致性；发现新冲突口径随时录入本表。</li>
+        <li><b>发布校验：</b>所有对外内容发布前，逐个数字对照本表（内容评分器已内置此提醒）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 子页：内容评分 -->
+  <div class="sub-view" id="sub-score" hidden>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>原文 <span class="hint">粘贴园区文案：官网介绍/公众号/招商推文</span></h3>
+        <textarea id="scorerInput" class="ta" placeholder="例：蛇口网谷是招商蛇口旗下的科创园区，位于深圳南山，环境优美，配套完善，欢迎广大企业入驻咨询！"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="scorerRun">开始体检</button>
+          <select id="scorerEntity" class="sel" style="max-width:220px"></select>
+        </div>
+      </div>
+      <div class="card">
+        <h3>体检结果 <span class="hint">≥75分可发布</span></h3>
+        <div id="scorerScore" class="big-score">—</div>
+        <div id="scorerChecks"><p class="muted">等待评分…</p></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>GEO 写作规范十二条（评分依据）<span class="hint">悬停查看标准</span></h3>
+      <div class="filter-row" id="writingRules"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>改写示范：营销腔 → GEO体</h3>
+      <div class="rw">
+        <div class="rw-col"><span class="tag tag-bad">改写前 · 33分</span>
+          <p>蛇口网谷环境优美、配套完善、区位优越，是广大企业理想的办公选择，欢迎咨询入驻！</p></div>
+        <div class="rw-col"><span class="tag tag-ok">改写后 · 83分</span>
+          <p>蛇口网谷是招商蛇口产业园区（招商产园）旗下科创园区，位于深圳南山区。截至2025年11月，园区入驻企业近460家，核心产业聚集度近70%，引入苹果、博世、雀巢等世界500强，培育上市公司及新三板挂牌企业20余家（来源：中国工业新闻网，2025）。「招商既是房东也是公司股东——我们十多年没换过地方。」（纽迪瑞科技董事长李灏）更新时间：2026-09 · 责任人：招商产园品牌部</p></div>
+      </div>
+    </div>
+  </div>
+<!-- 子页：证据库（V4 三期） -->
+  <div class="sub-view" id="sub-evidence" hidden>
+    <div class="card">
+      <h3>证据库 <span class="hint">叙述性证据 · 已核验自动注入内容生成器</span></h3>
+      <div id="evBox"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Ⅱ 行动（建·布·造）═══ -->
+<section class="view" id="view-act" hidden>
+  <div class="page-head">
+    <h2>执行</h2>
+    <p>生成优化文件与 90 天执行方案。</p>
+  </div>
+  <div class="subnav" data-subnav="act">
+    <button data-sub="toolkit" class="on"><i class="sn-step">1</i>一键优化文件</button>
+    <button data-sub="plan"><i class="sn-step">2</i>90天方案</button>
+    <button data-sub="agent"><i class="sn-step">3</i>AI 助手</button>
+  </div>
+
+  <!-- 子页：一键优化文件（真实可部署物料 + 渠道分发图） -->
+  <div class="sub-view" id="sub-toolkit">
+    <div class="card">
+      <h3>生成优化文件 <span class="hint">数据取自口径表，【待填】处发布前补齐</span></h3>
+      <div class="form-grid">
+        <label class="lb">园区名<input id="tkPark" class="inp" placeholder="如：蛇口网谷"></label>
+        <label class="lb">城市<input id="tkCity" class="inp" placeholder="如：深圳南山"></label>
+        <label class="full lb">主导产业<input id="tkIndustry" class="inp" placeholder="如：数字经济、人工智能"></label>
+      </div>
+      <button class="btn btn-primary" id="tkBuild" style="margin-top:12px">一键生成优化文件</button>
+      <p class="muted" style="margin-top:8px">生成6个可直接使用的文件：网站 AI 可读配置（交网站管理员）· AI 说明文件（传官网根目录）· 结构化数据标签（贴页面）· 一园一档（内容库最小单元）· 选址FAQ20问（过评分器再发）· 渠道分发指南。</p>
+    </div>
+    <div id="tkOut" style="margin-top:16px"><p class="muted" style="padding:16px 0;text-align:center">点击「一键生成优化文件」后，6个文件在此预览并可下载。</p></div>
+    <div class="card" style="margin-top:16px">
+      <h3>资产追踪 <span class="hint">下载物料即登记 · 部署后补URL · 查排名看效果</span></h3>
+      <div id="watchBox"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>渠道分发图 <span class="hint">8个真实入口 · 按引擎偏好排序 · 含首发内容建议</span></h3>
+      <div class="agent-grid" id="channelBox"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>内容选题单工单 <span class="hint">按问题场景生成可派单的选题工单</span></h3>
+      <div class="grid grid-2">
+        <div class="form-grid">
+          <label class="full lb">园区<select id="briefPark" class="sel"></select></label>
+          <label class="full lb">问题场景（决定覆盖问题与分发阵地）<select id="briefCluster" class="sel">
+            <option>选址决策</option><option>对比竞品</option><option>品牌认知</option><option>产业服务</option>
+          </select></label>
+          <label class="full lb">主导产业<input id="briefIndustry" class="inp" placeholder="如：数字经济、人工智能、生命科技"></label>
+          <div><button class="btn btn-primary" id="briefGen">生成内容选题单</button></div>
+        </div>
+        <div>
+          <pre class="prompt-view" id="briefOut" style="max-height:260px">选择场景后点击「生成内容选题单」。</pre>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <button class="btn btn-primary" id="briefDl" disabled>下载(.md)</button>
+            <button class="btn btn-ghost" id="briefCopy">复制内容</button>
+          </div>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:8px">对比竞品场景当前最空白（2026-09-04实测：全网不存在含蛇口网谷的三方对比内容），转化价值最高，建议首批。</p>
+    </div>
+  </div>
+
+  <!-- 子页：90天方案 -->
+  <div class="sub-view" id="sub-plan" hidden>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>园区信息</h3>
+        <div class="form-grid">
+          <label class="full lb">园区名称<input id="pName" class="inp" placeholder="如：蛇口网谷"></label>
+          <label class="lb">所在城市<input id="pCity" class="inp" placeholder="如：深圳南山"></label>
+          <label class="lb">园区类型<select id="pType" class="sel">
+            <option>科创园（网谷系）</option><option>文创园（意库系）</option><option>产城综合体（智慧城系）</option><option>特色产业园区</option></select></label>
+          <label class="full lb">主导产业<input id="pIndustry" class="inp" placeholder="如：数字经济、人工智能、生命健康"></label>
+          <label class="lb">投入规模<select id="pBudget" class="sel">
+            <option>轻量：内部兼职+无外包</option><option>标准：内部专人+外部内容支持</option><option>进取：专属小组+服务商</option></select></label>
+          <label class="lb">周期<select id="pCycle" class="sel"><option>90天冲刺</option><option>180天常规</option></select></label>
+          <label class="full lb">已具备资产（多选）<div class="filter-row" id="pAssets" style="margin-top:4px"></div></label>
+        </div>
+        <button class="btn btn-primary" id="pRun" style="margin-top:12px">生成方案</button>
+      </div>
+      <div class="card">
+        <h3>方案预览</h3>
+        <pre class="prompt-view" id="planPreview" style="max-height:520px">填写左侧信息后点击「生成方案」。</pre>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="planDl" disabled>下载方案(.md)</button>
+          <button class="btn btn-ghost" id="planCopy">复制方案内容</button>
+        </div>
+      </div>
+    </div>
+    <div class="grid grid-2" style="margin-top:16px">
+      <div class="card">
+        <h3>四大渠道铺设清单 <span class="hint" id="battleBar"></span></h3>
+        <ul class="rule-list" id="battleBox"></ul>
+      </div>
+      <div class="card">
+        <h3>90天路线图（通用骨架）</h3>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th>阶段</th><th>关键动作</th><th>里程碑</th></tr></thead>
+          <tbody>
+            <tr><td><b>一 · 体检建基线</b><br><span class="muted num">第1–4周</span></td>
+              <td>30问基线监测（含豆包双端口）；30项审计；口径表V1；官网技术整改（robots/WAF/HTTPS）；选定2–3试点</td>
+              <td>基线报告；口径表V1</td></tr>
+            <tr><td><b>二 · 建库布源</b><br><span class="muted num">第5–9周</span></td>
+              <td>一园一档；FAQ 50问；官网改造+Schema；百科按口径表更新；公众号/知乎/头条/百家号开播；首批数字PR</td>
+              <td>内容库上线；首批引用（10–15天）</td></tr>
+            <tr><td><b>三 · 造势测效</b><br><span class="muted num">第10–13周</span></td>
+              <td>对比类内容破冰；榜单垂直媒体投放；企业引言库；双周监测×2；根据监测调整选题；季度复盘</td>
+              <td>稳定引用（8–12周）；推广方案</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 子页：Agent团 -->
+  <div class="sub-view" id="sub-agent" hidden>
+    <div class="card" style="margin-bottom:16px">
+      <h3>内置对话助手 <span class="hint">右下角「问」悬浮窗，全站可用</span></h3>
+      <div class="grid grid-2">
+        <div>
+          <p style="font-size:var(--text-sm)"><b>直接在系统里对话</b>：点右下角「问」按钮打开助手窗口——本机大模型驱动，已接入你的实时数据（体检分/提及率/诊断结果），可以直接问「怎么用这个系统」「解读我的诊断」「下一步做什么」。</p>
+          <button class="btn btn-primary" id="openChatBtn">打开助手对话窗</button>
+        </div>
+        <div>
+          <p style="font-size:var(--text-sm)"><b>外部AI用法</b>：下方4个专业Agent提示词，复制粘贴到豆包 / DeepSeek / Kimi / 元宝 / ChatGPT 新对话即可；适合长文案生产等重任务。本机 AI 助手中还可用 <b class="num"></b>。</p>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <h3>怎么用</h3>
+      <ul class="rule-list">
+        <li><b>对话AI：</b>复制提示词 → 粘贴到豆包 / DeepSeek / Kimi / 元宝 / ChatGPT 新对话即可；内置 2026-08 引擎规则与招商产园背景。</li>
+        <li><b>本机 AI 助手：</b>已装  <b class="num" style="color:var(--color-accent)"></b>，可直接执行：出方案 / 改写内容并评分 / 导出报告。</li>
+        <li><b>提示词更新：</b>随系统知识库同步维护，复制即用，无需配置。</li>
+      </ul>
+    </div>
+    <div class="agent-grid" id="agentGrid"></div>
+    <div class="card" id="agentDetail" hidden style="margin-top:16px">
+      <h3 id="agentTitle" style="border:none;margin-bottom:8px"></h3>
+      <button class="btn btn-primary btn-sm" id="agentCopy">复制提示词</button>
+      <pre class="prompt-view" id="agentPrompt" style="margin-top:10px"></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Ⅲ 监测（测）═══ -->
+<section class="view" id="view-monitor" hidden>
+  <div class="page-head">
+    <h2>监测</h2>
+    <p>双周一轮，统计各引擎提及率与自有渠道命中率。</p>
+  </div>
+  <div class="grid grid-3" id="monStats"></div>
+  <div class="grid grid-2" style="margin-top:16px">
+    <div class="card">
+      <h3>① 提问矩阵 <span class="hint">按重要程度优先提问 · 点击「复制」到各引擎提问</span>
+        <span style="display:flex;gap:6px"><button class="btn btn-sm btn-ghost" id="paToggle">管理问题矩阵</button></span>
+      </h3>
+      <div class="filter-row" id="promptFilter"></div>
+      <div id="promptAdmin" hidden style="margin-bottom:12px"></div>
+      <div id="promptList"></div>
+    </div>
+    <div class="card">
+      <h3>② 录入一条监测结果</h3>
+      <div class="form-grid">
+        <label class="lb">监测日期<input type="date" id="mDate" class="inp"></label>
+        <label class="lb">引擎<select id="mEngine" class="sel"></select></label>
+        <label class="full lb">问题<select id="mPrompt" class="sel"></select></label>
+        <label class="lb">是否提及<select id="mMention" class="sel">
+          <option value="1">提及（含引用链接）</option><option value="0.5">仅相似表述</option><option value="0">未提及</option></select></label>
+        <label class="lb">倾向<select id="mSentiment" class="sel">
+          <option value="1">正面推荐</option><option value="0.5">中性</option><option value="0">负面/错误信息</option></select></label>
+        <label class="full lb">被引用链接<input id="mUrl" class="inp" placeholder="选填：AI答案引用了哪个网页"></label>
+        <label class="full lb">竞品同时出现（V4）<input id="mCooccur" class="inp" placeholder="选填：答案里同时出现了哪些竞品，顿号分隔，如：深圳湾科技园、天安数码城"></label>
+        <label class="full lb">备注<input id="mNote" class="inp" placeholder="选填：排位/豆包端口(App/Web)/错误事实"></label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="mSave">保存记录</button>
+        <button class="btn btn-ghost" id="batchPasteBtn">批量粘贴录入（Excel/记事本）</button>
+        <button class="btn btn-ghost" id="parseBtn">贴答案自动填（本机AI解析）</button>
+      </div>
+    </div>
+  </div>
+  <div class="grid grid-2" style="margin-top:16px">
+    <div class="card"><h3>③ 引擎 × 类别 提及率图表</h3><div id="heatBox"></div></div>
+    <div class="card">
+      <h3>④ GEO 发展曲线 <span class="hint">快照自动积累 · 悬浮看点位值与样本量</span></h3>
+      <div class="filter-row" id="curveChips" style="margin-bottom:8px"></div>
+      <div id="curveBox"></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3>⑤ 一键跑30问（信源侧真实搜索）
+      <span style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary btn-sm" id="batchRun">跑一轮30问（真实搜索）</button>
+        <button class="btn btn-danger btn-sm" id="batchStop" hidden>停止</button>
+      </span>
+    </h3>
+    <div style="display:flex;align-items:center;gap:10px;margin:8px 0 4px">
+      <div style="flex:1;height:10px;background:var(--color-paper-3);border:1px solid var(--color-line);border-radius:5px;overflow:hidden">
+        <div id="batchBar" style="height:100%;width:0;background:var(--color-accent);transition:width .3s var(--ease-out)"></div>
+      </div>
+      <span class="num" id="batchPct" style="font-size:12px;color:var(--color-ink-2);white-space:nowrap">0%</span>
+    </div>
+    <p class="muted" id="batchTxt"><b class="num">0/30</b> · 待运行。逐条真实搜索30问并自动写入台账（引擎=搜索通道，记录前10域名），约2–4分钟；运行中此条实时显示「N/30 · 当前问题」。AI引擎无公开问答API，豆包/DeepSeek等最终提及率仍需人工提问录入（下方②区）。</p>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3>⑥ 本轮人工采样 <span class="tag tag-ok">预计 ≤20 分钟</span></h3>
+    <div id="sampleCard"></div>
+  </div>
+  <div class="card" id="probeCard" style="margin-top:16px" hidden>
+    <h3>快速检测 <span class="hint">任意词真实搜索看前列信源</span></h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="probeQ" class="inp" style="flex:1;min-width:220px" placeholder="输入查询词，如：深圳南山 科创园区 推荐">
+      <button class="btn btn-primary" id="probeRun">检测</button>
+    </div>
+    <div id="probeOut" style="margin-top:10px"></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3>⑦ 人工实测台账（六引擎AI问答）
+      <span style="display:flex;gap:8px"><button class="btn btn-sm btn-ghost" id="mExport">导出CSV</button><button class="btn btn-sm btn-danger" id="mClear">清空</button></span>
+    </h3>
+    <div class="tbl-wrap tbl-cards" id="mTable"></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3>⑧ 引用诊断 · 谁在赢我们的问题 <span class="hint">监测数据 → 修复路线图</span></h3>
+    <div id="winBox"></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3>⑨ 业务结果 <span class="hint">AI引荐流量/线索 · 月度登记 · 进曲线副轴</span></h3>
+    <div id="bizBox"></div>
+  </div>
+</section>
+
+<!-- ═══ 知识库 ═══ -->
+<section class="view" id="view-knowledge" hidden>
+  <div class="page-head">
+    <h2>知识库</h2>
+    <p>方法论、引擎规则与案例参考。</p>
+  </div>
+
+  <div class="grid grid-4" id="kpiCards"></div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>一条回答的诞生：五步链路（每步都可优化）</h3>
+    <ul class="rule-list" id="pipeBox"></ul>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>五步法与系统模块对照</h3>
+    <div class="tbl-wrap tbl-cards"><table class="tbl">
+      <thead><tr><th>五步法</th><th>动作</th><th>系统位置</th><th>节奏</th></tr></thead>
+      <tbody>
+        <tr><td data-col="五步法"><b>审</b>（体检）</td><td data-col="动作">30项检查 + 30问基线监测</td><td data-col="位置">诊断 → 体检 / 监测</td><td data-col="节奏">第1–2周，此后双周</td></tr>
+        <tr><td data-col="五步法"><b>建</b>（建库）</td><td data-col="动作">一园一档 + FAQ + 口径表治理</td><td data-col="位置">诊断 → 口径表</td><td data-col="节奏">第3–6周</td></tr>
+        <tr><td data-col="五步法"><b>布</b>（布源）</td><td data-col="动作">四大渠道：官网/知识实体/产业内容/生态矩阵</td><td data-col="位置">行动 → 90天方案</td><td data-col="节奏">第4–10周</td></tr>
+        <tr><td data-col="五步法"><b>造</b>（造势）</td><td data-col="动作">RE网站管理员/榜单/资质素材化 + 数字PR + 企业引言</td><td data-col="位置">行动 → 内容选题单</td><td data-col="节奏">贯穿</td></tr>
+        <tr><td data-col="五步法"><b>测</b>（测效）</td><td data-col="动作">六引擎双周监测 + 根据监测调整选题</td><td data-col="位置">监测（全页）</td><td data-col="节奏">长期双周</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:16px">
+    <div class="card">
+      <h3>双通道可见性</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>通道</th><th>机制</th><th>园区动作</th></tr></thead>
+        <tbody>
+          <tr><td><b>模型记忆</b><br><span class="tag">离线 · 慢</span></td><td>训练语料与知识库中的存量认知，更新慢、看权重</td><td>百科词条、权威媒体报道、RE网站管理员公告、政府文件等高权重资产</td></tr>
+          <tr><td><b>实时检索</b><br><span class="tag">实时检索 · 快</span></td><td>提问时现场抓取网页、向量检索后生成引用，3–5个工作日生效</td><td>官网结构化内容、公众号、知乎、产业媒体的持续布源</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>内容被引用的四个条件</h3>
+      <ul class="rule-list">
+        <li><b>可达</b>：AI爬虫能抓取——robots/WAF放行、核心内容在HTML里、HTTPS正常</li>
+        <li><b>可读</b>：小标题、短段落、数据表，可被整段摘录</li>
+        <li><b>可信</b>：署名、日期、数据来源、资质背书（E-E-A-T信号）</li>
+        <li><b>可验证</b>：关键事实全网一致、可交叉印证（口径表的生命线）</li>
+      </ul>
+      <p class="muted" style="margin-top:10px">新榜4600万条信源数据显示：AI还会交叉对照<b>百科、企查查、应用商店</b>三类基础层页面核验品牌事实。</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>六大引擎信源矩阵 <span class="hint">2026-08/09 实测口径 · [n]为文末信源编号</span></h3>
+    <div class="tbl-wrap" id="engineMatrix"></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>学术证据：普林斯顿 GEO 论文九策略（KDD 2024）</h3>
+    <p class="muted">首个大规模实证：10,000条查询×8领域（GEO-bench），模拟生成式引擎实测九种内容改写策略，并在真实引擎验证。</p>
+    <div class="tbl-wrap" id="paperTactics" style="margin-top:8px"></div>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:16px">
+    <div class="card"><h3>核心指标体系（全球通行口径）</h3><div class="tbl-wrap" id="metricsTable"></div></div>
+    <div class="card"><h3>技术侧 2026 判决</h3><div class="tbl-wrap" id="techTable"></div></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>全球标杆与案例库 <span class="hint">多源交叉，厂商口径已标注</span></h3>
+    <div class="tbl-wrap" id="caseTable"></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>信源清单</h3>
+    <ol class="rule-list" id="srcList" style="font-size:12px"></ol>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <p><b>招商产园 GEO 智控台 V4.0</b> · 本地（双击打开）/ 服务器（<span class="num">python3 server.py</span>）·
+    <button class="btn btn-sm btn-ghost" id="stateExport" style="vertical-align:middle">导出全量数据</button>
+    <label class="btn btn-sm btn-ghost" style="vertical-align:middle;cursor:pointer">导入数据
+      <input type="file" id="stateImport" accept=".json" style="display:none"></label>
+  </p>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- V4 新建项目弹窗 -->
+<div class="modal-mask" id="projModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="新建项目">
+    <h3 style="margin-top:0">新建项目</h3>
+    <p class="muted" style="font-size:var(--text-sm);margin-top:-6px">每个园区/客户一个项目：体检、口径表、台账、诊断历史完全隔离，互不污染。</p>
+    <div class="form-grid">
+      <label class="full lb">项目名称（如：南京金融城）<input id="npName" class="inp" placeholder="园区或客户名" maxlength="60"></label>
+      <label class="full lb">官方承载页域名（可后补，用于一键诊断）<input id="npUrl" class="inp" placeholder="www.example.com" maxlength="120"></label>
+      <label class="full lb">品牌词（品牌词搜索验证用）<input id="npBrand" class="inp" placeholder="如：南京金融城" maxlength="60"></label>
+      <label class="full lb">自有域名（每行一个——用于自有渠道判定、AI 引用中来自自有渠道的比例与品牌词搜索）<textarea id="npOwn" class="inp" rows="3" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号）"></textarea></label>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-ghost" id="npCancel" type="button">取消</button>
+      <button class="btn btn-primary" id="npSubmit" type="button">创建项目</button>
+    </div>
+  </div>
+</div>
+
+<!-- V4 批量粘贴录入弹窗 -->
+<div class="modal-mask" id="batchModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="批量粘贴录入">
+    <h3 style="margin-top:0">批量粘贴录入</h3>
+    <p class="muted" style="font-size:var(--text-sm);margin-top:-6px">在豆包/DeepSeek 等引擎问完一批问题后，把结果整理成下述格式整段粘贴（Excel 直接复制即为制表符分隔）。列顺序：<b>日期 引擎 问题ID 提及 倾向 链接 竞品同时出现 备注</b>，后四列可留空；提及=提及/相似/未提及，倾向=正面/中性/负面。首行表头自动跳过，日期留空=今天。</p>
+    <textarea id="batchTa" class="inp" rows="8" style="width:100%;font-family:var(--font-mono);font-size:12px" placeholder="日期	引擎	问题ID	提及	倾向	链接	竞品同时出现	备注&#10;	豆包	P2	提及	正面		深圳湾科技园	答案第3位&#10;	DeepSeek	P19	未提及	中性			"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn btn-ghost" id="bpPreviewBtn">解析预览</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost" id="bpCancel">关闭</button>
+      <button class="btn btn-primary" id="bpImport" disabled>导入</button>
+    </div>
+    <div id="bpPreview" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- V4 三期：贴答案自动填弹窗 -->
+<div class="modal-mask" id="parseModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="贴答案自动填">
+    <h3 style="margin-top:0">贴答案自动填</h3>
+    <p class="muted" style="font-size:var(--text-sm);margin-top:-6px">把某一引擎的 AI 回答原文整段粘进来，本机模型自动抽取 提及/倾向/引用域名/竞品同时出现 并填入②区表单——<b>解析结果不自动提交，你核对后才入库</b>。模型不可用时直接手工填。</p>
+    <textarea id="pmTa" class="inp" rows="7" style="width:100%" placeholder="粘贴 AI 回答原文…"></textarea>
+    <label class="lb" style="display:block;margin-top:8px">竞品候选（顿号分隔，来自历史记录，可改）<input id="pmComp" class="inp" style="width:100%"></label>
+    <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" id="pmClose">关闭</button>
+      <button class="btn btn-primary" id="pmRun">解析并填入表单</button>
+    </div>
+    <div id="pmOut" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script src="js/ops.js"></script>
+<script src="js/chat.js"></script>
+</body>
+</html>

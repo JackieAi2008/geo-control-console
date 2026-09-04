@@ -1,0 +1,51 @@
+/* Hallmark · macrostructure: Workbench App (utilitarian) · tone: 央企年报 · theme: custom
+ * 招商蓝/金体系 —— 色值采样自招商局集团官方VI素材（cmhk.com/uploadfiles/img/cmh-blue.jpg → #014070；
+ * cmh-logo-yellow.jpg → #AA9168），非凭印象配色。
+ * axes: light-paper / serif-display / cool-blue accent + gold trim · genre: utilitarian editorial
+ * 双端策略：桌面≥1024 多栏高密度；≤768 单栏触控（目标≥44px），无 hover 依赖
+ * IA：金字塔原理 —— 一级导航=工作台/诊断/行动/监测(/知识库)，二级子页收纳于各阶段内
+ */
+:root {
+  /* ── color · 招商蓝金 ───────────────────── */
+  --color-paper:      oklch(98% 0.004 240);   /* 冷白纸 */
+  --color-paper-2:    oklch(95.5% 0.008 240); /* 分区底（浅蓝灰） */
+  --color-paper-3:    oklch(92% 0.012 240);   /* 悬浮/条带 */
+  --color-ink:        oklch(24% 0.030 255);   /* 深蓝墨（正文） */
+  --color-ink-2:      oklch(38% 0.030 255);   /* 次级文字 */
+  --color-ink-3:      oklch(56% 0.022 250);   /* 弱文字 */
+  --color-line:       oklch(87% 0.012 240);   /* 分隔线 */
+  --color-line-2:     oklch(78% 0.018 240);   /* 强分隔线 */
+  --color-accent:     oklch(38% 0.090 250);   /* 招商蓝（≈#0A4A82，按钮/链接/强调） */
+  --color-accent-deep:oklch(30% 0.080 252);   /* 深招商蓝（hover/表头，≈#02366A） */
+  --color-accent-navy:oklch(28% 0.070 250);   /* 报头底蓝（≈#014070 采样值） */
+  --color-accent-soft:oklch(94% 0.025 245);   /* 蓝晕底 */
+  --color-gold:       oklch(63% 0.060 80);    /* 哑金（≈#AA9168 采样值）：线条/描边/点缀 */
+  --color-gold-bright:oklch(76% 0.090 85);    /* 亮金：深蓝底上的文字/徽记（≈#D9B97C） */
+  --color-gold-soft:  oklch(95% 0.025 90);    /* 金晕底 */
+  --color-info:       oklch(45% 0.090 245);   /* 信息蓝（与主蓝同域） */
+  --color-ok:         oklch(52% 0.120 150);   /* 达成绿 */
+  --color-warn:       oklch(62% 0.125 75);    /* 琥珀 */
+  --color-bad:        oklch(50% 0.155 27);    /* 风险红 */
+  --color-focus:      oklch(38% 0.090 250);
+
+  /* ── font ──────────────────────────────── */
+  --font-display: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, "PingFang SC", monospace;
+
+  /* ── text scale（4pt 友好的阶梯）───────── */
+  --text-xs: 12px;  --text-sm: 13px;  --text-base: 15px; --text-md: 17px;
+  --text-lg: 20px;  --text-xl: 26px;  --text-2xl: 34px;  --text-display: 42px;
+
+  /* ── space（4pt scale）────────────────── */
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px;  --space-sm: 12px;
+  --space-md: 16px; --space-lg: 24px; --space-xl: 32px; --space-2xl: 48px;
+
+  /* ── rule / radius / ease / dur ───────── */
+  --rule-hair: 1px; --rule-bold: 2px;
+  --radius-s: 3px; --radius-m: 6px; --radius-l: 10px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:  cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.37, 0, 0.63, 1);
+  --dur-fast: 120ms; --dur-mid: 220ms; --dur-slow: 400ms;
+}
