@@ -59,8 +59,8 @@ const CHAT_SUGGEST = [
       .chat-msg.ai h4 { font-size:14px; margin:10px 0 6px; }
       .chat-msg.ai code { background:rgba(1,64,112,.08); padding:1px 5px; border-radius:4px; font-size:12px; font-family:var(--font-mono,monospace); }
       .chat-msg.ai table { border-collapse:collapse; font-size:12px; margin:4px 0 8px; }
-      .think-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--color-ink-3,#8895a7); background:rgba(1,64,112,.06); border:1px solid rgba(1,64,112,.12); border-radius:10px; padding:1px 8px; margin-bottom:6px; }
-      .kb-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:#8a6d1a; background:rgba(201,158,45,.12); border:1px solid rgba(201,158,45,.3); border-radius:10px; padding:1px 8px; margin-bottom:6px; }
+      .think-badge { display:flex; width:fit-content; align-items:center; gap:4px; font-size:11px; color:var(--color-ink-3,#8895a7); background:rgba(1,64,112,.06); border:1px solid rgba(1,64,112,.12); border-radius:10px; padding:1px 8px; margin:0 0 6px; }
+      .kb-badge { display:flex; width:fit-content; align-items:center; gap:4px; font-size:11px; color:#8a6d1a; background:rgba(201,158,45,.12); border:1px solid rgba(201,158,45,.3); border-radius:10px; padding:1px 8px; margin:0 0 6px; }
     `;
     document.head.appendChild(st);
   }
