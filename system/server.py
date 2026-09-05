@@ -826,8 +826,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("X-Model", model_name)
             self.send_header("X-Accel-Buffering", "no")        # V4.3.3：明确告诉 nginx 禁缓冲
-            # 不设 close_connection，让 nginx 正常代理；不让 nginx 等待 Content-Length
-            self.send_header("Transfer-Encoding", "chunked")  # 客户端识别流式
+            # 不写 Transfer-Encoding——Python BaseHTTPRequestHandler 不允许写；nginx 配置了
+            # chunked_transfer_encoding on 后会自己加上 chunked
+            # 不写 Content-Length——让 nginx 用 chunked 而非定长
             self.end_headers()
 
             if src in ("user", "server"):
