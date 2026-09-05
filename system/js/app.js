@@ -369,10 +369,9 @@ async function loadProjectFromServer() {
   let localRaw = null;
   try { localRaw = localStorage.getItem(projKey(CUR)); } catch (e) {}
   if (!hasRemote && localRaw && localRaw !== "{}") {
-    /* 服务器空、本机有未同步数据 → 保留本机（保存时走合并协议上传） */
+    /* 服务器空、本机有未同步数据 → 静默保留本机（保存时走合并协议上传），不打扰用户 */
     loadCurrentState();
     SERVER_BASE = JSON.parse(JSON.stringify(state));
-    toast("已连接服务器：本机已有「" + curProject().name + "」数据，保留本机版本（保存时自动合并他人更新）");
   } else {
     state = Object.assign(defaultState(), remote);
     try { localStorage.setItem(projKey(CUR), JSON.stringify(state)); } catch (e) {}
