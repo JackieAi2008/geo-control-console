@@ -63,9 +63,9 @@ def geo_user(headers):
 def llm_user_config(conn, u):
     try:
         c = kv_get(conn, "llm:user:" + u) or {}
-        if c.get("apiKey") and c.get("baseUrl") and c.get("model"):
+        if c.get("baseUrl") and c.get("model"):
             return {"provider": c.get("provider", "custom"), "baseUrl": c["baseUrl"],
-                    "model": c["model"], "apiKey": c["apiKey"], "updatedAt": c.get("updatedAt", "")}
+                    "model": c["model"], "apiKey": c.get("apiKey", ""), "updatedAt": c.get("updatedAt", "")}
     except Exception:
         pass
     return None
@@ -74,17 +74,26 @@ def mask_key(k):
     k = str(k or "")
     return ("****" + k[-4:]) if len(k) >= 8 else ("*" * len(k) if k else "—")
 
-def llm_url_guard(u):
-    """SSRF 防护：仅 https + 拒绝环回/内网/链路本地/CGNAT(含云 metadata) 地址。返回错误文案，空串=通过"""
+def llm_url_guard(u, allow_loopback_http=False):
+    """SSRF 防护：默认仅 https + 拒绝内网/CGNAT(云metadata)。
+    allow_loopback_http=True（本地 Ollama 场景）时额外放行 http://127.0.0.1:任意端口。返回错误文案，空串=通过"""
     try:
         p = urlparse(str(u or ""))
     except Exception:
         return "地址格式不正确"
-    if p.scheme != "https":
-        return "仅允许 https 地址"
     h = (p.hostname or "").lower()
     if not h:
         return "缺少主机名"
+    loop = h in ("127.0.0.1", "localhost", "::1")
+    if p.scheme == "https":
+        pass
+    elif p.scheme == "http":
+        if not (allow_loopback_http and loop):
+            return "仅允许 https 地址（本地 Ollama 可用 http://127.0.0.1:端口）"
+    else:
+        return "仅允许 http/https 地址"
+    if loop and p.scheme == "http":
+        return ""   # 环回 http 仅本机 Ollama 场景放行（不影响其余内网拦截）
     if h == "localhost" or h.endswith((".localhost", ".internal", ".local", ".lan")):
         return "不允许内网地址"
     try:
@@ -116,12 +125,14 @@ def llm_resolve(conn, headers):
     return "none", "", None
 
 def llm_remote_open(cfg, msgs, stream, timeout=30, max_tokens=1024):
-    """OpenAI 兼容远端调用（DeepSeek/通义/Kimi/智谱/豆包/自定义通用）"""
+    """OpenAI 兼容远端调用（DeepSeek/通义/Kimi/智谱/豆包/Ollama /v1/自定义通用）；无密钥不发 Authorization"""
     payload = {"model": cfg["model"], "messages": msgs, "stream": stream,
                "temperature": 0.4, "max_tokens": max_tokens}
+    headers = {"Content-Type": "application/json"}
+    if cfg.get("apiKey"):
+        headers["Authorization"] = "Bearer " + cfg["apiKey"]
     req = urllib.request.Request(cfg["baseUrl"].rstrip("/") + "/chat/completions",
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + cfg["apiKey"]})
+        data=json.dumps(payload).encode(), headers=headers)
     return urllib.request.build_opener(_NoRedirect).open(req, timeout=timeout)
 
 def state_summary(conn, pid=None):
@@ -731,18 +742,22 @@ class Handler(BaseHTTPRequestHandler):
         base = str(b.get("baseUrl") or "").strip()[:300]
         model = str(b.get("model") or "").strip()[:100]
         key = str(b.get("apiKey") or "").strip()[:200]
-        if not key:
-            # 留空 = 沿用已保存密钥（界面从不回显完整密钥，改地址/模型不必重贴 key）
+        is_local = provider == "ollama"
+        if not key and not is_local:
+            # 远端服务商留空 = 沿用已保存密钥（界面从不回显完整密钥，改地址/模型不必重贴 key）
             old = llm_user_config(self.conn, geo_user(self.headers))
             if old and old["baseUrl"] == base:
                 key = old["apiKey"]
-        err = llm_url_guard(base)
+        err = llm_url_guard(base, allow_loopback_http=is_local)
         if err:
             return self._send(400, {"error": "API 地址不合规：" + err})
         if not (1 <= len(model) <= 100):
             return self._send(400, {"error": "请填写模型名称（以服务商控制台为准）"})
-        if not (8 <= len(key) <= 200) or any(c in key for c in " \t\r\n"):
-            return self._send(400, {"error": "API 密钥长度需 8–200 位且不含空白字符"})
+        if is_local:
+            if any(c in key for c in " \t\r\n"):
+                return self._send(400, {"error": "Ollama 通常无需密钥；若填则不含空白"})
+        elif not (8 <= len(key) <= 200) or any(c in key for c in " \t\r\n"):
+            return self._send(400, {"error": "API 密钥长度需 8–200 位且不含空白字符（Ollama 无需密钥）"})
         u = geo_user(self.headers)
         kv_put(self.conn, "llm:user:" + u,
                {"provider": provider, "baseUrl": base, "model": model, "apiKey": key,
@@ -757,8 +772,8 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             b = {}
         src, _, saved_cfg = llm_resolve(self.conn, self.headers)
-        if b.get("apiKey"):
-            err = llm_url_guard(b.get("baseUrl"))
+        if b.get("apiKey") or b.get("provider") == "ollama":
+            err = llm_url_guard(b.get("baseUrl"), allow_loopback_http=(b.get("provider") == "ollama"))
             if err:
                 return self._send(200, {"ok": False, "error": "API 地址不合规：" + err})
             cfg = {"baseUrl": str(b["baseUrl"]).strip(), "model": str(b.get("model") or "").strip(),
