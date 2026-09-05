@@ -22,6 +22,49 @@ const CHAT_SUGGEST = [
   function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
   function clean(t) { return t.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/^[\s\n]+/, ""); }
 
+  /* V4.4：安全 Markdown 渲染——先整篇 esc 防 XSS，再恢复受限语法（粗体/代码/标题/列表/链接文字） */
+  function mdToHtml(src) {
+    let s = esc(String(src || ""));
+    s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
+    const lines = s.split("\n");
+    let html = "", inUl = false, inOl = false;
+    const closeLists = () => { if (inUl) { html += "</ul>"; inUl = false; } if (inOl) { html += "</ol>"; inOl = false; } };
+    for (const raw of lines) {
+      const t = raw.trim();
+      const ul = t.match(/^[-•]\s+(.*)/);
+      const ol = t.match(/^(\d+)[.、]\s+(.*)/);
+      if (ul) { if (!inUl) { closeLists(); html += "<ul>"; inUl = true; } html += "<li>" + ul[1] + "</li>"; continue; }
+      if (ol) { if (!inOl) { closeLists(); html += "<ol>"; inOl = true; } html += "<li>" + ol[2] + "</li>"; continue; }
+      if (/^#{1,4}\s/.test(t)) { closeLists(); html += "<h4>" + t.replace(/^#{1,4}\s+/, "") + "</h4>"; continue; }
+      if (/^\|/.test(t)) { closeLists(); html += "<p class='mono'>" + t + "</p>"; continue; }  // 表格行暂以等宽段呈现
+      if (!t) { closeLists(); continue; }
+      closeLists();
+      html += "<p>" + t + "</p>";
+    }
+    closeLists();
+    return html || "<p></p>";
+  }
+
+  /* V4.4：聊天排版样式（inject 一次） */
+  function injectChatStyles() {
+    if ($("#chatMdStyle")) return;
+    const st = document.createElement("style");
+    st.id = "chatMdStyle";
+    st.textContent = `
+      .chat-msg.ai p { margin:0 0 7px; line-height:1.75; }
+      .chat-msg.ai p:last-child { margin-bottom:0; }
+      .chat-msg.ai ul, .chat-msg.ai ol { margin:2px 0 8px 20px; padding:0; }
+      .chat-msg.ai li { margin:3px 0; line-height:1.7; }
+      .chat-msg.ai h4 { font-size:14px; margin:10px 0 6px; }
+      .chat-msg.ai code { background:rgba(1,64,112,.08); padding:1px 5px; border-radius:4px; font-size:12px; font-family:var(--font-mono,monospace); }
+      .chat-msg.ai table { border-collapse:collapse; font-size:12px; margin:4px 0 8px; }
+      .think-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--color-ink-3,#8895a7); background:rgba(1,64,112,.06); border:1px solid rgba(1,64,112,.12); border-radius:10px; padding:1px 8px; margin-bottom:6px; }
+      .kb-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:#8a6d1a; background:rgba(201,158,45,.12); border:1px solid rgba(201,158,45,.3); border-radius:10px; padding:1px 8px; margin-bottom:6px; }
+    `;
+    document.head.appendChild(st);
+  }
+
   function inject() {
     if ($("#chatPanel")) return;
     const fab = document.createElement("button");
@@ -45,11 +88,22 @@ const CHAT_SUGGEST = [
         <button id="chatSend" class="btn btn-primary">发送</button>
       </div>`;
     document.body.appendChild(fab); document.body.appendChild(panel);
+    injectChatStyles();
+
+    /* V4.4：渲染一条历史/完成消息（Markdown 排版 + 过滤旧版残留的 [思考] 尾巴） */
+    function renderAssistantMd(text) {
+      const pure = String(text || "").split("\n[思考]")[0].trim();
+      return mdToHtml(pure);
+    }
 
     const renderAll = () => {
       const body = $("#chatBody");
-      body.innerHTML = `<div class="chat-msg ai">你好，我是本系统的使用助手（本机模型驱动，已接入你的实时数据）。可以问我「怎么用这个系统」「解读诊断结果」「下一步做什么」，或任何园区GEO问题。</div>` +
-        history.map(m => `<div class="chat-msg ${m.role === "user" ? "user" : "ai"}">${esc(m.content).replace(/\n/g, "<br>")}</div>`).join("");
+      /* V4.4：过滤空内容消息（旧版本 bug 可能存入空串 → 空泡） */
+      const items = history.filter(m => (m.content || "").trim());
+      body.innerHTML = `<div class="chat-msg ai">你好，我是本系统的使用助手（已接入你的实时数据）。可以问我「怎么用这个系统」「解读诊断结果」「下一步做什么」，或任何园区GEO问题。</div>` +
+        items.map(m => m.role === "user"
+          ? `<div class="chat-msg user">${esc(m.content).replace(/\n/g, "<br>")}</div>`
+          : `<div class="chat-msg ai">${renderAssistantMd(m.content)}</div>`).join("");
       body.scrollTop = body.scrollHeight;
     };
     renderAll();
@@ -66,7 +120,7 @@ const CHAT_SUGGEST = [
     const ob = $("#openChatBtn"); if (ob) ob.addEventListener("click", open);
 
     let busy = false;
-    /* V4.3.4：SSE 解析器——识别 event: think / data: 两种事件，思考过程单独累积以便折叠显示 */
+    /* V4.4：SSE 解析器——识别 event: think / data: 两种事件 */
     function parseSSEChunk(buffer) {
       const lines = buffer.split("\n");
       let keep = lines.pop() || "";
@@ -89,23 +143,43 @@ const CHAT_SUGGEST = [
       busy = true;
       const send = $("#chatSend"); send.classList.add("is-busy"); send.textContent = "回答中…";
       history.push({ role: "user", content: text.trim() });
-      localStorage.setItem(chatKey(), JSON.stringify(history.slice(-24)));
+      localStorage.setItem(chatKey(), JSON.stringify(history.filter(m => (m.content || "").trim()).slice(-24)));
       const body = $("#chatBody");
-      body.insertAdjacentHTML("beforeend", `<div class="chat-msg user">${esc(text)}</div><div class="chat-msg ai" id="chatLive"><span class="chat-dots">…</span></div>`);
-      body.scrollTop = body.scrollHeight;
-      const live = $("#chatLive");
-      live.innerHTML = '<span class="chat-dots">连接本机模型…（首次约10–20秒，之后约5秒）</span>';
+
+      /* V4.4：用局部节点引用（不再依赖 id 查找）——防 renderAll 重建后引用失效留空泡 */
+      const userNode = document.createElement("div");
+      userNode.className = "chat-msg user";
+      userNode.textContent = text.trim();
+      const liveNode = document.createElement("div");
+      liveNode.className = "chat-msg ai";
+      body.appendChild(userNode);
+      body.appendChild(liveNode);
+      const scrollToBottom = () => { body.scrollTop = body.scrollHeight; };
+      scrollToBottom();
+
+      /* V4.4：①知识库优先——命中高频问题秒回标准答案 */
+      const kb = (typeof kbSearch === "function") ? kbSearch(text) : null;
+      if (kb) {
+        liveNode.innerHTML = `<span class="kb-badge">📖 系统知识库</span><div class="kb-answer">${renderAssistantMd(kb.answer)}</div>`;
+        history.push({ role: "assistant", content: kb.answer });
+        localStorage.setItem(chatKey(), JSON.stringify(history.filter(m => (m.content || "").trim()).slice(-24)));
+        scrollToBottom();
+        send.classList.remove("is-busy"); send.textContent = "发送"; busy = false;
+        return;
+      }
+
+      /* ②LLM 流式回答。思考过程不展示全文，仅显示「深度思考中 → 已深度思考」徽标 */
+      liveNode.innerHTML = '<span class="chat-dots">思考中…</span>';
       const slowTimer = setTimeout(() => {
-        if (!live.dataset.started) live.innerHTML = '<span class="chat-dots">模型加载中，仅首次较慢，请稍候…</span>';
+        if (!liveNode.dataset.started) liveNode.innerHTML = '<span class="chat-dots">模型加载中，仅首次较慢，请稍候…</span>';
       }, 7000);
       try {
-        /* V4.3.3：用 AbortController 兜底 90s 超时，避免死等 */
         const ac = new AbortController();
         const to = setTimeout(() => ac.abort(), 90000);
         const r = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
-          body: JSON.stringify({ messages: history.slice(-12), project: (typeof curProjectId === "function" ? curProjectId() : undefined) }),
+          body: JSON.stringify({ messages: history.filter(m => (m.content || "").trim()).slice(-12), project: (typeof curProjectId === "function" ? curProjectId() : undefined) }),
           signal: ac.signal
         });
         clearTimeout(to);
@@ -117,7 +191,18 @@ const CHAT_SUGGEST = [
         const modelName = r.headers.get("X-Model");
         if (modelName) $("#chatModel").textContent = modelName.split("-")[0];
         const rd = r.body.getReader(); const dec = new TextDecoder();
-        let acc = "", thinkAcc = "", last = 0, sseBuf = "";
+        let acc = "", thought = false, last = 0, sseBuf = "";
+        const renderLive = () => {
+          /* 防游离节点：面板被重建就把节点挂回去 */
+          if (!liveNode.isConnected) body.appendChild(liveNode);
+          const badge = thought ? '<span class="think-badge">💡 已深度思考</span>' : "";
+          liveNode.innerHTML = badge + (acc
+            ? mdToHtmlStream(acc)
+            : '<span class="chat-dots">思考中…</span>');
+          scrollToBottom();
+        };
+        /* 流式期间用轻量排版（增量安全：逐字符累计后统一 esc+md） */
+        const mdToHtmlStream = (t) => mdToHtml(t);
         while (true) {
           const { done, value } = await rd.read();
           if (done) break;
@@ -125,41 +210,37 @@ const CHAT_SUGGEST = [
           const parsed = parseSSEChunk(sseBuf);
           sseBuf = parsed.keep === "__DONE__" ? "" : parsed.keep;
           for (const it of parsed.items) {
-            if (it.event === "think") thinkAcc += it.data;
+            if (it.event === "think") thought = true;      /* V4.4：思考只点亮徽标，不展示全文 */
             else acc += it.data;
           }
-          if (!live.dataset.started && (acc || thinkAcc)) { live.dataset.started = "1"; clearTimeout(slowTimer); }
+          if (!liveNode.dataset.started && (acc || thought)) { liveNode.dataset.started = "1"; clearTimeout(slowTimer); }
           const now = performance.now();
-          if (now - last > 80) {
-            last = now;
-            /* 思考过程默认折叠在「思考中…」之后，仅展示最终回答；用户可点开看思考 */
-            const thinkHtml = thinkAcc
-              ? `<details style="margin-top:8px;font-size:12px;color:var(--color-ink-3)"><summary style="cursor:pointer">思考过程（${thinkAcc.length}字，可点开）</summary><div style="margin-top:4px;line-height:1.55">${esc(clean(thinkAcc)).replace(/\n/g, "<br>")}</div></details>`
-              : "";
-            live.innerHTML = (acc ? `<div>${esc(clean(acc)).replace(/\n/g, "<br>")}</div>` : (thinkAcc ? "<span class='muted'>思考中…</span>" : "")) + thinkHtml;
-            body.scrollTop = body.scrollHeight;
-          }
+          if (now - last > 100) { last = now; renderLive(); }
         }
-        clearTimeout(slowTimer); delete live.dataset.started;
-        acc = clean(acc);
-        thinkAcc = clean(thinkAcc);
-        const finalText = (acc + (thinkAcc ? "\n\n[思考] " + thinkAcc : "")).trim();
+        clearTimeout(slowTimer); delete liveNode.dataset.started;
+
+        const finalText = clean(acc).trim();
+        if (!liveNode.isConnected) body.appendChild(liveNode);
         if (!finalText) {
-          live.innerHTML = "<span style='color:var(--color-warn)'>（模型未返回内容，请重试或换个问题）</span>";
-          history.push({ role: "assistant", content: "（模型未返回内容）" });
+          /* V4.4：空回答直接移除气泡，不留空泡 */
+          liveNode.remove();
+          history.pop();   /* 把刚 push 的 user 消息也撤回（本次问答无效） */
         } else {
-          /* 历史里只存最终回答，思考过程进 meta 字段（暂不进历史，避免污染上下文） */
-          live.innerHTML = esc(finalText).replace(/\n/g, "<br>");
+          const badge = thought ? '<span class="think-badge">💡 已深度思考</span>' : "";
+          liveNode.innerHTML = badge + mdToHtml(finalText);
           history.push({ role: "assistant", content: finalText });
         }
-        localStorage.setItem(chatKey(), JSON.stringify(history.slice(-24)));
+        localStorage.setItem(chatKey(), JSON.stringify(history.filter(m => (m.content || "").trim()).slice(-24)));
+        scrollToBottom();
       } catch (e) {
-        clearTimeout(slowTimer); delete live.dataset.started;
+        clearTimeout(slowTimer); delete liveNode.dataset.started;
         const isAbort = e && (e.name === "AbortError" || /abort/i.test(e.message || ""));
-        live.innerHTML = `<span style="color:var(--color-bad)">${isAbort ? "⏱ 请求超时（90s 无响应）" : "出错了：" + esc(e.message || String(e))}</span><br><span class="muted" style="font-size:12px">若长时间无响应：①点对话窗 ⚙ 切服务商+模型再试；②让管理员在服务器终端执行 <code>systemctl restart geo-console</code>。</span>`;
+        if (!liveNode.isConnected) body.appendChild(liveNode);
+        liveNode.innerHTML = `<span style="color:var(--color-bad)">${isAbort ? "⏱ 请求超时（90s 无响应）" : "出错了：" + esc(e.message || String(e))}</span><br><span class="muted" style="font-size:12px">可点右上角 ⚙ 检查模型配置，或稍后重试。</span>`;
+        scrollToBottom();
       }
       send.classList.remove("is-busy"); send.textContent = "发送"; busy = false;
-      body.scrollTop = body.scrollHeight;
+      scrollToBottom();
     }
 
     $("#chatSend").addEventListener("click", () => { const t = $("#chatTa").value; $("#chatTa").value = ""; ask(t); });
