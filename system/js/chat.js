@@ -123,14 +123,15 @@ const CHAT_SUGGEST = [
     if (new URLSearchParams(location.search).get("llm") === "1") { open(); openLlm(); }  /* 模型配置直达（演示/排障） */
 
     /* ── 用户自接入 LLM：⚙ 设置窗（密钥存服务器按账号隔离，界面只回显尾4位）── */
+    /* V4.3：预填主流服务商的 API 地址+模型名，用户只填 API 密钥即可；自定义模式保留高级用户入口 */
     const LLM_PROVIDERS = {
-      deepseek: { name: "DeepSeek（深度求索）", base: "https://api.deepseek.com/v1", model: "deepseek-chat" },
-      qwen:     { name: "通义千问（阿里百炼）", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
-      kimi:     { name: "Kimi（月之暗面）", base: "https://api.moonshot.cn/v1", model: "kimi-k2-0905-preview" },
-      zhipu:    { name: "智谱 GLM", base: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },
-      doubao:   { name: "豆包（火山方舟）", base: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seed-1-6-250615" },
-      ollama:   { name: "Ollama（本机大模型，无需密钥）", base: "http://127.0.0.1:11434/v1", model: "qwen3:4b-instruct-2507-q4_K_M" },
-      custom:   { name: "OpenAI 兼容（自定义）", base: "", model: "" },
+      deepseek: { name: "DeepSeek（深度求索）", base: "https://api.deepseek.com/v1", model: "deepseek-chat", keyHint: "格式：sk-xxxxxxxx… 在 deepseek.com 平台控制台 → API Keys 创建" },
+      qwen:     { name: "通义千问（阿里百炼）", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", keyHint: "格式：sk-xxxxxxxx… 在 dashscope.console.aliyun.com → API-KEY 创建（兼容 OpenAI 模式）" },
+      kimi:     { name: "Kimi（月之暗面）", base: "https://api.moonshot.cn/v1", model: "kimi-k2-0905-preview", keyHint: "格式：sk-xxxxxxxx… 在 platform.moonshot.cn → API Keys 创建" },
+      zhipu:    { name: "智谱 GLM", base: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash", keyHint: "格式：xxxxxxx.yyyyyyy 在 bigmodel.cn → 个人中心 → API Keys 创建" },
+      doubao:   { name: "豆包（火山方舟）", base: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seed-1-6-250615", keyHint: "格式：xxxx-xxx-… 在 volcengine.com → 火山方舟 → API Key 管理创建（需先开通模型推理接入点）" },
+      ollama:   { name: "Ollama（本机大模型，无需密钥）", base: "http://127.0.0.1:11434/v1", model: "qwen3:4b-instruct-2507-q4_K_M", keyHint: "本机 Ollama 通常无需密钥；密钥框留空即可" },
+      custom:   { name: "OpenAI 兼容（自定义地址/模型）", base: "", model: "", keyHint: "高级用户：自填兼容 OpenAI 协议的 API 地址与模型名" },
     };
     async function fetchLlmSettings() {
       try { return await (await fetch("/api/llm/settings")).json(); }
@@ -167,17 +168,30 @@ const CHAT_SUGGEST = [
         const a = st.active || {};
         $("#llmState").textContent = a.source === "server" ? `尚未配置个人模型。当前使用：系统配置（${a.model}）`
           : a.source === "local" ? `尚未配置个人模型。当前使用：本机 Ollama（${a.model}）`
-          : "尚未配置任何模型——对话助手当前不可用，填好下方表单即可启用。";
+          : "尚未配置任何模型——选服务商 + 填密钥 + 保存 即可启用。";
       }
+      /* V4.3：下拉选服务商后自动填地址/模型 + 切换高级字段显隐（custom 模式显示） */
+      const prov = $("#llmProvider").value;
+      const p = LLM_PROVIDERS[prov] || LLM_PROVIDERS.custom;
+      $("#llmBase").value = p.base; $("#llmModel").value = p.model;
+      $("#llmKey").placeholder = p.keyHint || "sk-…（以服务商控制台为准）";
+      syncLlmAdvanced();
       paintModelLabel(st);
+    }
+    /* V4.3：非 custom 模式隐藏地址/模型（避免改错），custom 才显示 */
+    function syncLlmAdvanced() {
+      const prov = $("#llmProvider").value;
+      const isCustom = prov === "custom";
+      $("#llmBase").closest("label").style.display = isCustom ? "" : "none";
+      $("#llmModel").closest("label").style.display = isCustom ? "" : "none";
     }
     $("#llmCfgBtn").addEventListener("click", openLlm);
     const llmClose = $("#llmClose"); if (llmClose) llmClose.addEventListener("click", () => { $("#llmModal").hidden = true; });
     $("#llmProvider").addEventListener("change", () => {
       const p = LLM_PROVIDERS[$("#llmProvider").value] || LLM_PROVIDERS.custom;
       $("#llmBase").value = p.base; $("#llmModel").value = p.model;
-      $("#llmKey").placeholder = $("#llmProvider").value === "ollama"
-        ? "本机 Ollama 通常无需密钥，留空即可" : "sk-…（以服务商控制台为准）";
+      $("#llmKey").placeholder = p.keyHint || "sk-…（以服务商控制台为准）";
+      syncLlmAdvanced();
     });
     $("#llmEye").addEventListener("click", () => {
       const k = $("#llmKey"); const show = k.type === "password";

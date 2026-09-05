@@ -596,16 +596,16 @@
 <div class="modal-mask" id="llmModal" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="配置我的 AI 模型">
     <h3 style="margin-top:0">配置我的 AI 模型</h3>
-    <p class="muted" style="font-size:var(--text-sm);margin-top:-6px">供右下角「问」对话助手使用。密钥只保存在服务器上、按你的登录账号隔离，任何界面都不会完整显示。</p>
+    <p class="muted" style="font-size:var(--text-sm);margin-top:-6px">供右下角「问」对话助手使用。<b>选服务商后地址/模型已自动填好</b>，通常只需填 API 密钥即可；选「自定义」才需手动填地址与模型。密钥只保存在服务器上、按你的登录账号隔离，任何界面都不会完整显示。</p>
     <div class="form-grid">
       <label class="full lb">服务商<select id="llmProvider" class="sel"></select></label>
-      <label class="full lb">API 地址（仅 https）<input id="llmBase" class="inp" placeholder="https://api.deepseek.com/v1"></label>
+      <label class="full lb">API 地址（仅 https；选「自定义」才需手动填）<input id="llmBase" class="inp" placeholder="https://api.deepseek.com/v1"></label>
       <label class="full lb">API 密钥
         <span style="display:flex;gap:6px;align-items:center">
           <input id="llmKey" class="inp" type="password" autocomplete="off" placeholder="sk-…（以服务商控制台为准）" style="flex:1">
           <button class="btn btn-ghost" id="llmEye" type="button">显示</button>
         </span></label>
-      <label class="full lb">模型名称（以服务商控制台为准）<input id="llmModel" class="inp" placeholder="deepseek-chat"></label>
+      <label class="full lb">模型名称（选「自定义」才需手动填）<input id="llmModel" class="inp" placeholder="deepseek-chat"></label>
     </div>
     <p class="muted" id="llmState" style="font-size:12px;margin-top:10px"></p>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
