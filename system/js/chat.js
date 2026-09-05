@@ -123,15 +123,56 @@ const CHAT_SUGGEST = [
     if (new URLSearchParams(location.search).get("llm") === "1") { open(); openLlm(); }  /* 模型配置直达（演示/排障） */
 
     /* ── 用户自接入 LLM：⚙ 设置窗（密钥存服务器按账号隔离，界面只回显尾4位）── */
-    /* V4.3：预填主流服务商的 API 地址+模型名，用户只填 API 密钥即可；自定义模式保留高级用户入口 */
+    /* V4.3：预填主流服务商的 API 地址+模型名，用户只填 API 密钥即可；自定义模式保留高级用户入口
+       V4.3.1：每家服务商附 models 列表（截至 2026-09 主力在售），用户选服务商后下拉选具体模型 */
     const LLM_PROVIDERS = {
-      deepseek: { name: "DeepSeek（深度求索）", base: "https://api.deepseek.com/v1", model: "deepseek-chat", keyHint: "格式：sk-xxxxxxxx… 在 deepseek.com 平台控制台 → API Keys 创建" },
-      qwen:     { name: "通义千问（阿里百炼）", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", keyHint: "格式：sk-xxxxxxxx… 在 dashscope.console.aliyun.com → API-KEY 创建（兼容 OpenAI 模式）" },
-      kimi:     { name: "Kimi（月之暗面）", base: "https://api.moonshot.cn/v1", model: "kimi-k2-0905-preview", keyHint: "格式：sk-xxxxxxxx… 在 platform.moonshot.cn → API Keys 创建" },
-      zhipu:    { name: "智谱 GLM", base: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash", keyHint: "格式：xxxxxxx.yyyyyyy 在 bigmodel.cn → 个人中心 → API Keys 创建" },
-      doubao:   { name: "豆包（火山方舟）", base: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seed-1-6-250615", keyHint: "格式：xxxx-xxx-… 在 volcengine.com → 火山方舟 → API Key 管理创建（需先开通模型推理接入点）" },
-      ollama:   { name: "Ollama（本机大模型，无需密钥）", base: "http://127.0.0.1:11434/v1", model: "qwen3:4b-instruct-2507-q4_K_M", keyHint: "本机 Ollama 通常无需密钥；密钥框留空即可" },
-      custom:   { name: "OpenAI 兼容（自定义地址/模型）", base: "", model: "", keyHint: "高级用户：自填兼容 OpenAI 协议的 API 地址与模型名" },
+      deepseek: { name: "DeepSeek（深度求索）", base: "https://api.deepseek.com/v1", model: "deepseek-chat", keyHint: "格式：sk-xxxxxxxx… 在 deepseek.com 平台控制台 → API Keys 创建",
+        models: [
+          { id: "deepseek-chat",     desc: "V3.2 旗舰对话（默认，性价比最高）" },
+          { id: "deepseek-reasoner", desc: "V3.2 深度推理（R1，含思考过程）" },
+        ] },
+      qwen:     { name: "通义千问（阿里百炼）", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", keyHint: "格式：sk-xxxxxxxx… 在 dashscope.console.aliyun.com → API-KEY 创建（兼容 OpenAI 模式）",
+        models: [
+          { id: "qwen3-max",         desc: "Qwen3 Max（旗舰，长文本/工具调用）" },
+          { id: "qwen3-max-preview", desc: "Qwen3 Max 预览版" },
+          { id: "qwen-plus",         desc: "Plus（默认，性价比高）" },
+          { id: "qwen-turbo",        desc: "Turbo（速度最快，价格低）" },
+          { id: "qwen-long",         desc: "Long（百万级上下文）" },
+        ] },
+      kimi:     { name: "Kimi（月之暗面）", base: "https://api.moonshot.cn/v1", model: "moonshot-v1-128k", keyHint: "格式：sk-xxxxxxxx… 在 platform.moonshot.cn → API Keys 创建",
+        models: [
+          { id: "kimi-k2-0905-preview", desc: "Kimi K2 预览版（开源旗舰 MoE）" },
+          { id: "kimi-k2-turbo-preview", desc: "Kimi K2 Turbo（速度优化）" },
+          { id: "moonshot-v1-128k", desc: "V1 128k（长上下文）" },
+          { id: "moonshot-v1-32k",  desc: "V1 32k" },
+          { id: "moonshot-v1-8k",   desc: "V1 8k（速度最快）" },
+        ] },
+      zhipu:    { name: "智谱 GLM", base: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash", keyHint: "格式：xxxxxxx.yyyyyyy 在 bigmodel.cn → 个人中心 → API Keys 创建",
+        models: [
+          { id: "glm-4.6",           desc: "GLM-4.6（最新旗舰对话）" },
+          { id: "glm-4.5",           desc: "GLM-4.5" },
+          { id: "glm-4-plus",        desc: "GLM-4 Plus（高阶推理）" },
+          { id: "glm-4-flash",       desc: "GLM-4 Flash（默认，免费档）" },
+          { id: "glm-4-flash-250414", desc: "GLM-4 Flash 旧版 ID（兼容）" },
+          { id: "glm-z1-air",        desc: "GLM-Z1 Air（深度推理）" },
+        ] },
+      doubao:   { name: "豆包（火山方舟）", base: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seed-1-6-250615", keyHint: "格式：xxxx-xxx-… 在 volcengine.com → 火山方舟 → API Key 管理创建（需先开通模型推理接入点）",
+        models: [
+          { id: "doubao-seed-1-6-250615",  desc: "Seed 1.6（当前主推旗舰）" },
+          { id: "doubao-seed-1-6-lite",   desc: "Seed 1.6 Lite（轻量）" },
+          { id: "doubao-1-5-pro-32k-250115", desc: "1.5 Pro 32k（备选）" },
+          { id: "doubao-1-5-lite-32k-250115", desc: "1.5 Lite 32k（备选）" },
+        ] },
+      ollama:   { name: "Ollama（本机大模型，无需密钥）", base: "http://127.0.0.1:11434/v1", model: "qwen3:4b-instruct-2507-q4_K_M", keyHint: "本机 Ollama 通常无需密钥；密钥框留空即可；先在终端 ollama pull <模型>",
+        models: [
+          { id: "qwen3:4b-instruct-2507-q4_K_M", desc: "Qwen3 4B 量化（本机默认）" },
+          { id: "qwen3:8b",                  desc: "Qwen3 8B（更强）" },
+          { id: "qwen3:14b",                 desc: "Qwen3 14B（要 16G 内存）" },
+          { id: "deepseek-r1:8b",            desc: "DeepSeek R1 蒸馏 8B" },
+          { id: "gemma3:4b",                 desc: "Gemma 3 4B（Google）" },
+          { id: "llama3.1:8b",               desc: "Llama 3.1 8B（Meta）" },
+        ] },
+      custom:   { name: "OpenAI 兼容（自定义地址/模型）", base: "", model: "", keyHint: "高级用户：自填兼容 OpenAI 协议的 API 地址与模型名", models: [] },
     };
     async function fetchLlmSettings() {
       try { return await (await fetch("/api/llm/settings")).json(); }
@@ -158,23 +199,25 @@ const CHAT_SUGGEST = [
       $("#llmTestOut").innerHTML = "";
       const st = await fetchLlmSettings();
       if (!st) { $("#llmState").textContent = "读取失败：需要在服务器模式下使用（本地双击打开时不可配置）。"; return; }
+      let savedModel = "";
       if (st.user) {
         $("#llmProvider").value = providerKeyOf(st.user.baseUrl, st.user.provider);
         $("#llmBase").value = st.user.baseUrl;
-        $("#llmModel").value = st.user.model;
+        savedModel = st.user.model;
         $("#llmKey").placeholder = `已保存 ${st.user.keyTail}（留空则沿用）`;
         $("#llmState").textContent = `我的配置已生效：${st.user.model} · 密钥${st.user.keyTail}（${st.user.updatedAt} 保存）。清除后回退系统默认。`;
       } else {
         const a = st.active || {};
         $("#llmState").textContent = a.source === "server" ? `尚未配置个人模型。当前使用：系统配置（${a.model}）`
           : a.source === "local" ? `尚未配置个人模型。当前使用：本机 Ollama（${a.model}）`
-          : "尚未配置任何模型——选服务商 + 填密钥 + 保存 即可启用。";
+          : "尚未配置任何模型——选服务商 + 选模型 + 填密钥 + 保存 即可启用。";
       }
-      /* V4.3：下拉选服务商后自动填地址/模型 + 切换高级字段显隐（custom 模式显示） */
+      /* V4.3.1：填充模型下拉（选中的服务商的 models 列表） */
       const prov = $("#llmProvider").value;
       const p = LLM_PROVIDERS[prov] || LLM_PROVIDERS.custom;
-      $("#llmBase").value = p.base; $("#llmModel").value = p.model;
+      $("#llmBase").value = p.base;
       $("#llmKey").placeholder = p.keyHint || "sk-…（以服务商控制台为准）";
+      fillModelSelect(prov, savedModel || p.model);
       syncLlmAdvanced();
       paintModelLabel(st);
     }
@@ -183,14 +226,48 @@ const CHAT_SUGGEST = [
       const prov = $("#llmProvider").value;
       const isCustom = prov === "custom";
       $("#llmBase").closest("label").style.display = isCustom ? "" : "none";
-      $("#llmModel").closest("label").style.display = isCustom ? "" : "none";
+      /* 模型字段始终显示——custom 走 select；非 custom 走 select，下拉由 models 列表填充 */
+    }
+    /* V4.3.1：填充模型下拉。最末项「自定义」切到手动输入框 */
+    function fillModelSelect(prov, currentModel) {
+      const p = LLM_PROVIDERS[prov] || LLM_PROVIDERS.custom;
+      const sel = $("#llmModel");
+      const custom = $("#llmModelCustom");
+      const opts = (p.models || []).map(m =>
+        `<option value="${esc(m.id)}">${esc(m.id)} — ${esc(m.desc)}</option>`).join("");
+      sel.innerHTML = `<option value="${esc(p.model)}" selected>${esc(p.model)}（推荐）</option>` +
+                      opts +
+                      `<option value="__custom__">自定义（手填）…</option>`;
+      /* 若当前 model 不在下拉里（如保存了旧 ID），保留并显示 */
+      if (currentModel && currentModel !== p.model && ![...sel.options].some(o => o.value === currentModel)) {
+        const o = document.createElement("option");
+        o.value = currentModel; o.textContent = currentModel + "（已保存）"; sel.appendChild(o);
+        sel.value = currentModel;
+      }
+      /* custom 模式：无下拉项，直接输入 */
+      if (prov === "custom") {
+        sel.style.display = "none"; custom.style.display = "";
+        custom.value = currentModel || "";
+      } else {
+        sel.style.display = ""; custom.style.display = "none";
+        sel.value = [...sel.options].some(o => o.value === currentModel) ? currentModel : p.model;
+      }
     }
     $("#llmCfgBtn").addEventListener("click", openLlm);
     const llmClose = $("#llmClose"); if (llmClose) llmClose.addEventListener("click", () => { $("#llmModal").hidden = true; });
+    $("#llmModel").addEventListener("change", () => {
+      if ($("#llmModel").value === "__custom__") {
+        $("#llmModel").style.display = "none";
+        $("#llmModelCustom").style.display = "";
+        $("#llmModelCustom").focus();
+      }
+    });
     $("#llmProvider").addEventListener("change", () => {
-      const p = LLM_PROVIDERS[$("#llmProvider").value] || LLM_PROVIDERS.custom;
-      $("#llmBase").value = p.base; $("#llmModel").value = p.model;
+      const prov = $("#llmProvider").value;
+      const p = LLM_PROVIDERS[prov] || LLM_PROVIDERS.custom;
+      $("#llmBase").value = p.base;
       $("#llmKey").placeholder = p.keyHint || "sk-…（以服务商控制台为准）";
+      fillModelSelect(prov, p.model);
       syncLlmAdvanced();
     });
     $("#llmEye").addEventListener("click", () => {
@@ -204,8 +281,10 @@ const CHAT_SUGGEST = [
       try {
         const key = $("#llmKey").value.trim();
         const prov = $("#llmProvider").value;
+        const modelEl = $("#llmModel");
+        const model = (modelEl.style.display === "none") ? $("#llmModelCustom").value.trim() : modelEl.value.trim();
         const body = (key || prov === "ollama")
-          ? { provider: prov, baseUrl: $("#llmBase").value.trim(), model: $("#llmModel").value.trim(), apiKey: key } : {};
+          ? { provider: prov, baseUrl: $("#llmBase").value.trim(), model, apiKey: key } : {};
         const resp = await fetch("/api/llm/test", { method: "POST",
           headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), redirect: "manual" });
         /* V4.3：检测 nginx 把请求重定向到 SSO 登录页（302）→ 不是 API 错误，而是 SSO 失效 */
@@ -222,10 +301,12 @@ const CHAT_SUGGEST = [
     });
     $("#llmSave").addEventListener("click", async () => {
       try {
+        const modelEl = $("#llmModel");
+        const model = (modelEl.style.display === "none") ? $("#llmModelCustom").value.trim() : modelEl.value.trim();
         const resp = await fetch("/api/llm/settings", { method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ provider: $("#llmProvider").value, baseUrl: $("#llmBase").value.trim(),
-                                 model: $("#llmModel").value.trim(), apiKey: $("#llmKey").value.trim() }), redirect: "manual" });
+                                 model, apiKey: $("#llmKey").value.trim() }), redirect: "manual" });
         if (resp.type === "opaqueredirect" || resp.status === 302 || resp.status === 0) {
           $("#llmTestOut").innerHTML = `<p style="color:var(--color-bad)">✗ 请求被拦截（${resp.status || '重定向'}）</p><p class="muted" style="font-size:12px">多半是 SSO 登录态失效：请刷新页面重新登录。</p>`;
           return;

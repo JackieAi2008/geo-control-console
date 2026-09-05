@@ -605,7 +605,10 @@
           <input id="llmKey" class="inp" type="password" autocomplete="off" placeholder="sk-…（以服务商控制台为准）" style="flex:1">
           <button class="btn btn-ghost" id="llmEye" type="button">显示</button>
         </span></label>
-      <label class="full lb">模型名称（选「自定义」才需手动填）<input id="llmModel" class="inp" placeholder="deepseek-chat"></label>
+      <label class="full lb">模型名称（选服务商后下拉选；最末项「自定义」可手填）
+        <select id="llmModel" class="sel"><option value="">先选服务商</option></select>
+        <input id="llmModelCustom" class="inp" style="display:none;margin-top:6px" placeholder="手填模型名称，如：deepseek-chat">
+      </label>
     </div>
     <p class="muted" id="llmState" style="font-size:12px;margin-top:10px"></p>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
