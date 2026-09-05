@@ -637,6 +637,20 @@
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 <script src="js/ops.js"></script>
-<script src="js/chat.js"></script>
+<!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
+     自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
+<script>
+  (function () {
+    try {
+      fetch("/js/chat.js", { cache: "force-cache" }).then(r => r.text()).then(t => {
+        const m = t.match(/const LLM_PROVIDERS\s*=\s*\{([^}]+)\}/);
+        if (m && m[1].split(",").length < 5 && !location.search.includes("cachebust=")) {
+          location.replace(location.pathname + location.search + (location.search ? "&" : "?") + "cachebust=4.3");
+        }
+      });
+    } catch (e) {}
+  })();
+</script>
+<script src="js/chat.js?v=4.3"></script>
 </body>
 </html>
