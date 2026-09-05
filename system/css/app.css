@@ -122,6 +122,12 @@ main { max-width: 1320px; margin: 0 auto; padding: var(--space-lg) var(--space-l
   display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-sm);
 }
 .card > h3 .hint { font-family: var(--font-body); font-weight: 400; font-size: var(--text-xs); color: var(--color-ink-3); }
+.card > h3 .h3-title { white-space: nowrap; }   /* 卡片标题主词不折行（hint 可换行） */
+/* 窄屏：hint 挤压时换到标题下一行，不与标题抢宽度 */
+@media (max-width: 768px) {
+  .card > h3 { flex-wrap: wrap; }
+  .card > h3 .hint { flex-basis: 100%; }
+}
 .muted { color: var(--color-ink-3); font-size: var(--text-sm); }
 .num { font-family: var(--font-mono); }
 
@@ -412,6 +418,8 @@ pre.prompt-view {
 @media (max-width: 768px) {
   .chat-panel { right: 8px; left: 8px; width: auto; bottom: 8px; height: 76vh; }
   .chat-fab { right: 14px; bottom: 14px; width: 56px; height: 56px; }
+  /* FAB 遮正文兜底：窄屏下给页面底部留出 FAB 高度的安全区 */
+  main { padding-bottom: calc(var(--space-xl) + 72px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -485,6 +493,7 @@ pre.prompt-view {
   .proj-chip { flex: 1 1 100%; justify-content: space-between; min-height: 44px; }  /* 触控目标 ≥44px */
   .proj-chip .pc-name { max-width: none; }
   .proj-grid { grid-template-columns: 1fr; }
+  .proj-card .pc-stats { display: grid; grid-template-columns: repeat(3, auto); gap: var(--space-sm) var(--space-lg); justify-content: start; }  /* 5 列挤压 → 3+2 两行 */
 }
 
 /* ── V4 1b：采样卡 / 矩阵管理 / 批量粘贴 ── */

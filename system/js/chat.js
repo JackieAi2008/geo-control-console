@@ -1,7 +1,6 @@
-/* GEO智控台 V3.2 · 内置对话助手（真实调用本机Ollama模型，经 /api/chat 流式返回） */
+/* GEO智控台 V4.2 · 内置对话助手（真实调用本机Ollama/DeepSeek，经 /api/chat 流式返回；对话历史按项目隔离） */
 "use strict";
 
-const CHAT_STORE = "geodesk.chat.v1";
 const CHAT_SUGGEST = [
   "我是新手，教我怎么用这个系统",
   "解读我的一键诊断结果",
@@ -11,8 +10,14 @@ const CHAT_SUGGEST = [
 ];
 
 (function () {
+  /* V4.2：历史记录键跟随当前项目——切换项目互不可见，避免跨项目上下文串味 */
+  const chatKey = () => "geodesk.chat.v1." + ((typeof CUR !== "undefined" && CUR) ? CUR : "local");
   let history = [];
-  try { history = JSON.parse(localStorage.getItem(CHAT_STORE) || "[]"); } catch (e) {}
+  function loadHistory() {
+    history = [];
+    try { history = JSON.parse(localStorage.getItem(chatKey()) || "[]"); } catch (e) {}
+  }
+  loadHistory();
 
   function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
   function clean(t) { return t.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/^[\s\n]+/, ""); }
@@ -49,11 +54,14 @@ const CHAT_SUGGEST = [
     renderAll();
     $("#chatChips").innerHTML = CHAT_SUGGEST.map(s => `<button class="chip" data-sug="${esc(s)}">${esc(s)}</button>`).join("");
 
-    const open = () => { panel.hidden = false; fab.hidden = true; $("#chatTa").focus(); };
+    const open = () => {
+      panel.hidden = false; fab.hidden = true; $("#chatTa").focus();
+      loadHistory(); renderAll();   /* 每次打开按当前项目重载历史 */
+    };
     const close = () => { panel.hidden = true; fab.hidden = false; };
     fab.addEventListener("click", open);
     $("#chatClose").addEventListener("click", close);
-    $("#chatClear").addEventListener("click", () => { history = []; localStorage.setItem(CHAT_STORE, "[]"); renderAll(); });
+    $("#chatClear").addEventListener("click", () => { history = []; localStorage.setItem(chatKey(), "[]"); renderAll(); });
     const ob = $("#openChatBtn"); if (ob) ob.addEventListener("click", open);
 
     let busy = false;
@@ -62,7 +70,7 @@ const CHAT_SUGGEST = [
       busy = true;
       const send = $("#chatSend"); send.classList.add("is-busy"); send.textContent = "回答中…";
       history.push({ role: "user", content: text.trim() });
-      localStorage.setItem(CHAT_STORE, JSON.stringify(history.slice(-24)));
+      localStorage.setItem(chatKey(), JSON.stringify(history.slice(-24)));
       const body = $("#chatBody");
       body.insertAdjacentHTML("beforeend", `<div class="chat-msg user">${esc(text)}</div><div class="chat-msg ai" id="chatLive"><span class="chat-dots">…</span></div>`);
       body.scrollTop = body.scrollHeight;
@@ -96,7 +104,7 @@ const CHAT_SUGGEST = [
         if (!acc.trim()) acc = "（模型返回为空，请重试或换个小问题）";
         live.innerHTML = esc(acc).replace(/\n/g, "<br>");
         history.push({ role: "assistant", content: acc });
-        localStorage.setItem(CHAT_STORE, JSON.stringify(history.slice(-24)));
+        localStorage.setItem(chatKey(), JSON.stringify(history.slice(-24)));
       } catch (e) {
         clearTimeout(slowTimer); delete live.dataset.started;
         live.innerHTML = `<span style="color:var(--color-bad)">出错了：${esc(e.message)}</span><br><span class="muted" style="font-size:12px">若提示连接失败：请联系系统管理员启动后台服务。</span>`;

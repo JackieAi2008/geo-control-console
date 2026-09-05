@@ -237,8 +237,10 @@ def diagnose(url, brand="", own_domains=None):
                    "score": {}})
     # ── T1 robots.txt 与 AI 爬虫 ──
     rst, rtxt, rurl = _fetch(https_url + "robots.txt")
+    robots_attempts = [f"GET {https_url}robots.txt → {rst if rst is not None else '连接失败'}"]
     if rst != 200 and rst is not None or rst is None:
         rst, rtxt, rurl = _fetch(http_url + "robots.txt")
+        robots_attempts.append(f"GET {http_url}robots.txt → {rst if rst is not None else '连接失败'}")
     if rst == 403:
         checks.append({"id": "T1", "name": "robots.txt / WAF", "status": "fail",
                        "evidence": f"GET {rurl} → 403 Forbidden（WAF/反爬对非浏览器UA拦截——AI爬虫大概率同样被拦，需IT在CDN/WAF白名单放行）", "score": {"T1": 0}})
@@ -256,8 +258,9 @@ def diagnose(url, brand="", own_domains=None):
             checks.append({"id": "T1", "name": "robots.txt / WAF", "status": "pass",
                            "evidence": f"GET {rurl} → 200，未发现全站Disallow或AI爬虫拦截{named_txt}", "score": {"T1": 2}})
     else:
+        # V4.2：证据如实列出两次尝试（HTTPS/HTTP），避免读者误以为只查了一种协议
         checks.append({"id": "T1", "name": "robots.txt / WAF", "status": "warn",
-                       "evidence": f"GET {rurl} → {rst if rst is not None else rtxt}（未获取到robots.txt）", "score": {"T1": 1}})
+                       "evidence": "；".join(robots_attempts) + "（未获取到robots.txt）", "score": {"T1": 1}})
     # ── T5 llms.txt ──
     lst, _, lurl = _fetch(https_url + "llms.txt")
     checks.append({"id": "T5", "name": "llms.txt（可选项）", "status": "pass" if lst == 200 else "warn",
@@ -362,8 +365,18 @@ def parse_answer(text, brand, competitors):
         if s in ("0.5",): return 0.5
         if s in ("0", "0.0"): return 0
         return None
+    def norm_host(x):
+        # V4.2：归一化为裸域名——去协议、去路径/锚点、去端口前的空白；模型有时会带 https:// 前缀
+        h = re.sub(r"^https?://", "", str(x).strip(), flags=re.I)
+        h = h.split("/")[0].split("?")[0].strip().lower()
+        return h
+    doms = []
+    for x in (d.get("citedDomains") or []):
+        h = norm_host(x)
+        if h and "." in h and h not in doms:
+            doms.append(h)
     return {"mention": norm3(d.get("mention")), "sentiment": norm3(d.get("sentiment")),
-            "citedDomains": [str(x).strip() for x in (d.get("citedDomains") or []) if str(x).strip()][:10],
+            "citedDomains": doms[:10],
             "competitorMentions": [str(x).strip() for x in (d.get("competitorMentions") or []) if str(x).strip()][:10]}
 
 def run_probe(query, own_domains=None):
@@ -417,7 +430,7 @@ def kv_migrate(conn):
         kv_put(conn, "doc", {"rev": 1, "state": old or {}})
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "GeoDesk/4.0"
+    server_version = "GeoDesk/4.2"
     conn = None  # 由 main 注入
 
     def log_message(self, fmt, *args):
@@ -443,7 +456,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         qs = dict(p.split("=", 1) for p in urlparse(self.path).query.split("&") if "=" in p)
         if path == "/api/ping":
-            return self._send(200, {"ok": True, "server": "geodesk", "version": "4.0"})
+            return self._send(200, {"ok": True, "server": "geodesk", "version": "4.2"})
         if path == "/api/llm/status":
             # 给运维/前端用：当前聊天后端是远端 API 还是本地 Ollama
             if DEEPSEEK_API_KEY:
@@ -529,11 +542,34 @@ class Handler(BaseHTTPRequestHandler):
                         "name": str(body.get("name") or "未命名项目").strip()[:60],
                         "url": str(body.get("url") or "").strip()[:120],
                         "brand": str(body.get("brand") or "").strip()[:60],
+                        "operator": str(body.get("operator") or "").strip()[:60],
                         "ownDomains": [str(d).strip()[:80] for d in (body.get("ownDomains") or []) if str(d).strip()][:20],
                         "createdAt": time.strftime("%Y-%m-%d"), "archived": False}
                 kv_put(self.conn, "projects", plist + [proj])
                 kv_put(self.conn, proj_doc_key(pid), {"rev": 0, "state": {}})
                 audit_append(self.conn, body.get("operator"), pid, "POST /api/projects", f"新建项目「{proj['name']}」")
+                return self._send(200, {"ok": True, "id": pid})
+            except Exception as e:
+                return self._send(400, {"error": str(e)})
+        if path == "/api/projects/update":
+            """V4.2：更新项目元数据（名称/品牌词/运营主体/自有域名）——元数据单一真相落地：
+               前端启动时把本机可读元数据回写服务器，修复历史「域名当项目名」遗留。"""
+            try:
+                body = self._body() or {}
+                pid = str(body.get("id") or "")
+                plist = projects_ensure(self.conn)
+                p = next((x for x in plist if x["id"] == pid), None)
+                if not p:
+                    return self._send(404, {"error": f"project 不存在: {pid}"})
+                if "name" in body: p["name"] = str(body.get("name") or p["name"]).strip()[:60] or p["name"]
+                if "url" in body: p["url"] = str(body.get("url") or "").strip()[:120]
+                if "brand" in body: p["brand"] = str(body.get("brand") or "").strip()[:60]
+                if "operator" in body: p["operator"] = str(body.get("operator") or "").strip()[:60]
+                if "ownDomains" in body:
+                    p["ownDomains"] = [str(d).strip()[:80] for d in (body.get("ownDomains") or []) if str(d).strip()][:20]
+                kv_put(self.conn, "projects", plist)
+                audit_append(self.conn, body.get("operator"), pid, "POST /api/projects/update",
+                             f"更新项目元数据「{p['name']}」")
                 return self._send(200, {"ok": True, "id": pid})
             except Exception as e:
                 return self._send(400, {"error": str(e)})

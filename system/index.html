@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>招商产园 GEO 智控台 V4</title>
+<title>招商产园 GEO 智控台 V4.2</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/app.css">
@@ -90,7 +90,7 @@
       <ul class="rule-list" id="dashTodo"></ul>
     </div>
     <div class="card">
-      <h3>基线发现 <span class="hint">2026-09-04 蛇口网谷信源侧实测</span></h3>
+      <h3>基线发现 <span class="hint">蛇口网谷信源侧静态快照（2026-09-04）· 有时效，以最新一键诊断为准</span></h3>
       <ul class="rule-list" id="dashBase"></ul>
     </div>
   </div>
@@ -273,7 +273,7 @@
       <h3>渠道分发图 <span class="hint">8个真实入口 · 按引擎偏好排序 · 含首发内容建议</span></h3>
       <div class="agent-grid" id="channelBox"></div>
     </div>
-    <div class="card" style="margin-top:16px">
+      <div class="card" id="briefCard" style="margin-top:16px">
       <h3>内容选题单工单 <span class="hint">按问题场景生成可派单的选题工单</span></h3>
       <div class="grid grid-2">
         <div class="form-grid">
@@ -388,8 +388,8 @@
   <div class="grid grid-3" id="monStats"></div>
   <div class="grid grid-2" style="margin-top:16px">
     <div class="card">
-      <h3>① 提问矩阵 <span class="hint">按重要程度优先提问 · 点击「复制」到各引擎提问</span>
-        <span style="display:flex;gap:6px"><button class="btn btn-sm btn-ghost" id="paToggle">管理问题矩阵</button></span>
+      <h3><span class="h3-title">① 提问矩阵</span> <span class="hint">按重要程度优先提问 · 点击「复制」到各引擎提问
+        <span style="display:flex;gap:6px;margin-top:4px"><button class="btn btn-sm btn-ghost" id="paToggle">管理问题矩阵</button></span></span>
       </h3>
       <div class="filter-row" id="promptFilter"></div>
       <div id="promptAdmin" hidden style="margin-bottom:12px"></div>
@@ -548,7 +548,7 @@
 </main>
 
 <footer class="foot">
-  <p><b>招商产园 GEO 智控台 V4.0</b> · 本地（双击打开）/ 服务器（<span class="num">python3 server.py</span>）·
+  <p><b>招商产园 GEO 智控台 V4.2</b> · <span id="srvState" class="muted">正在检测服务端…</span> ·
     <button class="btn btn-sm btn-ghost" id="stateExport" style="vertical-align:middle">导出全量数据</button>
     <label class="btn btn-sm btn-ghost" style="vertical-align:middle;cursor:pointer">导入数据
       <input type="file" id="stateImport" accept=".json" style="display:none"></label>
@@ -566,6 +566,7 @@
       <label class="full lb">项目名称（如：南京金融城）<input id="npName" class="inp" placeholder="园区或客户名" maxlength="60"></label>
       <label class="full lb">官方承载页域名（可后补，用于一键诊断）<input id="npUrl" class="inp" placeholder="www.example.com" maxlength="120"></label>
       <label class="full lb">品牌词（品牌词搜索验证用）<input id="npBrand" class="inp" placeholder="如：南京金融城" maxlength="60"></label>
+      <label class="full lb">运营主体（生成物料时的归属表述，可改）<input id="npOperator" class="inp" value="招商蛇口产业园区（招商产园）" maxlength="60"></label>
       <label class="full lb">自有域名（每行一个——用于自有渠道判定、AI 引用中来自自有渠道的比例与品牌词搜索）<textarea id="npOwn" class="inp" rows="3" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号）"></textarea></label>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">

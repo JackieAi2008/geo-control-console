@@ -81,10 +81,12 @@ function genRobotsTxt() {
     OPS_BOTS.map(b => `User-agent: ${b}\nAllow: /`).join("\n\n");
 }
 function genLlmsTxt(park, url) {
-  return `# ${park}\n\n> 官方承载页 https://${url}/ · 运营方：招商蛇口产业园区（招商产园）\n\n## 核心事实（数据时点见口径表）\n- 入驻企业：【见口径表】\n- 产业聚集度：【见口径表】\n\n## 页面导航\n- [官方承载页](https://${url}/)\n\n<!-- 更新时间 ${today()} -->`;
+  const op = (typeof projCtx === "function") ? projCtx().operator : "招商蛇口产业园区（招商产园）";
+  return `# ${park}\n\n> 官方承载页 https://${url}/ · 运营方：${op}\n\n## 核心事实（数据时点见口径表）\n- 入驻企业：【见口径表】\n- 产业聚集度：【见口径表】\n\n## 页面导航\n- [官方承载页](https://${url}/)\n\n<!-- 更新时间 ${today()} -->`;
 }
 function genSchema(park, url, city, industry) {
-  return `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "招商蛇口产业园区（招商产园）" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "description": "${park}是${city}${industry}产业园区。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", "产业园区", "企业选址"]\n}\n</script>`;
+  const op = (typeof projCtx === "function") ? projCtx().operator : "招商蛇口产业园区（招商产园）";
+  return `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "description": "${park}是${city}${industry}产业园区。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", "产业园区", "企业选址"]\n}\n</script>`;
 }
 
 /* ══════ 整改工单（人话行动卡版：五要素+按业务价值排序+可直贴微信的转发消息）════════ */
@@ -157,7 +159,7 @@ function buildWorkOrderHtml(e) {
   </div>
   ${SELF.length ? `<p class="kicker">第一部分 · 不用等技术，你自己今天就能做</p>` : ""}
   ${SELF.map((c, i) => woCard(c, e, i + 1)).join("")}
-  ${IT.length ? `<p class="kicker" style="margin-top:12px">第二部分 · 需要能登录官网的人处理（终稿物料在桌面 SKIPGEO/output/蛇口网谷终稿物料/，转发消息里也含代码）</p>` : ""}
+  ${IT.length ? `<p class="kicker" style="margin-top:12px">第二部分 · 需要能登录官网的人处理（终稿物料由本系统「一键优化文件」生成，转发消息里也含代码）</p>` : ""}
   ${IT.map((c, i) => woCard(c, e, (SELF.length ? SELF.length : 0) + i + 1)).join("")}
   <p class="muted" style="font-size:12px">生成 ${today()} · 基于 ${esc(e.ts)} 诊断 · 状态存在本系统 · 全部做完后重跑「跑一轮30问」看素材池变化</p>`;
 }
@@ -182,10 +184,12 @@ function woPrintDoc(e) {
 
 /* ══════ ② 一键优化文件 ══════ */
 function opsBuildToolkit() {
-  const park = $("#tkPark").value.trim() || "试点园区";
-  const city = $("#tkCity").value.trim() || "深圳";
-  const industry = $("#tkIndustry").value.trim() || "数智科技";
-  const url = (state.parkUrl || "").trim() || "www.example.com";
+  const ctx = projCtx();
+  const park = $("#tkPark").value.trim() || ctx.park || "试点园区";
+  const city = $("#tkCity").value.trim() || ctx.city || "深圳";
+  const industry = $("#tkIndustry").value.trim() || ctx.industry || "数智科技";
+  const url = (state.parkUrl || curProject().url || "").trim() || "www.example.com";
+  const op = ctx.operator, opShort = ctx.operatorShort;
   const rows = state.caliber.filter(r => r.park && (r.park.includes(park.slice(0, 2)) || park.includes(r.park.slice(0, 2))));
   const F = {}; rows.forEach(r => { F[r.field] = r.official; });
   const g = (k, d) => F[k] || d;
@@ -196,16 +200,16 @@ function opsBuildToolkit() {
       .map(b => `User-agent: ${b}\nAllow: /`).join("\n\n") +
     `\n\n# 提示：若官网使用 Cloudflare/阿里云WAF，还需在控制台「Bot管理」中将上述爬虫加入白名单\n# （Cloudflare 自 2025-07 对新域名默认封锁 AI 爬虫——这是最高频的技术翻车点）`;
 
-  const llms = `# ${park}\n\n> ${city}${industry}产业园区 · 运营方：招商蛇口产业园区（招商产园） · 官网 https://${url}\n\n## 核心事实（数据时点见口径表）\n\n- 入驻企业：${g("入驻企业数", "【待填：见口径表】")}\n- 产业聚集度：${g("产业聚集度", "【待填】")}\n- 运营面积：${g("面积", "【待填】")}㎡\n- 主导产业：${industry}\n- 权威背书：${g("行业排名", "方升榜中国产业园区运营商50强（引用须写明榜单名与年份）")}\n\n## 页面导航\n\n- [园区官网](https://${url}/)\n- [一园一档页]（部署后把链接更新到这里）\n- [选址FAQ]（部署后把链接更新到这里）\n\n<!-- 更新时间 ${today()} · 责任人：__ -->`;
+  const llms = `# ${park}\n\n> ${city}${industry}产业园区 · 运营方：${op} · 官网 https://${url}\n\n## 核心事实（数据时点见口径表）\n\n- 入驻企业：${g("入驻企业数", "【待填：见口径表】")}\n- 产业聚集度：${g("产业聚集度", "【待填】")}\n- 运营面积：${g("面积", "【待填】")}㎡\n- 主导产业：${industry}\n- 权威背书：${g("行业排名", "【待填：榜单名+年份，引用须写明榜单名】")}\n\n## 页面导航\n\n- [园区官网](https://${url}/)\n- [一园一档页]（部署后把链接更新到这里）\n- [选址FAQ]（部署后把链接更新到这里）\n\n<!-- 更新时间 ${today()} · 责任人：__ -->`;
 
-  const jsonld = `<!-- 结构化数据：贴到园区页面 </head> 前（部署前把【待填】补齐，并对照口径表逐项核对） -->\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "alternateName": "${park}（招商产园）",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "招商蛇口产业园区（招商产园）" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "areaServed": "${city}",\n  "description": "${park}是${city}${industry}产业园区，入驻企业${g("入驻企业数", "【待填】")}，产业聚集度${g("产业聚集度", "【待填】")}。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", "产业园区", "企业选址"]\n}\n</script>`;
+  const jsonld = `<!-- 结构化数据：贴到园区页面 </head> 前（部署前把【待填】补齐，并对照口径表逐项核对） -->\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "alternateName": "${park}（${opShort}）",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "areaServed": "${city}",\n  "description": "${park}是${city}${industry}产业园区，入驻企业${g("入驻企业数", "【待填】")}，产业聚集度${g("产业聚集度", "【待填】")}。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", "产业园区", "企业选址"]\n}\n</script>`;
 
-  const profile = `# ${park}（一园一档）\n> 数据截至 ${today()} · 责任人：__ · 数字均取自口径表，发布前逐项核对\n\n## 一句话\n${park}是招商蛇口产业园区（招商产园）旗下园区，位于${city}，主导${industry}产业。\n\n## 基本信息表\n| 项目 | 数据 | 时点 |\n|---|---|---|\n| 运营主体 | 招商蛇口产业园区（招商产园） | — |\n| 区位交通 | 【待填：地址/地铁线站/距离】 | — |\n| 运营面积 | ${g("面积", "【待填】")} | 【待填】 |\n| 入驻企业 | ${g("入驻企业数", "【待填】")} | 【待填】 |\n| 产业聚集度 | ${g("产业聚集度", "【待填】")} | 【待填】 |\n| 租金区间 | 【待填：元/㎡/月】 | 【待填】 |\n| 龙头企业 | 【待填：500强/上市公司名单】 | — |\n| 权威背书 | ${g("行业排名", "【待填：榜单名+年份】")} | — |\n\n## 选址者最关心的5个问题（FAQ骨架，逐问补答≤300字）\n${P_prompts().filter(p => p.cat === "选址决策").slice(0, 5).map(p => `### ${p.q}\n【答案前置：先给结论+2个硬数据，再展开】`).join("\n\n")}\n\n## 企业说\n${(() => { const qs = (typeof evidenceQuotes === "function") ? evidenceQuotes(park) : [];
+  const profile = `# ${park}（一园一档）\n> 数据截至 ${today()} · 责任人：__ · 数字均取自口径表，发布前逐项核对\n\n## 一句话\n${park}是${op}旗下园区，位于${city}，主导${industry}产业。\n\n## 基本信息表\n| 项目 | 数据 | 时点 |\n|---|---|---|\n| 运营主体 | ${op} | — |\n| 区位交通 | 【待填：地址/地铁线站/距离】 | — |\n| 运营面积 | ${g("面积", "【待填】")} | 【待填】 |\n| 入驻企业 | ${g("入驻企业数", "【待填】")} | 【待填】 |\n| 产业聚集度 | ${g("产业聚集度", "【待填】")} | 【待填】 |\n| 租金区间 | 【待填：元/㎡/月】 | 【待填】 |\n| 龙头企业 | 【待填：500强/上市公司名单】 | — |\n| 权威背书 | ${g("行业排名", "【待填：榜单名+年份】")} | — |\n\n## 选址者最关心的5个问题（FAQ骨架，逐问补答≤300字）\n${P_prompts().filter(p => p.cat === "选址决策").slice(0, 5).map(p => `### ${p.q}\n【答案前置：先给结论+2个硬数据，再展开】`).join("\n\n")}\n\n## 企业说\n${(() => { const qs = (typeof evidenceQuotes === "function") ? evidenceQuotes(park) : [];
   return qs.length ? qs.map(q => `> 「${q.content}」\n> —— ${q.person}${q.title ? "·" + q.title : ""}${q.source ? `（${q.source}）` : ""}`).join("\n\n") : "> 【待采集：入驻企业负责人原话，带姓名职务（在「诊断→证据库」录入已核验引言后，此处自动填充）】"; })()}\n\n*更新时间：${today()} · 责任人：__*`;
 
   const faqMd = `# ${park} 选址FAQ（20问）\n> 每问一答、答案前置、≤300字、数据取自口径表；答完贴入「诊断→内容评分」≥75分再发布\n\n${[...P_prompts().filter(p => p.cat === "选址决策"), ...P_prompts().filter(p => p.cat === "品牌认知")].slice(0, 20).map((p, i) => `## ${i + 1}. ${p.q}\n【结论句式：${park}……（首个数字：${g("入驻企业数", "企业数【待填】")}；第二个数字：${g("产业聚集度", "聚集度【待填】")}）】\n【展开：区位/载体/政策/服务各一句，数字优先】\n【出处：（来源：口径表/权威榜单，年份）】`).join("\n\n")}`;
 
-  const channelPack = `# ${park} 渠道分发分发指南\n> 生成 ${today()} · 每个渠道都是真实入口，按顺序执行；先发布、后监测（监测页一键跑30问）\n\n## 第一周（基础层+自有渠道）\n1. 官网：部署 robots 片段 + 结构化数据 + 一园一档页 + FAQ页（文件在左侧已生成）\n2. 百度百科：按口径表更新词条，每个数字附权威来源\n3. 企查查/天眼查：核验运营主体信息\n\n## 第二周起（内容矩阵，按引擎偏好排序）\n${GEO.channels.map((c, i) => `${i + 1}. **${c.name}** — ${c.engine}\n   入口：${c.entry}\n   动作：${c.action}\n   ${c.first.replace("{园区}", park).replace("{产业}", industry)}`).join("\n\n")}\n\n## 节奏与红线\n- 节奏：公众号双周 / 知乎月2 / 头条百家随发 / 抖音周1\n- 红线：同一事实多渠道口径必须一致（DeepSeek 对不一致品牌首选率暴跌82%）；禁堆砌夸饰；效果预期 10–15天首批引用、8–12周稳定（行业参考值，以监测台账为准）`;
+  const channelPack = `# ${park} 渠道分发指南\n> 生成 ${today()} · 每个渠道都是真实入口，按顺序执行；先发布、后监测（监测页一键跑30问）\n\n## 第一周（基础层+自有渠道）\n1. 官网：部署 robots 片段 + 结构化数据 + 一园一档页 + FAQ页（文件在左侧已生成）\n2. 百度百科：按口径表更新词条，每个数字附权威来源\n3. 企查查/天眼查：核验运营主体信息\n\n## 第二周起（内容矩阵，按引擎偏好排序）\n${GEO.channels.map((c, i) => `${i + 1}. **${c.name}** — ${c.engine}\n   入口：${c.entry}\n   动作：${c.action}\n   首发：${c.first.replace("{园区}", park).replace("{产业}", industry).replace("{city}", city)}`).join("\n\n")}\n\n## 节奏与红线\n- 节奏：公众号双周 / 知乎月2 / 头条百家随发 / 抖音周1\n- 红线：同一事实多渠道口径必须一致（DeepSeek 对不一致品牌首选率暴跌82%）；禁堆砌夸饰；效果预期 10–15天首批引用、8–12周稳定（行业参考值，以监测台账为准）`;
 
   const files = [
     { name: "robots-AI放行片段.txt", desc: "追加到官网 robots.txt；若用 CDN/WAF 还需控制台白名单", content: robots },
@@ -213,7 +217,7 @@ function opsBuildToolkit() {
     { name: "schema-结构化数据.html", desc: "贴到园区页 </head> 前，补齐【待填】", content: jsonld },
     { name: "一园一档.md", desc: "官网/公众号/知乎通用的园区标准档案（GEO内容库最小单元）", content: profile },
     { name: "选址FAQ-20问.md", desc: "答案前置的FAQ页源稿，逐问补答后过评分器≥75再发", content: faqMd },
-    { name: "渠道分发分发指南.md", desc: "8个渠道的真实入口、动作与首发内容，按周执行", content: channelPack },
+    { name: "渠道分发指南.md", desc: "8个渠道的真实入口、动作与首发内容，按周执行", content: channelPack },
   ];
   window.__tkFiles = files;
   $("#tkOut").innerHTML = files.map((f, i) => `
@@ -246,11 +250,12 @@ function opsBuildToolkit() {
 }
 
 function renderChannels(park, industry) {
+  const city = (state.planInputs && state.planInputs.city) || (projCtx().city) || "深圳";
   $("#channelBox").innerHTML = GEO.channels.map(c => `
     <div class="card agent-card">
       <h4>${esc(c.name)} <span class="tag tag-gold">${esc(c.engine)}</span></h4>
       <p>${esc(c.action)}</p>
-      <p style="color:var(--color-ink-2)"><b>首发：</b>${esc(c.first.replace("{园区}", park).replace("{产业}", industry))}</p>
+      <p style="color:var(--color-ink-2)"><b>首发：</b>${esc(c.first.replace("{园区}", park).replace("{产业}", industry).replace("{city}", city))}</p>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <a class="btn btn-ghost btn-sm" href="${c.entry}" target="_blank" rel="noopener">打开入口 ↗</a>
         <span class="num" style="font-size:11px;color:var(--color-ink-3);word-break:break-all">${esc(c.entry.replace("https://", ""))}</span>
@@ -290,7 +295,7 @@ async function opsBatch() {
         const tops = (d.results || []).slice(0, 10);
         const own = tops.find(t => t.own);        if (own) hits++;
         state.ledger.push({
-          date: today(), engine: "搜索通道", promptId: p.id,
+          date: today(), engine: "搜索通道", promptId: p.id, channel: "src",
           mention: own ? 1 : 0, sentiment: own ? 1 : 0.5,
           url: own ? own.url : "",
           note: "信源自动：前10=" + tops.slice(0, 3).map(t => hostOf(t.url)).join(","),
@@ -428,10 +433,17 @@ render.scan = () => {
   if (state.lastDiag) renderDiagResult(state.lastDiag, 0);
 };
 render.toolkit = () => {
-  const park = [...new Set(state.caliber.map(r => r.park))][0] || "";
-  if (park && !$("#tkPark").value) $("#tkPark").value = park.split("（")[0];
+  /* V4.2：园区名默认值跟随当前项目（品牌词/项目名），禁止把种子项目（蛇口网谷）带进其他项目 */
+  const cur = curProject();
+  const want = ((cur.brand || cur.name || "") + "").split("（")[0].trim();
+  if ($("#tkPark").dataset.proj !== CUR) {
+    const calPark = [...new Set(state.caliber.map(r => r.park))]
+      .find(pk => want && (pk.includes(want) || want.includes(pk.split("（")[0])));
+    $("#tkPark").value = calPark ? calPark.split("（")[0] : want;
+    $("#tkPark").dataset.proj = CUR;
+  }
   render.content();  /* 选题单 表单选项填充（复用） */
-  if ($("#channelBox").children.length === 0) renderChannels("试点园区", "数智科技");
+  if ($("#channelBox").children.length === 0) renderChannels(cur.brand || cur.name || "试点园区", "数智科技");
 };
 document.addEventListener("DOMContentLoaded", () => {
   const dg = $("#dgRun"); if (dg) dg.addEventListener("click", opsDiagnose);
