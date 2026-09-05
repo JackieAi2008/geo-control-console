@@ -206,20 +206,31 @@ const CHAT_SUGGEST = [
         const prov = $("#llmProvider").value;
         const body = (key || prov === "ollama")
           ? { provider: prov, baseUrl: $("#llmBase").value.trim(), model: $("#llmModel").value.trim(), apiKey: key } : {};
-        const r = await (await fetch("/api/llm/test", { method: "POST",
-          headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
-        out.innerHTML = r.ok
-          ? `<p style="color:var(--color-ok)">✓ 连接成功（${r.which} · ${r.model} · ${r.latency_ms}ms）</p>`
-          : `<p style="color:var(--color-bad)">✗ ${esc(r.error || "测试失败")}</p>`;
-      } catch (e) { out.innerHTML = `<p style="color:var(--color-bad)">✗ 请求失败：${esc(e.message)}</p>`; }
+        const resp = await fetch("/api/llm/test", { method: "POST",
+          headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), redirect: "manual" });
+        /* V4.3：检测 nginx 把请求重定向到 SSO 登录页（302）→ 不是 API 错误，而是 SSO 失效 */
+        if (resp.type === "opaqueredirect" || resp.status === 302 || resp.status === 0) {
+          out.innerHTML = `<p style="color:var(--color-bad)">✗ 请求被拦截（${resp.status || '重定向'}）</p><p class="muted" style="font-size:12px">多半是 SSO 登录态失效：请刷新页面重新登录，或换用「自定义地址」避开反代。</p>`;
+        } else {
+          const r = await resp.json();
+          out.innerHTML = r.ok
+            ? `<p style="color:var(--color-ok)">✓ 连接成功（${r.which} · ${r.model} · ${r.latency_ms}ms）</p>`
+            : `<p style="color:var(--color-bad)">✗ ${esc(r.error || "测试失败")}</p>`;
+        }
+      } catch (e) { out.innerHTML = `<p style="color:var(--color-bad)">✗ 请求失败：${esc(e.message)}</p><p class="muted" style="font-size:12px">可能是 SSO 登录态失效或网络问题，请刷新页面重试。</p>`; }
       btn.classList.remove("is-busy"); btn.textContent = "连接测试";
     });
     $("#llmSave").addEventListener("click", async () => {
       try {
-        const r = await (await fetch("/api/llm/settings", { method: "POST",
+        const resp = await fetch("/api/llm/settings", { method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ provider: $("#llmProvider").value, baseUrl: $("#llmBase").value.trim(),
-                                 model: $("#llmModel").value.trim(), apiKey: $("#llmKey").value.trim() }) })).json();
+                                 model: $("#llmModel").value.trim(), apiKey: $("#llmKey").value.trim() }), redirect: "manual" });
+        if (resp.type === "opaqueredirect" || resp.status === 302 || resp.status === 0) {
+          $("#llmTestOut").innerHTML = `<p style="color:var(--color-bad)">✗ 请求被拦截（${resp.status || '重定向'}）</p><p class="muted" style="font-size:12px">多半是 SSO 登录态失效：请刷新页面重新登录。</p>`;
+          return;
+        }
+        const r = await resp.json();
         if (r.ok || r.keyTail) {
           $("#llmKey").value = ""; $("#llmKey").type = "password"; $("#llmEye").textContent = "显示";
           $("#llmKey").placeholder = `已保存 ${r.keyTail}（留空则沿用）`;
