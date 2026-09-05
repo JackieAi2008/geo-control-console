@@ -592,6 +592,33 @@
   </div>
 </div>
 
+<!-- 用户自接入 LLM 设置（对话助手 ⚙ 打开；密钥存服务器按账号隔离）-->
+<div class="modal-mask" id="llmModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="配置我的 AI 模型">
+    <h3 style="margin-top:0">配置我的 AI 模型</h3>
+    <p class="muted" style="font-size:var(--text-sm);margin-top:-6px">供右下角「问」对话助手使用。密钥只保存在服务器上、按你的登录账号隔离，任何界面都不会完整显示。</p>
+    <div class="form-grid">
+      <label class="full lb">服务商<select id="llmProvider" class="sel"></select></label>
+      <label class="full lb">API 地址（仅 https）<input id="llmBase" class="inp" placeholder="https://api.deepseek.com/v1"></label>
+      <label class="full lb">API 密钥
+        <span style="display:flex;gap:6px;align-items:center">
+          <input id="llmKey" class="inp" type="password" autocomplete="off" placeholder="sk-…（以服务商控制台为准）" style="flex:1">
+          <button class="btn btn-ghost" id="llmEye" type="button">显示</button>
+        </span></label>
+      <label class="full lb">模型名称（以服务商控制台为准）<input id="llmModel" class="inp" placeholder="deepseek-chat"></label>
+    </div>
+    <p class="muted" id="llmState" style="font-size:12px;margin-top:10px"></p>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn btn-ghost" id="llmTest" type="button">连接测试</button>
+      <button class="btn btn-ghost" id="llmClose" type="button">关闭</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-danger" id="llmClear" type="button">清除我的配置</button>
+      <button class="btn btn-primary" id="llmSave" type="button">保存</button>
+    </div>
+    <div id="llmTestOut" style="margin-top:10px"></div>
+  </div>
+</div>
+
 <!-- V4 三期：贴答案自动填弹窗 -->
 <div class="modal-mask" id="parseModal" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="贴答案自动填">

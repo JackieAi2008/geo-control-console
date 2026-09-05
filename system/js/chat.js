@@ -33,6 +33,7 @@ const CHAT_SUGGEST = [
       <div class="chat-head">
         <div><b>GEO 使用助手</b><span class="chat-model" id="chatModel">本地模型</span></div>
         <div><button class="chat-x" id="chatClear" title="清空对话">清空</button>
+        <button class="chat-x" id="llmCfgBtn" title="配置我的 AI 模型">⚙</button>
         <button class="chat-x" id="chatClose" title="收起">×</button></div>
       </div>
       <div class="chat-body" id="chatBody">
@@ -119,6 +120,114 @@ const CHAT_SUGGEST = [
     });
     $$("#chatChips [data-sug]").forEach(b => b.addEventListener("click", () => ask(b.dataset.sug)));
     if (new URLSearchParams(location.search).get("chat") === "1") open();  /* 截图/演示直达 */
+    if (new URLSearchParams(location.search).get("llm") === "1") { open(); openLlm(); }  /* 模型配置直达（演示/排障） */
+
+    /* ── 用户自接入 LLM：⚙ 设置窗（密钥存服务器按账号隔离，界面只回显尾4位）── */
+    const LLM_PROVIDERS = {
+      deepseek: { name: "DeepSeek（深度求索）", base: "https://api.deepseek.com/v1", model: "deepseek-chat" },
+      qwen:     { name: "通义千问（阿里百炼）", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
+      kimi:     { name: "Kimi（月之暗面）", base: "https://api.moonshot.cn/v1", model: "kimi-k2-0905-preview" },
+      zhipu:    { name: "智谱 GLM", base: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },
+      doubao:   { name: "豆包（火山方舟）", base: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seed-1-6-250615" },
+      custom:   { name: "OpenAI 兼容（自定义）", base: "", model: "" },
+    };
+    async function fetchLlmSettings() {
+      try { return await (await fetch("/api/llm/settings")).json(); }
+      catch (e) { return null; }
+    }
+    function providerKeyOf(baseUrl, provider) {
+      if (provider && LLM_PROVIDERS[provider]) return provider;
+      for (const [k, v] of Object.entries(LLM_PROVIDERS))
+        if (v.base && baseUrl && v.base === baseUrl.replace(/\/$/, "")) return k;
+      return "custom";
+    }
+    function paintModelLabel(st) {
+      const el = $("#chatModel"); if (!el) return;
+      if (!st) return;
+      const src = st.active && st.active.source;
+      const model = (st.active && st.active.model) || "";
+      el.textContent = src === "none" ? "未配置 ⚙" : (model.split("-")[0] || "已配置");
+    }
+    async function openLlm() {
+      const m = $("#llmModal"); m.hidden = false;
+      $("#llmProvider").innerHTML = Object.entries(LLM_PROVIDERS)
+        .map(([k, v]) => `<option value="${k}">${v.name}</option>`).join("");
+      $("#llmKey").value = ""; $("#llmKey").type = "password"; $("#llmEye").textContent = "显示";
+      $("#llmTestOut").innerHTML = "";
+      const st = await fetchLlmSettings();
+      if (!st) { $("#llmState").textContent = "读取失败：需要在服务器模式下使用（本地双击打开时不可配置）。"; return; }
+      if (st.user) {
+        $("#llmProvider").value = providerKeyOf(st.user.baseUrl, st.user.provider);
+        $("#llmBase").value = st.user.baseUrl;
+        $("#llmModel").value = st.user.model;
+        $("#llmKey").placeholder = `已保存 ${st.user.keyTail}（留空则沿用）`;
+        $("#llmState").textContent = `我的配置已生效：${st.user.model} · 密钥${st.user.keyTail}（${st.user.updatedAt} 保存）。清除后回退系统默认。`;
+      } else {
+        const a = st.active || {};
+        $("#llmState").textContent = a.source === "server" ? `尚未配置个人模型。当前使用：系统配置（${a.model}）`
+          : a.source === "local" ? `尚未配置个人模型。当前使用：本机 Ollama（${a.model}）`
+          : "尚未配置任何模型——对话助手当前不可用，填好下方表单即可启用。";
+      }
+      paintModelLabel(st);
+    }
+    $("#llmCfgBtn").addEventListener("click", openLlm);
+    const llmClose = $("#llmClose"); if (llmClose) llmClose.addEventListener("click", () => { $("#llmModal").hidden = true; });
+    $("#llmProvider").addEventListener("change", () => {
+      const p = LLM_PROVIDERS[$("#llmProvider").value] || LLM_PROVIDERS.custom;
+      $("#llmBase").value = p.base; $("#llmModel").value = p.model;
+    });
+    $("#llmEye").addEventListener("click", () => {
+      const k = $("#llmKey"); const show = k.type === "password";
+      k.type = show ? "text" : "password"; $("#llmEye").textContent = show ? "隐藏" : "显示";
+    });
+    $("#llmTest").addEventListener("click", async () => {
+      const out = $("#llmTestOut"); const btn = $("#llmTest");
+      btn.classList.add("is-busy"); btn.textContent = "测试中…";
+      out.innerHTML = '<p class="muted">正在真实调用该服务商接口…</p>';
+      try {
+        const key = $("#llmKey").value.trim();
+        const body = key ? { baseUrl: $("#llmBase").value.trim(), model: $("#llmModel").value.trim(), apiKey: key } : {};
+        const r = await (await fetch("/api/llm/test", { method: "POST",
+          headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
+        out.innerHTML = r.ok
+          ? `<p style="color:var(--color-ok)">✓ 连接成功（${r.which} · ${r.model} · ${r.latency_ms}ms）</p>`
+          : `<p style="color:var(--color-bad)">✗ ${esc(r.error || "测试失败")}</p>`;
+      } catch (e) { out.innerHTML = `<p style="color:var(--color-bad)">✗ 请求失败：${esc(e.message)}</p>`; }
+      btn.classList.remove("is-busy"); btn.textContent = "连接测试";
+    });
+    $("#llmSave").addEventListener("click", async () => {
+      try {
+        const r = await (await fetch("/api/llm/settings", { method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: $("#llmProvider").value, baseUrl: $("#llmBase").value.trim(),
+                                 model: $("#llmModel").value.trim(), apiKey: $("#llmKey").value.trim() }) })).json();
+        if (r.ok || r.keyTail) {
+          $("#llmKey").value = ""; $("#llmKey").type = "password"; $("#llmEye").textContent = "显示";
+          $("#llmKey").placeholder = `已保存 ${r.keyTail}（留空则沿用）`;
+          $("#llmState").textContent = `已保存并生效：${$("#llmModel").value.trim()} · 密钥${r.keyTail}`;
+          paintModelLabel(await fetchLlmSettings());
+          if (typeof toast === "function") toast("模型配置已保存 ✓");
+        } else {
+          $("#llmState").textContent = "";
+          $("#llmTestOut").innerHTML = `<p style="color:var(--color-bad)">✗ ${esc(r.error || "保存失败")}</p>`;
+        }
+      } catch (e) { $("#llmTestOut").innerHTML = `<p style="color:var(--color-bad)">✗ 保存失败：${esc(e.message)}</p>`; }
+    });
+    $("#llmClear").addEventListener("click", async () => {
+      if (!confirm("清除我保存的模型配置？（不影响其他人）")) return;
+      try {
+        await fetch("/api/llm/settings/clear", { method: "POST" });
+        $("#llmKey").value = ""; $("#llmKey").placeholder = "sk-…（以服务商控制台为准）";
+        $("#llmTestOut").innerHTML = "";
+        const st = await fetchLlmSettings();
+        const a = (st && st.active) || {};
+        $("#llmState").textContent = a.source === "server" ? `已清除。当前使用：系统配置（${a.model}）`
+          : a.source === "local" ? `已清除。当前使用：本机 Ollama（${a.model}）` : "已清除。当前无可用模型。";
+        paintModelLabel(st);
+        if (typeof toast === "function") toast("已清除我的配置");
+      } catch (e) { $("#llmTestOut").innerHTML = `<p style="color:var(--color-bad)">✗ ${esc(e.message)}</p>`; }
+    });
+    fetchLlmSettings().then(paintModelLabel);   /* 初始标签即显示当前生效后端 */
   }
   document.addEventListener("DOMContentLoaded", inject);
 })();

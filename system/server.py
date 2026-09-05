@@ -53,6 +53,77 @@ def pick_chat_model():
         if pref in names: return pref
     return names[0] if names else None
 
+# ── 用户自接入 LLM（按登录账号隔离；生产由 nginx auth_request 注入 X-Geo-User）──
+import ipaddress
+
+def geo_user(headers):
+    """当前登录用户名。仅信任同机 nginx 注入的头（服务只监听 127.0.0.1，外部无法直连伪造）"""
+    return (headers.get("X-Geo-User") or "").strip()[:64] or "local"
+
+def llm_user_config(conn, u):
+    try:
+        c = kv_get(conn, "llm:user:" + u) or {}
+        if c.get("apiKey") and c.get("baseUrl") and c.get("model"):
+            return {"provider": c.get("provider", "custom"), "baseUrl": c["baseUrl"],
+                    "model": c["model"], "apiKey": c["apiKey"], "updatedAt": c.get("updatedAt", "")}
+    except Exception:
+        pass
+    return None
+
+def mask_key(k):
+    k = str(k or "")
+    return ("****" + k[-4:]) if len(k) >= 8 else ("*" * len(k) if k else "—")
+
+def llm_url_guard(u):
+    """SSRF 防护：仅 https + 拒绝环回/内网/链路本地/CGNAT(含云 metadata) 地址。返回错误文案，空串=通过"""
+    try:
+        p = urlparse(str(u or ""))
+    except Exception:
+        return "地址格式不正确"
+    if p.scheme != "https":
+        return "仅允许 https 地址"
+    h = (p.hostname or "").lower()
+    if not h:
+        return "缺少主机名"
+    if h == "localhost" or h.endswith((".localhost", ".internal", ".local", ".lan")):
+        return "不允许内网地址"
+    try:
+        ip = ipaddress.ip_address(h)
+        bad = ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified
+        if bad or (ip.version == 4 and ip in ipaddress.ip_network("100.64.0.0/10")):
+            return "不允许内网地址"
+    except ValueError:
+        pass   # 域名放行（DNS 级伪造为残留风险；已叠加 仅https+禁自动重定向 两层缓解）
+    return ""
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """禁自动重定向：防配置的 URL 通过 3xx 跳到内网地址（SSRF 跳转绕过）"""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+def llm_resolve(conn, headers):
+    """解析当前生效的聊天后端。优先级：本账号配置 > 服务器环境 DeepSeek > 本机 Ollama。
+    返回 (source, model, cfg|None)；source ∈ user/server/local/none"""
+    cfg = llm_user_config(conn, geo_user(headers))
+    if cfg:
+        return "user", cfg["model"], cfg
+    if DEEPSEEK_API_KEY:
+        return "server", DEEPSEEK_MODEL, {"provider": "deepseek", "baseUrl": DEEPSEEK_BASE_URL,
+                                          "model": DEEPSEEK_MODEL, "apiKey": DEEPSEEK_API_KEY}
+    m = pick_chat_model()
+    if m:
+        return "local", m, None
+    return "none", "", None
+
+def llm_remote_open(cfg, msgs, stream, timeout=30, max_tokens=1024):
+    """OpenAI 兼容远端调用（DeepSeek/通义/Kimi/智谱/豆包/自定义通用）"""
+    payload = {"model": cfg["model"], "messages": msgs, "stream": stream,
+               "temperature": 0.4, "max_tokens": max_tokens}
+    req = urllib.request.Request(cfg["baseUrl"].rstrip("/") + "/chat/completions",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + cfg["apiKey"]})
+    return urllib.request.build_opener(_NoRedirect).open(req, timeout=timeout)
+
 def state_summary(conn, pid=None):
     """把当前项目状态浓缩成助手上下文（助手因此知道你的真实数据）"""
     try:
@@ -458,11 +529,18 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/ping":
             return self._send(200, {"ok": True, "server": "geodesk", "version": "4.2"})
         if path == "/api/llm/status":
-            # 给运维/前端用：当前聊天后端是远端 API 还是本地 Ollama
-            if DEEPSEEK_API_KEY:
-                return self._send(200, {"backend": "remote", "provider": "deepseek", "model": DEEPSEEK_MODEL})
-            local = pick_chat_model()
-            return self._send(200, {"backend": "local" if local else "none", "provider": "ollama", "model": local or ""})
+            src, model, cfg = llm_resolve(self.conn, self.headers)
+            return self._send(200, {"backend": "remote" if src in ("user", "server") else src,
+                                    "source": src, "model": model})
+        if path == "/api/llm/settings":
+            src, model, _ = llm_resolve(self.conn, self.headers)
+            saved = llm_user_config(self.conn, geo_user(self.headers))
+            user_out = None
+            if saved:
+                user_out = {"provider": saved["provider"], "baseUrl": saved["baseUrl"],
+                            "model": saved["model"], "keyTail": mask_key(saved["apiKey"]),
+                            "updatedAt": saved.get("updatedAt", "")}
+            return self._send(200, {"active": {"source": src, "model": model}, "user": user_out})
         if path == "/api/projects":
             plist = projects_ensure(self.conn)
             out = [dict(p, summary=proj_summary(self.conn, p)) for p in plist if not p.get("archived")]
@@ -630,22 +708,96 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, parse_answer(body.get("text"), body.get("brand"), body.get("competitors")))
             except Exception as e:
                 return self._send(500, {"error": str(e)})
+        if path == "/api/llm/settings":
+            return self._llm_settings_save()
+        if path == "/api/llm/settings/clear":
+            u = geo_user(self.headers)
+            kv_put(self.conn, "llm:user:" + u, {})
+            audit_append(self.conn, u, None, "LLM配置", "清除个人模型配置")
+            return self._send(200, {"ok": True})
+        if path == "/api/llm/test":
+            return self._llm_test()
         if path == "/api/chat":
             return self._chat()
         return self._send(404, {"error": "not found"})
 
-    def _chat(self):
-        """对话助手：优先远端 API（DeepSeek），无 key 时回退本机 Ollama；流式返回纯文本"""
-        # 选择后端
-        backend = None
-        if DEEPSEEK_API_KEY:
-            backend = ("remote", DEEPSEEK_MODEL)
+    def _llm_settings_save(self):
+        """保存当前账号的个人 LLM 配置。密钥仅存服务器 SQLite，任何响应只回显尾 4 位"""
+        try:
+            b = self._body() or {}
+        except Exception:
+            return self._send(400, {"error": "请求体不是合法 JSON"})
+        provider = str(b.get("provider") or "custom").strip()[:30]
+        base = str(b.get("baseUrl") or "").strip()[:300]
+        model = str(b.get("model") or "").strip()[:100]
+        key = str(b.get("apiKey") or "").strip()[:200]
+        if not key:
+            # 留空 = 沿用已保存密钥（界面从不回显完整密钥，改地址/模型不必重贴 key）
+            old = llm_user_config(self.conn, geo_user(self.headers))
+            if old and old["baseUrl"] == base:
+                key = old["apiKey"]
+        err = llm_url_guard(base)
+        if err:
+            return self._send(400, {"error": "API 地址不合规：" + err})
+        if not (1 <= len(model) <= 100):
+            return self._send(400, {"error": "请填写模型名称（以服务商控制台为准）"})
+        if not (8 <= len(key) <= 200) or any(c in key for c in " \t\r\n"):
+            return self._send(400, {"error": "API 密钥长度需 8–200 位且不含空白字符"})
+        u = geo_user(self.headers)
+        kv_put(self.conn, "llm:user:" + u,
+               {"provider": provider, "baseUrl": base, "model": model, "apiKey": key,
+                "updatedAt": time.strftime("%Y-%m-%d %H:%M")})
+        audit_append(self.conn, u, None, "LLM配置", f"设置 {provider}/{model}（密钥不记录）")
+        return self._send(200, {"ok": True, "keyTail": mask_key(key)})
+
+    def _llm_test(self):
+        """连接测试：优先测请求体里的临时配置（先测后存），否则测当前生效配置。绝不回显密钥"""
+        try:
+            b = self._body() or {}
+        except Exception:
+            b = {}
+        src, _, saved_cfg = llm_resolve(self.conn, self.headers)
+        if b.get("apiKey"):
+            err = llm_url_guard(b.get("baseUrl"))
+            if err:
+                return self._send(200, {"ok": False, "error": "API 地址不合规：" + err})
+            cfg = {"baseUrl": str(b["baseUrl"]).strip(), "model": str(b.get("model") or "").strip(),
+                   "apiKey": str(b["apiKey"]).strip()}
+            if not cfg["model"]:
+                return self._send(200, {"ok": False, "error": "请先填写模型名称"})
+            which = "临时配置"
+        elif saved_cfg:
+            cfg = saved_cfg
+            which = {"user": "我的配置", "server": "系统配置"}.get(src, src)
         else:
-            m = pick_chat_model()
-            if m:
-                backend = ("local", m)
-        if not backend:
-            return self._send(503, {"error": "暂无可用的大模型后端。请在服务器环境变量里设置 DEEPSEEK_API_KEY，或在本机运行 ollama 并拉取 qwen3:4b 模型。"})
+            return self._send(200, {"ok": False, "error": "没有可测试的配置（当前后端为本机 Ollama 或未配置）"})
+        t0 = time.time()
+        try:
+            with llm_remote_open(cfg, [{"role": "user", "content": "只回复两个字：成功"}],
+                                 stream=False, timeout=20, max_tokens=16) as r:
+                data = json.loads(r.read() or b"{}")
+            reply = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+            return self._send(200, {"ok": True, "which": which, "model": cfg["model"],
+                                    "latency_ms": int((time.time() - t0) * 1000),
+                                    "reply": str(reply)[:40]})
+        except urllib.error.HTTPError as e:
+            detail = ""
+            try:
+                detail = (e.read() or b"")[:200].decode("utf-8", "ignore")
+            except Exception:
+                pass
+            # 常见错码翻译；detail 可能含提供商返回的说明（无密钥），截断即出
+            hint = {401: "密钥无效或未授权", 403: "无权限（可能被风控或欠费）", 404: "地址或模型名不对",
+                    429: "请求太频繁（限流）"}.get(e.code, f"HTTP {e.code}")
+            return self._send(200, {"ok": False, "error": f"{hint}。{detail[:120]}"})
+        except Exception as e:
+            return self._send(200, {"ok": False, "error": "连接失败：" + str(e)[:120]})
+
+    def _chat(self):
+        """对话助手：本账号配置 > 服务器 DeepSeek > 本机 Ollama；流式返回纯文本"""
+        src, model_name, cfg = llm_resolve(self.conn, self.headers)
+        if src == "none":
+            return self._send(503, {"error": "暂无可用的大模型后端。点对话窗口右上角 ⚙ 配置你自己的模型，或联系管理员设置系统级 DeepSeek。"})
         try:
             body = self._body() or {}
             msgs = [{"role": "system", "content": CHAT_SYSTEM + "\n【用户当前系统状态（实时）】" + state_summary(self.conn, body.get("project"))}]
@@ -653,7 +805,6 @@ class Handler(BaseHTTPRequestHandler):
             if not any(m["role"] == "user" for m in msgs[1:]):
                 return self._send(400, {"error": "messages 需要至少一条 user 消息"})
 
-            kind, model_name = backend
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.send_header("Cache-Control", "no-cache")
@@ -662,22 +813,17 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
             self.end_headers()
 
-            if kind == "remote":
-                # DeepSeek 兼容 OpenAI 协议
-                payload = {"model": model_name, "messages": msgs, "stream": True,
-                           "temperature": 0.4, "max_tokens": 1024}
-                req = urllib.request.Request(DEEPSEEK_BASE_URL.rstrip("/") + "/chat/completions",
-                    data=json.dumps(payload).encode(),
-                    headers={"Content-Type": "application/json",
-                             "Authorization": "Bearer " + DEEPSEEK_API_KEY})
+            if src in ("user", "server"):
+                up = llm_remote_open(cfg, msgs, stream=True, timeout=180, max_tokens=1024)
             else:
                 payload = {"model": model_name, "messages": msgs, "stream": True,
                            "options": {"temperature": 0.4, "num_predict": 450}, "think": False,
                            "keep_alive": "30m"}
                 req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(payload).encode(),
                                              headers={"Content-Type": "application/json"})
+                up = urllib.request.urlopen(req, timeout=180)
 
-            with urllib.request.urlopen(req, timeout=180) as up:
+            with up as up:
                 for raw in up:
                     try:
                         line = raw.decode("utf-8", "ignore").strip()
