@@ -243,9 +243,18 @@ const CHAT_SUGGEST = [
       scrollToBottom();
     }
 
-    $("#chatSend").addEventListener("click", () => { const t = $("#chatTa").value; $("#chatTa").value = ""; ask(t); });
+    $("#chatSend").addEventListener("click", () => {
+      const t = $("#chatTa").value;
+      if (busy) { if (typeof toast === "function") toast("上一问还在回答中，请稍候…"); return; }
+      $("#chatTa").value = ""; ask(t);
+    });
     $("#chatTa").addEventListener("keydown", e => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); const t = $("#chatTa").value; $("#chatTa").value = ""; ask(t); }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const t = $("#chatTa").value;
+        if (busy) { if (typeof toast === "function") toast("上一问还在回答中，请稍候…"); return; }
+        $("#chatTa").value = ""; ask(t);
+      }
     });
     $$("#chatChips [data-sug]").forEach(b => b.addEventListener("click", () => ask(b.dataset.sug)));
     if (new URLSearchParams(location.search).get("chat") === "1") open();  /* 截图/演示直达 */
