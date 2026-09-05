@@ -1,162 +1,81 @@
 # 部署指南——招商产园 GEO 智控台
 
-部署到 `https://cmip.alaa.org.cn/geo/`（子路径模式，由 cmip 主站 nginx 反代到本服务）。
+**生产环境已上线：https://geo.alaa.org.cn/（cmip SSO 汇总门户子系统）**
 
-## 架构
+## 生产架构（2026-09-05 实际部署）
 
 ```
-用户浏览器
-    ↓ HTTPS
-cmip.alaa.org.cn（主站 nginx，已有 SSL）
-    ↓ location /geo/ { proxy_pass http://127.0.0.1:8340/; }
-127.0.0.1:8340（Python server.py，systemd 托管）
+用户浏览器（cmip.alaa.org.cn 登录，cookie 域 .alaa.org.cn）
+    ↓ 未登录 → 302 cmip.alaa.org.cn/#/login?redirect=...
+    ↓ 已登录（cmip_sso cookie 自动携带）
+geo.alaa.org.cn（nginx 443 + Let's Encrypt）
+    ↓ auth_request → 127.0.0.1:8009/api/sso/check?system=geo   ← cmip 门户后端校验
+    ↓ 401 → 302 门户登录页；200 → 放行（X-Sso-User 注入 X-Geo-User）
+127.0.0.1:8340（geo-console.service，Python server.py）
     ↓
-SQLite（/var/lib/geo-control/geodesk.db）
-    ↓ HTTPS
-DeepSeek API（对话后端，OpenAI 兼容）
+SQLite /var/lib/geo-control/geodesk.db（每日自动备份）
 ```
 
-## 一次性部署（5 步）
+服务器：阿里云 ECS `118.178.120.99`（与 cmip 门户同机）
+部署目录：`/var/www/geo.alaa.org.cn`（rsync 直传，服务器不出网连 GitHub）
+systemd：`geo-console.service`（`/etc/geo-control/geo-control.env` 存配置）
+nginx：`/etc/nginx/sites-enabled/geo.alaa.org.cn.conf`（auth_request SSO 门禁）
 
-### 第 1 步：服务器拉代码
+## 为什么是子域名而不是子路径
+
+cmip 门户的 5 个既有子系统（qmjjr/yidun/tc/kzfy/weekly）全部是独立子域名模式：
+- SSO cookie 域为 `.alaa.org.cn`，子域名天然携带，免跨域改造
+- 门户通过 `/api/go?system=geo` 302 跳转并在跳转时重签 cookie（防 cookie 损坏）
+- 独立 nginx conf，零风险不碰 cmip 主站配置
+
+## 日常更新（发版）
+
+本地改完代码后：
 
 ```bash
-ssh root@118.178.120.99
-mkdir -p /var/www/geo_control_console
-cd /var/www/geo_control_console
-git clone https://github.com/JackieAi2008/geo-control-console.git . || git pull
+git add -A && git commit -m "..." && git push origin main   # 备份到 GitHub
+rsync -az --delete \
+  --exclude '.git' --exclude '__pycache__' --exclude '*.pyc' \
+  --exclude 'output' --exclude 'agent' --exclude '*.docx' \
+  --exclude '.DS_Store' --exclude 'system/geodesk.db*' --exclude 'system/backups' \
+  ./ root@118.178.120.99:/var/www/geo.alaa.org.cn/
+ssh root@118.178.120.99 'systemctl restart geo-console && sleep 1 && curl -s http://127.0.0.1:8340/api/ping'
 ```
 
-### 第 2 步：填环境变量
+（GitHub Actions workflow 已备好 `.github/workflows/deploy.yml`，在仓库 Secrets 配置
+DEPLOY_SSH_KEY/HOST/USER/PATH 后即可推送自动部署；GitHub runner 在境外可直连，服务器无需出网。）
+
+## LLM 对话助手（待配 DeepSeek key）
+
+服务器无 Ollama。启用对话助手：编辑 `/etc/geo-control/geo-control.env`：
+
+```
+DEEPSEEK_API_KEY=sk-xxxx
+```
 
 ```bash
-sudo mkdir -p /etc/geo-control
-sudo cp /var/www/geo_control_console/.env.example /etc/geo-control/geo-control.env
-sudo nano /etc/geo-control/geo-control.env
+systemctl restart geo-console
+curl http://127.0.0.1:8340/api/llm/status   # 应显示 backend:remote
 ```
 
-至少填一个：
-- `DEEPSEEK_API_KEY=sk-...`（推荐生产用 DeepSeek）
-- 不填就走本机 Ollama（需 `ollama serve` + 已 `ollama pull qwen3:4b-instruct-2507-q4_K_M`）
+不配 key 其余功能全部正常（诊断/执行/监测/台账），仅对话助手返回友好提示。
 
-```bash
-sudo chmod 600 /etc/geo-control/geo-control.env
-sudo chown root:root /etc/geo-control/geo-control.env
-```
+**已知降级**：信源侧快检/一键30问依赖 anysearch 脚本，服务器暂未安装——页面上会如实
+提示「本机未找到 anysearch」，不编造数据。需要时把本机 `~/.openclaw/skills/anysearch/`
+与 `~/.anysearch.json` 复制到服务器同路径即可启用。
 
-### 第 3 步：装 systemd 服务
+## cmip 门户注册（已完成，留档）
 
-```bash
-sudo cp /var/www/geo_control_console/deploy/geo-control-console.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable geo-control-console
-sudo systemctl start geo-control-console
-sudo systemctl status geo-control-console   # 看到 active (running) 即成功
-```
-
-### 第 4 步：在 cmip 主站 nginx 加子路径反代
-
-⚠️ **这一步必须在 cmip.alaa.org.cn 的 nginx 上做，不在 GEO 这边。**
-
-把 `deploy/nginx-geo.conf` 整个文件的内容，追加到 cmip 主站 nginx 配置里（通常是 `/etc/nginx/sites-enabled/cmip` 或 `/etc/nginx/nginx.conf` 的 server 块内）。
-
-```bash
-# 在 cmip 主站服务器上执行（不是 GEO 服务器）
-sudo cp /var/www/geo_control_console/deploy/nginx-geo.conf /tmp/nginx-geo.conf
-# 人工把 /tmp/nginx-geo.conf 的内容追加到主站 server { ... } 块内
-sudo nano /etc/nginx/sites-enabled/cmip.conf
-sudo nginx -t && sudo nginx -s reload
-```
-
-> ⚠️ 重要：nginx 片段里的 `location ^~ /geo/` 必须紧贴在主站 server 块**内部**，而不是新建一个 server 块（否则会跟主站 HTTPS 冲突）。
-
-### 第 5 步：验证
-
-```bash
-# 服务器本地
-curl http://127.0.0.1:8340/api/ping
-# 期望：{"ok": true, "server": "geodesk", "version": "4.0"}
-
-# LLM 后端
-curl http://127.0.0.1:8340/api/llm/status
-# 期望：{"backend": "remote", "provider": "deepseek", "model": "deepseek-chat"}
-
-# 通过 cmip 反代
-curl https://cmip.alaa.org.cn/geo/api/ping
-# 期望：同本地
-
-# 浏览器
-open https://cmip.alaa.org.cn/geo/
-# 期望：看到 GEO 智控台首页
-```
-
-## 自动部署（CI/CD）
-
-推送 `main` 分支自动部署。配置：
-
-1. 在阿里云 ECS 生成 deploy key：
-```bash
-ssh root@118.178.120.99
-ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N ""
-cat ~/.ssh/github_deploy.pub
-```
-
-2. GitHub 仓库 → Settings → Deploy keys → Add deploy key
-   - Title: `aliyun-118.178.120.99`
-   - Key: 粘贴上一步的公钥
-   - **勾选 Allow write access**（其实用不到，但留着安全）
-3. GitHub 仓库 → Settings → Secrets and variables → Actions → New repository secret：
-   - `DEPLOY_SSH_KEY` = 私钥全文（`cat ~/.ssh/github_deploy` 的输出）
-   - `DEPLOY_HOST` = `118.178.120.99`
-   - `DEPLOY_USER` = `root`
-   - `DEPLOY_PATH` = `/var/www/geo_control_console`
-4. 推送代码到 main，Actions 自动跑：
-   - rsync 代码到服务器
-   - 保留服务器上的 `.env`（避免覆盖 LLM key）
-   - restart systemd 服务
-   - 验证 `/api/ping`
-
-## 数据迁移（如果有旧 SQLite 库）
-
-```bash
-# 在旧环境（8340 端口）导出
-scp old-server:/var/lib/geo-control/geodesk.db /tmp/geodesk.db.bak
-
-# 上传到新服务器
-scp /tmp/geodesk.db.bak root@118.178.120.99:/var/lib/geo-control/geodesk.db
-sudo chown www-data:www-data /var/lib/geo-control/geodesk.db
-sudo systemctl restart geo-control-console
-```
-
-## 备份策略
-
-`server.py` 已内置：
-- 每日自动备份到 `system/backups/geodesk-YYYYMMDD.json`（保留 30 份）
-- 通过 `/api/audit` 查看操作留痕（最近 100 条）
-
-生产环境建议：
-- `/var/lib/geo-control/` 单独挂载云盘
-- 用 crontab 把 `system/backups/` 同步到 OSS
-
-## SSO 接入（暂未实施）
-
-下一步要把 cmip.alaa.org.cn 的 SSO 接进来。需要从 cmip 站长那里拿到：
-1. OIDC discovery endpoint
-2. client_id / client_secret
-3. 用户唯一字段（通常是 `sub` 或 `email`）
-4. 回调地址白名单需添加 `https://cmip.alaa.org.cn/geo/auth/sso/callback`
-
-拿到后实施步骤：
-- `server.py` 新增 `/auth/sso/login`、`/auth/sso/callback`、`/auth/sso/logout` 三个路由
-- `state` 的多项目数据按用户隔离（不同 cmip 账号看到不同项目）
-- 删除「本地模式」/「服务器模式」徽标（这是内部技术细节，对外不暴露）
+- `/opt/cmip-portal/main.py` 的 `SYSTEMS` 清单已加 geo 条目（改前有 .bak 备份）
+- 权限：admin 角色自动拥有；普通用户已在 `cmip.db` 的 `user_systems` 表逐人授予 `geo`
+- 新用户授权：cmip 门户管理后台 → 用户管理 → 勾选「GEO 智控台」
 
 ## 故障排查
 
 | 现象 | 检查 |
 |---|---|
-| `/api/ping` 返回 connection refused | `sudo systemctl status geo-control-console`；看 stderr.log |
-| `/api/ping` 返回 200 但浏览器 502 | cmip 主站 nginx 反代配置是否生效（`sudo nginx -T` 查 location） |
-| 对话助手 503 | `curl /api/llm/status` 看后端是 none 还是 key 失效 |
-| 对话助手 401 | DeepSeek key 失效；去 DeepSeek 控制台重新生成 |
-| 数据库锁 | `sudo systemctl restart geo-control-console`；不要手动 kill -9 |
+| 访问 302 到登录页但已登录 | cookie 过期（7天）→ 回门户重新登录；或门户 `user_systems` 表无 geo 权限 |
+| 502 | `systemctl status geo-console`；`journalctl -eu geo-console \| tail` |
+| 对话助手报"暂无可用的大模型后端" | `.env` 未配 DeepSeek key（见上节） |
+| 快检报"未找到 anysearch" | 预期降级，见上节 |
+| 门户菜单没有 GEO 智控台 | cmip-portal 未重启或 SYSTEMS 条目被还原 |
