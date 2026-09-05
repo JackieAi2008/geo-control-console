@@ -1734,6 +1734,13 @@ const BATTLEFIELDS = [
   ["生态矩阵阵地", "公众号（元宝）/头条（豆包千问）/百家号（文心）/CSDN（通吃）/抖音（豆包生活场景）"],
 ];
 render.plan = () => {
+  /* V4.2 参数化：plan 页面园区名默认值跟随当前项目 */
+  const cur = curProject();
+  const want = ((cur.brand || cur.name || "") + "").split("（")[0].trim();
+  if ($("#pName").dataset.proj !== CUR) {
+    $("#pName").value = want;
+    $("#pName").dataset.proj = CUR;
+  }
   $("#pAssets").innerHTML = [["REIT披露数据","reit"],["50强榜单","rank"],["国家级资质","qual"],["企业引言库","quote"],["公众号阵地","wechat"],["知乎机构号","zhihu"]]
     .map(([t, v]) => `<label class="chip" style="cursor:pointer"><input type="checkbox" value="${v}" ${state.planInputs.assets && state.planInputs.assets.includes(v) ? "checked" : ""} style="margin-right:4px">${t}</label>`).join("");
   $("#battleBox").innerHTML = BATTLEFIELDS.map((b, i) => {
