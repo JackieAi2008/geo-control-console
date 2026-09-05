@@ -1,0 +1,14 @@
+[Unit]
+Description=GEO Console - 招商产园 GEO 智控台
+After=network.target
+
+[Service]
+EnvironmentFile=/etc/geo-control/geo-control.env
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=/var/www/geo.alaa.org.cn/system
+ExecStart=/usr/bin/python3 server.py --host 127.0.0.1 --port 8340 --db /var/lib/geo-control/geodesk.db
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
