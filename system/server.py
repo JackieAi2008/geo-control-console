@@ -857,11 +857,20 @@ class Handler(BaseHTTPRequestHandler):
                         self.wfile.write(f"data: 【模型错误】{err}\n\n".encode("utf-8")); self.wfile.flush()
                         continue
                     text = ""
+                    think = ""
                     if "choices" in chunk:                       # DeepSeek/OpenAI 格式
                         delta = chunk["choices"][0].get("delta") or {}
-                        text = delta.get("content", "")
+                        # V4.3.4 关键修复：DeepSeek V4 把「思考过程」放在 reasoning_content、
+                        # 「最终回答」放在 content，两者独立流式返回，必须分开读。
+                        content = delta.get("content") or ""
+                        reasoning = delta.get("reasoning_content") or ""
+                        # 用特殊事件前缀让前端识别思考过程（折叠/淡化展示）
+                        if reasoning: think += reasoning
+                        if content:  text += content
                     elif "message" in chunk:                      # Ollama 兼容格式
                         text = (chunk.get("message") or {}).get("content", "")
+                    if think:
+                        self.wfile.write(f"event: think\ndata: {think}\n\n".encode("utf-8")); self.wfile.flush()
                     if text:
                         self.wfile.write(f"data: {text}\n\n".encode("utf-8")); self.wfile.flush()
                 # V4.3.3：明确 [DONE] 终止符 + 收尾 flush，前端 reader 才能正常 done

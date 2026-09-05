@@ -66,21 +66,23 @@ const CHAT_SUGGEST = [
     const ob = $("#openChatBtn"); if (ob) ob.addEventListener("click", open);
 
     let busy = false;
-    /* V4.3.3：SSE 解析器——chunk 边界可能把 data: 行截断，必须按\n拆分重组 */
+    /* V4.3.4：SSE 解析器——识别 event: think / data: 两种事件，思考过程单独累积以便折叠显示 */
     function parseSSEChunk(buffer) {
       const lines = buffer.split("\n");
-      let keep = lines.pop() || "";            // 末尾不完整的行留到下个 chunk
+      let keep = lines.pop() || "";
       const out = [];
+      let curEvent = "data";
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+        if (line.startsWith("event:")) { curEvent = line.slice(6).trim(); continue; }
         if (line.startsWith("data:")) {
           const payload = line.slice(5).replace(/^ /, "");
           if (payload === "[DONE]") { keep = "__DONE__"; break; }
-          out.push(payload);
+          out.push({ event: curEvent, data: payload });
+          curEvent = "data";
         }
-        /* 其他行（event: / id: / retry: / 心跳注释行）忽略 */
       }
-      return { text: out.join(""), keep };
+      return { items: out, keep };
     }
     async function ask(text) {
       if (busy || !text.trim()) return;
@@ -115,27 +117,41 @@ const CHAT_SUGGEST = [
         const modelName = r.headers.get("X-Model");
         if (modelName) $("#chatModel").textContent = modelName.split("-")[0];
         const rd = r.body.getReader(); const dec = new TextDecoder();
-        let acc = "", last = 0, sseBuf = "";
+        let acc = "", thinkAcc = "", last = 0, sseBuf = "";
         while (true) {
           const { done, value } = await rd.read();
           if (done) break;
           sseBuf += dec.decode(value, { stream: true });
           const parsed = parseSSEChunk(sseBuf);
           sseBuf = parsed.keep === "__DONE__" ? "" : parsed.keep;
-          if (parsed.text) acc += parsed.text;
-          if (!live.dataset.started && acc) { live.dataset.started = "1"; clearTimeout(slowTimer); }
+          for (const it of parsed.items) {
+            if (it.event === "think") thinkAcc += it.data;
+            else acc += it.data;
+          }
+          if (!live.dataset.started && (acc || thinkAcc)) { live.dataset.started = "1"; clearTimeout(slowTimer); }
           const now = performance.now();
           if (now - last > 80) {
             last = now;
-            live.innerHTML = esc(clean(acc)).replace(/\n/g, "<br>");
+            /* 思考过程默认折叠在「思考中…」之后，仅展示最终回答；用户可点开看思考 */
+            const thinkHtml = thinkAcc
+              ? `<details style="margin-top:8px;font-size:12px;color:var(--color-ink-3)"><summary style="cursor:pointer">思考过程（${thinkAcc.length}字，可点开）</summary><div style="margin-top:4px;line-height:1.55">${esc(clean(thinkAcc)).replace(/\n/g, "<br>")}</div></details>`
+              : "";
+            live.innerHTML = (acc ? `<div>${esc(clean(acc)).replace(/\n/g, "<br>")}</div>` : (thinkAcc ? "<span class='muted'>思考中…</span>" : "")) + thinkHtml;
             body.scrollTop = body.scrollHeight;
           }
         }
         clearTimeout(slowTimer); delete live.dataset.started;
         acc = clean(acc);
-        if (!acc.trim()) acc = "（模型返回为空，请重试或换个小问题）";
-        live.innerHTML = esc(acc).replace(/\n/g, "<br>");
-        history.push({ role: "assistant", content: acc });
+        thinkAcc = clean(thinkAcc);
+        const finalText = (acc + (thinkAcc ? "\n\n[思考] " + thinkAcc : "")).trim();
+        if (!finalText) {
+          live.innerHTML = "<span style='color:var(--color-warn)'>（模型未返回内容，请重试或换个问题）</span>";
+          history.push({ role: "assistant", content: "（模型未返回内容）" });
+        } else {
+          /* 历史里只存最终回答，思考过程进 meta 字段（暂不进历史，避免污染上下文） */
+          live.innerHTML = esc(finalText).replace(/\n/g, "<br>");
+          history.push({ role: "assistant", content: finalText });
+        }
         localStorage.setItem(chatKey(), JSON.stringify(history.slice(-24)));
       } catch (e) {
         clearTimeout(slowTimer); delete live.dataset.started;
