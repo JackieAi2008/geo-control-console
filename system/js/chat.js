@@ -66,6 +66,22 @@ const CHAT_SUGGEST = [
     const ob = $("#openChatBtn"); if (ob) ob.addEventListener("click", open);
 
     let busy = false;
+    /* V4.3.3：SSE 解析器——chunk 边界可能把 data: 行截断，必须按\n拆分重组 */
+    function parseSSEChunk(buffer) {
+      const lines = buffer.split("\n");
+      let keep = lines.pop() || "";            // 末尾不完整的行留到下个 chunk
+      const out = [];
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.startsWith("data:")) {
+          const payload = line.slice(5).replace(/^ /, "");
+          if (payload === "[DONE]") { keep = "__DONE__"; break; }
+          out.push(payload);
+        }
+        /* 其他行（event: / id: / retry: / 心跳注释行）忽略 */
+      }
+      return { text: out.join(""), keep };
+    }
     async function ask(text) {
       if (busy || !text.trim()) return;
       busy = true;
@@ -81,24 +97,39 @@ const CHAT_SUGGEST = [
         if (!live.dataset.started) live.innerHTML = '<span class="chat-dots">模型加载中，仅首次较慢，请稍候…</span>';
       }, 7000);
       try {
-        const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: history.slice(-12), project: (typeof curProjectId === "function" ? curProjectId() : undefined) }) });
+        /* V4.3.3：用 AbortController 兜底 90s 超时，避免死等 */
+        const ac = new AbortController();
+        const to = setTimeout(() => ac.abort(), 90000);
+        const r = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+          body: JSON.stringify({ messages: history.slice(-12), project: (typeof curProjectId === "function" ? curProjectId() : undefined) }),
+          signal: ac.signal
+        });
+        clearTimeout(to);
         if (!r.ok) {
           let msg = `接口错误 ${r.status}`;
           try { msg = (await r.json()).error || msg; } catch (e) {}
           throw new Error(msg);
         }
         const modelName = r.headers.get("X-Model");
-        if (modelName) $("#chatModel").textContent = modelName.split("-")[0];   /* 短名：qwen3:4b-instruct-2507-q4_K_M → qwen3:4b */
+        if (modelName) $("#chatModel").textContent = modelName.split("-")[0];
         const rd = r.body.getReader(); const dec = new TextDecoder();
-        let acc = "", last = 0;
+        let acc = "", last = 0, sseBuf = "";
         while (true) {
           const { done, value } = await rd.read();
           if (done) break;
-          acc += dec.decode(value, { stream: true });
-          if (!live.dataset.started) { live.dataset.started = "1"; clearTimeout(slowTimer); }
+          sseBuf += dec.decode(value, { stream: true });
+          const parsed = parseSSEChunk(sseBuf);
+          sseBuf = parsed.keep === "__DONE__" ? "" : parsed.keep;
+          if (parsed.text) acc += parsed.text;
+          if (!live.dataset.started && acc) { live.dataset.started = "1"; clearTimeout(slowTimer); }
           const now = performance.now();
-          if (now - last > 80) { last = now; live.innerHTML = esc(clean(acc)).replace(/\n/g, "<br>"); body.scrollTop = body.scrollHeight; }
+          if (now - last > 80) {
+            last = now;
+            live.innerHTML = esc(clean(acc)).replace(/\n/g, "<br>");
+            body.scrollTop = body.scrollHeight;
+          }
         }
         clearTimeout(slowTimer); delete live.dataset.started;
         acc = clean(acc);
@@ -108,7 +139,8 @@ const CHAT_SUGGEST = [
         localStorage.setItem(chatKey(), JSON.stringify(history.slice(-24)));
       } catch (e) {
         clearTimeout(slowTimer); delete live.dataset.started;
-        live.innerHTML = `<span style="color:var(--color-bad)">出错了：${esc(e.message)}</span><br><span class="muted" style="font-size:12px">若提示连接失败：请联系系统管理员启动后台服务。</span>`;
+        const isAbort = e && (e.name === "AbortError" || /abort/i.test(e.message || ""));
+        live.innerHTML = `<span style="color:var(--color-bad)">${isAbort ? "⏱ 请求超时（90s 无响应）" : "出错了：" + esc(e.message || String(e))}</span><br><span class="muted" style="font-size:12px">若长时间无响应：①点对话窗 ⚙ 切服务商+模型再试；②让管理员在服务器终端执行 <code>systemctl restart geo-console</code>。</span>`;
       }
       send.classList.remove("is-busy"); send.textContent = "发送"; busy = false;
       body.scrollTop = body.scrollHeight;

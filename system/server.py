@@ -821,19 +821,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "messages 需要至少一条 user 消息"})
 
             self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache, no-store")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("X-Model", model_name)
-            self.close_connection = True
+            self.send_header("X-Accel-Buffering", "no")        # V4.3.3：明确告诉 nginx 禁缓冲
+            # 不设 close_connection，让 nginx 正常代理；不让 nginx 等待 Content-Length
+            self.send_header("Transfer-Encoding", "chunked")  # 客户端识别流式
             self.end_headers()
 
             if src in ("user", "server"):
                 up = llm_remote_open(cfg, msgs, stream=True, timeout=180, max_tokens=1024)
             else:
                 payload = {"model": model_name, "messages": msgs, "stream": True,
-                           "options": {"temperature": 0.4, "num_predict": 450}, "think": False,
-                           "keep_alive": "30m"}
+                           "options": {"temperature": 0.4, "num_predict": 450},
+                           "keep_alive": "30m"}      # V4.3.3：删掉 Ollama 0.x 不支持的 "think" 字段
                 req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(payload).encode(),
                                              headers={"Content-Type": "application/json"})
                 up = urllib.request.urlopen(req, timeout=180)
@@ -851,21 +853,30 @@ class Handler(BaseHTTPRequestHandler):
                     if chunk.get("error"):
                         err = chunk["error"]
                         if isinstance(err, dict): err = err.get("message") or json.dumps(err, ensure_ascii=False)
-                        self.wfile.write(("【模型错误】" + str(err)).encode("utf-8")); break
-                    # DeepSeek/OpenAI 格式：choices[0].delta.content
+                        self.wfile.write(f"data: 【模型错误】{err}\n\n".encode("utf-8")); self.wfile.flush()
+                        continue
                     text = ""
-                    if "choices" in chunk:
+                    if "choices" in chunk:                       # DeepSeek/OpenAI 格式
                         delta = chunk["choices"][0].get("delta") or {}
                         text = delta.get("content", "")
-                    elif "message" in chunk:   # Ollama 兼容格式
+                    elif "message" in chunk:                      # Ollama 兼容格式
                         text = (chunk.get("message") or {}).get("content", "")
                     if text:
-                        self.wfile.write(text.encode("utf-8")); self.wfile.flush()
+                        self.wfile.write(f"data: {text}\n\n".encode("utf-8")); self.wfile.flush()
+                # V4.3.3：明确 [DONE] 终止符 + 收尾 flush，前端 reader 才能正常 done
+                try:
+                    self.wfile.write(b"data: [DONE]\n\n"); self.wfile.flush()
+                except Exception:
+                    pass
         except urllib.error.URLError as e:
-            try: self.wfile.write(f"\n【连接模型失败】{e}".encode("utf-8"))
+            try: self.wfile.write(f"data: 【连接模型失败】{e}\n\n".encode("utf-8"))
+            except Exception: pass
+            try: self.wfile.write(b"data: [DONE]\n\n"); self.wfile.flush()
             except Exception: pass
         except Exception as e:
-            try: self.wfile.write(f"\n【服务错误】{e}".encode("utf-8"))
+            try: self.wfile.write(f"data: 【服务错误】{e}\n\n".encode("utf-8"))
+            except Exception: pass
+            try: self.wfile.write(b"data: [DONE]\n\n"); self.wfile.flush()
             except Exception: pass
 
 def warmup_model():
