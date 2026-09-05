@@ -123,56 +123,78 @@ const CHAT_SUGGEST = [
     if (new URLSearchParams(location.search).get("llm") === "1") { open(); openLlm(); }  /* 模型配置直达（演示/排障） */
 
     /* ── 用户自接入 LLM：⚙ 设置窗（密钥存服务器按账号隔离，界面只回显尾4位）── */
-    /* V4.3：预填主流服务商的 API 地址+模型名，用户只填 API 密钥即可；自定义模式保留高级用户入口
-       V4.3.1：每家服务商附 models 列表（截至 2026-09 主力在售），用户选服务商后下拉选具体模型 */
+    /* V4.3.2：每家服务商的 models 列表均通过 WebFetch 抓真实在售页面核实（2026-09）。
+       凡是无法公开核实或登录后才有完整列表的（如豆包/火山方舟），
+       仅保留两个有公开文档/控制台默认列出的备选 + 明确 desc 引导用户查控制台。 */
     const LLM_PROVIDERS = {
-      deepseek: { name: "DeepSeek（深度求索）", base: "https://api.deepseek.com/v1", model: "deepseek-chat", keyHint: "格式：sk-xxxxxxxx… 在 deepseek.com 平台控制台 → API Keys 创建",
+      /* DeepSeek：api-docs.deepseek.com/quick_start/pricing 实测在售 3 个 */
+      deepseek: { name: "DeepSeek（深度求索）", base: "https://api.deepseek.com/v1", model: "deepseek-v4-flash", keyHint: "格式：sk-xxxxxxxx… 在 deepseek.com 平台控制台 → API Keys 创建",
         models: [
-          { id: "deepseek-chat",     desc: "V3.2 旗舰对话（默认，性价比最高）" },
-          { id: "deepseek-reasoner", desc: "V3.2 深度推理（R1，含思考过程）" },
+          { id: "deepseek-v4-flash",            desc: "V4 Flash 2026-07-31 旗舰对话（默认，性价比高）" },
+          { id: "deepseek-v4-pro",              desc: "V4 Pro 2026-08-13 深度推理（含思考）" },
+          { id: "deepseek-v4-flash-vision-exp", desc: "V4 Flash Vision 实验版（多模态）" },
         ] },
-      qwen:     { name: "通义千问（阿里百炼）", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", keyHint: "格式：sk-xxxxxxxx… 在 dashscope.console.aliyun.com → API-KEY 创建（兼容 OpenAI 模式）",
+
+      /* 通义千问（阿里百炼）：help.aliyun.com/zh/model-studio/models 实测在售 Qwen 3.8/3.7 */
+      qwen: { name: "通义千问（阿里百炼）", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen3.8-max", keyHint: "格式：sk-xxxxxxxx… 在 dashscope.console.aliyun.com → API-KEY 创建（兼容 OpenAI 模式）",
         models: [
-          { id: "qwen3-max",         desc: "Qwen3 Max（旗舰，长文本/工具调用）" },
-          { id: "qwen3-max-preview", desc: "Qwen3 Max 预览版" },
-          { id: "qwen-plus",         desc: "Plus（默认，性价比高）" },
-          { id: "qwen-turbo",        desc: "Turbo（速度最快，价格低）" },
-          { id: "qwen-long",         desc: "Long（百万级上下文）" },
+          { id: "qwen3.8-max",  desc: "Qwen3.8 Max（旗舰，长上下文）" },
+          { id: "qwen3.7-plus", desc: "Qwen3.7 Plus（默认，性价比高）" },
+          { id: "qwen3.8-flash", desc: "Qwen3.8 Flash（速度最快，价格低）" },
+          { id: "qwen3.5-omni-plus", desc: "Qwen3.5 Omni Plus（全模态，按需）" },
         ] },
-      kimi:     { name: "Kimi（月之暗面）", base: "https://api.moonshot.cn/v1", model: "moonshot-v1-128k", keyHint: "格式：sk-xxxxxxxx… 在 platform.moonshot.cn → API Keys 创建",
+
+      /* Kimi（月之暗面）：platform.kimi.com/docs/pricing/chat 实测在售 K3/K2.7 Code/K2.6
+         （V1 系列已下架；platform.moonshot.cn 301 到 kimi.com） */
+      kimi: { name: "Kimi（月之暗面）", base: "https://api.moonshot.cn/v1", model: "kimi-K3", keyHint: "格式：sk-xxxxxxxx… 在 platform.kimi.com 控制台 → API Keys 创建",
         models: [
-          { id: "kimi-k2-0905-preview", desc: "Kimi K2 预览版（开源旗舰 MoE）" },
-          { id: "kimi-k2-turbo-preview", desc: "Kimi K2 Turbo（速度优化）" },
-          { id: "moonshot-v1-128k", desc: "V1 128k（长上下文）" },
-          { id: "moonshot-v1-32k",  desc: "V1 32k" },
-          { id: "moonshot-v1-8k",   desc: "V1 8k（速度最快）" },
+          { id: "kimi-K3",         desc: "Kimi K3（2026 旗舰）" },
+          { id: "kimi-K2.7-code",  desc: "Kimi K2.7 Code（编程/Agent 优化）" },
+          { id: "kimi-K2.6",       desc: "Kimi K2.6（开源旗舰 MoE）" },
         ] },
-      zhipu:    { name: "智谱 GLM", base: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash", keyHint: "格式：xxxxxxx.yyyyyyy 在 bigmodel.cn → 个人中心 → API Keys 创建",
+
+      /* 智谱 GLM：docs.bigmodel.cn/cn/guide/start/model-overview 实测在售 */
+      zhipu: { name: "智谱 GLM", base: "https://open.bigmodel.cn/api/paas/v4", model: "GLM-5.3", keyHint: "格式：xxxxxxx.yyyyyyy 在 bigmodel.cn → 个人中心 → API Keys 创建",
         models: [
-          { id: "glm-4.6",           desc: "GLM-4.6（最新旗舰对话）" },
-          { id: "glm-4.5",           desc: "GLM-4.5" },
-          { id: "glm-4-plus",        desc: "GLM-4 Plus（高阶推理）" },
-          { id: "glm-4-flash",       desc: "GLM-4 Flash（默认，免费档）" },
-          { id: "glm-4-flash-250414", desc: "GLM-4 Flash 旧版 ID（兼容）" },
-          { id: "glm-z1-air",        desc: "GLM-Z1 Air（深度推理）" },
+          { id: "GLM-5.3",            desc: "GLM-5.3（2026 旗舰）" },
+          { id: "GLM-5.3-Flash",      desc: "GLM-5.3 Flash（轻量旗舰）" },
+          { id: "GLM-5.2",            desc: "GLM-5.2" },
+          { id: "GLM-5.1",            desc: "GLM-5.1" },
+          { id: "GLM-5",              desc: "GLM-5" },
+          { id: "GLM-5-Turbo",        desc: "GLM-5 Turbo（速度优化）" },
+          { id: "GLM-4.7",            desc: "GLM-4.7" },
+          { id: "GLM-4.7-FlashX",     desc: "GLM-4.7 FlashX" },
+          { id: "GLM-4.7-Flash",      desc: "GLM-4.7 Flash" },
+          { id: "GLM-4.6",            desc: "GLM-4.6" },
+          { id: "GLM-4.5-Air",        desc: "GLM-4.5 Air" },
+          { id: "GLM-4.5-AirX",       desc: "GLM-4.5 AirX" },
+          { id: "GLM-4-Long",         desc: "GLM-4 Long（超长上下文）" },
+          { id: "GLM-4-FlashX-250414", desc: "GLM-4 FlashX 旧版 ID（兼容）" },
+          { id: "GLM-4.5-Flash",      desc: "GLM-4.5 Flash" },
+          { id: "GLM-4-Flash-250414",  desc: "GLM-4 Flash 旧版 ID（兼容）" },
         ] },
-      doubao:   { name: "豆包（火山方舟）", base: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seed-1-6-250615", keyHint: "格式：xxxx-xxx-… 在 volcengine.com → 火山方舟 → API Key 管理创建（需先开通模型推理接入点）",
+
+      /* 豆包（火山方舟）：官方文档需登录才能看到完整列表。
+         控制台默认开通的「豆包系列推理接入点」与这两个 ID 在 2026 年仍可见；
+         其他新模型请到方舟控制台 → 在线推理 → 创建接入点 查准确名称 */
+      doubao: { name: "豆包（火山方舟）", base: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seed-1-6-250615", keyHint: "格式：xxxx-xxx-… 在 volcengine.com → 火山方舟 → API Key 管理创建（需先开通模型推理接入点）",
         models: [
-          { id: "doubao-seed-1-6-250615",  desc: "Seed 1.6（当前主推旗舰）" },
+          { id: "doubao-seed-1-6-250615", desc: "Seed 1.6（2025 旗舰，方舟控制台默认有）" },
           { id: "doubao-seed-1-6-lite",   desc: "Seed 1.6 Lite（轻量）" },
-          { id: "doubao-1-5-pro-32k-250115", desc: "1.5 Pro 32k（备选）" },
-          { id: "doubao-1-5-lite-32k-250115", desc: "1.5 Lite 32k（备选）" },
         ] },
-      ollama:   { name: "Ollama（本机大模型，无需密钥）", base: "http://127.0.0.1:11434/v1", model: "qwen3:4b-instruct-2507-q4_K_M", keyHint: "本机 Ollama 通常无需密钥；密钥框留空即可；先在终端 ollama pull <模型>",
+
+      /* Ollama：本机已确认 qwen3:4b-instruct-2507-q4_K_M；其他选项是 ollama.com/library 常见热模型 */
+      ollama: { name: "Ollama（本机大模型，无需密钥）", base: "http://127.0.0.1:11434/v1", model: "qwen3:4b-instruct-2507-q4_K_M", keyHint: "本机 Ollama 通常无需密钥；密钥框留空即可；先在终端 ollama pull <模型>",
         models: [
-          { id: "qwen3:4b-instruct-2507-q4_K_M", desc: "Qwen3 4B 量化（本机默认）" },
+          { id: "qwen3:4b-instruct-2507-q4_K_M", desc: "Qwen3 4B 量化（本机实测可用）" },
           { id: "qwen3:8b",                  desc: "Qwen3 8B（更强）" },
-          { id: "qwen3:14b",                 desc: "Qwen3 14B（要 16G 内存）" },
+          { id: "qwen3:14b",                 desc: "Qwen3 14B（要 16G+ 内存）" },
           { id: "deepseek-r1:8b",            desc: "DeepSeek R1 蒸馏 8B" },
           { id: "gemma3:4b",                 desc: "Gemma 3 4B（Google）" },
           { id: "llama3.1:8b",               desc: "Llama 3.1 8B（Meta）" },
         ] },
-      custom:   { name: "OpenAI 兼容（自定义地址/模型）", base: "", model: "", keyHint: "高级用户：自填兼容 OpenAI 协议的 API 地址与模型名", models: [] },
+
+      custom: { name: "OpenAI 兼容（自定义地址/模型）", base: "", model: "", keyHint: "高级用户：自填兼容 OpenAI 协议的 API 地址与模型名", models: [] },
     };
     async function fetchLlmSettings() {
       try { return await (await fetch("/api/llm/settings")).json(); }
