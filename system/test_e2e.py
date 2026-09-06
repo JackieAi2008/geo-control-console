@@ -143,6 +143,9 @@ def main():
             html = dump("projects")
             check("V4.6项目库工具栏", "pjQ" in html and "pjChips" in html and "pjSort" in html and "pjArch" in html
                   and "pjNew" in html and "新建项目" in html, "搜索/形态状态chips/排序/含归档/新建按钮")
+            check("V4.7主导航全站常驻", "工作台" in html and "诊断" in html and "监测" in html and "知识库" in html
+                  and "mainNav" in html, "项目库页也显示系统全貌导航（新人不再只见卡片墙）")
+            check("V4.7首访欢迎页容器", "pjWelcome" in html and "新建项目" in html and "知道了" in html, "欢迎区（价值三步+新建引导+可关闭）存在；首访即显示（无localStorage标记）")
             check("V4.6项目库页头与形态筛选", "项目库" in html and "无官网" in html and "挂上级官网" in html
                   and "未诊断" in html and "pjStat" in html, "h2项目库+形态大白话chips+统计条")
             check("V4.6报头两态(库内高亮)", "pj-on" in html and "☰" in html, "项目库态chip高亮（同步渲染）")
@@ -327,10 +330,12 @@ const snap = vm.runInContext(`computeSnapshot("round", {audit: {T1: 2, T2: 1, T3
   {date: "2026-09-04", engine: "豆包", promptId: "P1", mention: 1},
   {date: "2026-09-04", engine: "Kimi", promptId: "P2", mention: 0}]})`, ctx);
 const snapNone = vm.runInContext('computeSnapshot("diag", {entityMode: "none", audit: {T1: 2, T2: 2, T3: 2, E1: 2, E2: 1}, lastDiag: {checks: []}, ledger: []})', ctx);
+const landing = vm.runInContext('landingView()', ctx);
 console.log(JSON.stringify({bad: r1.score, good: r2.score,
   fp: {hi: fp1, mid: fp2, d: [dt1, dt2, dt3]},
   snap: {pct: snap.auditPct, fails: snap.diagFails, ans: snap.mentionAns, ansN: snap.mentionAnsN, src: snap.mentionSrc, srcN: snap.mentionSrcN, own: snap.ownHitN, ownT: snap.ownHitTotal, ownD: snap.ownHitDate},
   snapNone: {pct: snapNone.auditPct},
+  landing,
   bp: {n: bp.rows.length, badn: bp.bad.length, co: (bp.rows[0] && bp.rows[0].cooccur || []).length},
   samp: {n: samp.qs.length, sev: samp.qs[0] ? samp.qs[0].severity : 0, noDoubao: !samp.engs.includes("豆包")}}));
 '''
@@ -357,6 +362,8 @@ console.log(JSON.stringify({bad: r1.score, good: r2.score,
                   f"体检{sn['pct']}·未过{sn['fails']}·答案侧{sn['ans']}(n={sn['ansN']})·信源侧{sn['src']}(n={sn['srcN']})·当日自有{sn['own']}/{sn['ownT']}")
             check("V4.5无官网分母排除", r.get("snapNone", {}).get("pct") == 75,
                   f"none模式 T1–T3(满分6)不进分母，E1+E2=3/4=75%·实测{r.get('snapNone', {}).get('pct')}%")
+            check("V4.7落地分流(无上次记录→项目库)", r.get("landing") == "projects",
+                  f"node环境无lastOpen→projects（有项目卡片+全貌导航）·实测{r.get('landing')}")
         else:
             check("评分器单元", False, p.stderr[:200] or "node 输出为空", skippable=True)
     finally:

@@ -225,6 +225,7 @@ async function switchProject(pid) {
     const pm = PROJECTS.find(p => p.id === pid);
     if (pm) pm.lastOpen = Date.now();   /* V4.6 项目库「上次处理」置顶数据（本机个人视角） */
     saveProjectsMeta();
+    try { localStorage.setItem("geodesk.visited", "1"); } catch (e) {}   /* V4.7 进过项目即视为老用户，欢迎区不再显示 */
     loadCurrentState();
     renderProjectContext(); renderAllViews();
     if (SERVER_MODE) { await loadProjectFromServer(); renderProjectContext(); renderAllViews(); }
@@ -485,12 +486,19 @@ const VIEWS = ["projects", "dashboard", "diag", "act", "monitor", "knowledge"];
 const SUBS = { diag: ["scan", "report", "audit", "caliber", "score", "evidence"], act: ["toolkit", "plan", "agent"] };
 const LEGACY = { caliber: "diag/caliber", audit: "diag/audit", content: "diag/score", plan: "act/plan", agents: "act/agent", brief: "act/toolkit", scan: "diag/scan", toolkit: "act/toolkit" };
 function go(v) { location.hash = "#/" + v; }
+/* V4.7 落地分流：回访者直进上次项目工作台（连续工作零成本）；新用户/新设备进项目库
+   （有真实项目卡片+全貌导航，不再是空白墙）；全新部署进项目库空态=欢迎页 */
+function landingView() {
+  if (!PROJECTS.length) return "projects";
+  const cur = PROJECTS.find(p => p.id === CUR);
+  return (cur && cur.lastOpen) ? "dashboard" : "projects";
+}
 function route() {
   let path = (location.hash || "").replace(/^#\/?/, "");
   if (LEGACY[path]) { location.hash = "#/" + LEGACY[path]; return; }
   const [view, subRaw] = path.split("/");
-  /* V4.6：默认落地=项目库（几十个诊断对象的入口先于上一次的项目） */
-  const v = VIEWS.includes(view) ? view : "projects";
+  if (!VIEWS.includes(view)) { go(landingView()); return; }   /* V4.7：空 hash 按身份分流（原默认 projects） */
+  const v = view;
   CUR_VIEW = v;
   updateProjChip(v);
   const subs = SUBS[v] || null;
@@ -511,8 +519,9 @@ function route() {
     }, 120);
   }
   $$(".view").forEach(s => s.hidden = s.id !== "view-" + v);
+  /* V4.7 主导航全站常驻：项目库页也显示（新人一眼看到系统全貌，点导航即进当前项目对应功能）；
+     项目库页无 tab 高亮（它是入口层不是功能页） */
   $$(".tab").forEach(t => t.classList.toggle("on", t.dataset.view === v));
-  $("#mainNav").hidden = v === "projects";   /* 项目总览是项目外层空间，不显示阶段导航 */
   window.scrollTo(0, 0);
   if (v === "projects") render.projects();
   else if (v === "dashboard") render.dashboard();
@@ -1356,11 +1365,9 @@ function renderProjectCards(useServer) {
       <span class="pc-arch" data-arch="${esc(p.id)}" title="归档（数据保留，可恢复）" role="button" tabindex="0">归档</span>
     </button>`;
   }).join("");
-  /* 空态才显示虚线新建卡（平时新建走工具栏按钮，单一入口） */
+  /* 空库时欢迎区的大按钮负责新建；有项目时筛选无结果给明确提示（不再误显"新建第一个"） */
   $("#projGrid").innerHTML = cards ||
-    `<button class="proj-card proj-add" type="button" aria-label="新建项目">
-      <span class="pa-plus">＋</span><b>新建第一个项目</b><span style="font-size:var(--text-xs);color:var(--color-ink-3)">园区、楼宇、任何要诊断的对象都可以</span>
-    </button>`;
+    (PROJECTS.length ? '<p class="muted" style="padding:24px 0;text-align:center">没有符合条件的项目——换个搜索词，或点上方「全部」清除筛选。</p>' : "");
   bindProjCardEvents(useServer);
   renderArchived();
 }
@@ -1430,6 +1437,15 @@ function bindProjCardEvents(useServer) {
   }));
 }
 render.projects = () => {
+  /* V4.7 欢迎页：空库必显；有项目时仅本机首次访问显示（新同事第一次进来看得懂系统是什么，
+     用过即收：点「知道了」或进入过任意项目后不再出现）——工具栏仅空库时隐藏 */
+  const empty = !PROJECTS.length;
+  let visited = false;
+  try { visited = !!localStorage.getItem("geodesk.visited"); } catch (e) {}
+  const wl = $("#pjWelcome"), tb = $("#pjToolbarCard"), hd = $("#pjHead");
+  if (wl) wl.hidden = visited && !empty;
+  if (tb) tb.hidden = empty;
+  if (hd) hd.hidden = empty;
   renderProjectCards(false);   /* 先用本机缓存即时渲染 */
   renderProjToolbar();         /* V4.6 工具栏（chips 按当前筛选态高亮） */
   if (SERVER_MODE) {
@@ -2046,6 +2062,11 @@ function bind() {
 
   /* V4.6 项目库工具栏：新建按钮 / 搜索（防抖）/ 形态与状态 chips（委托）/ 排序 / 含归档开关 */
   const pjNew = $("#pjNew"); if (pjNew) pjNew.addEventListener("click", () => { $("#projModal").hidden = false; $("#npName").focus(); });
+  const pjWNew = $("#pjWelcomeNew"); if (pjWNew) pjWNew.addEventListener("click", () => { $("#projModal").hidden = false; $("#npName").focus(); });   /* V4.7 欢迎页新建 */
+  const pjWClose = $("#pjWelcomeClose"); if (pjWClose) pjWClose.addEventListener("click", () => {   /* V4.7 欢迎页关闭=记访问，不再打扰 */
+    try { localStorage.setItem("geodesk.visited", "1"); } catch (e) {}
+    $("#pjWelcome").hidden = true; toast("已收起——想再看可清除浏览器本站数据后刷新");
+  });
   const pjQ = $("#pjQ");
   if (pjQ) { let pjT; pjQ.addEventListener("input", () => { clearTimeout(pjT); pjT = setTimeout(() => { PJ_FILTERS.q = pjQ.value; renderProjectCards(SERVER_MODE && !!SERVER_SUM); }, 180); }); }
   const pjChips = $("#pjChips");

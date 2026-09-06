@@ -36,11 +36,36 @@
 
 <!-- ═══ 项目库（多诊断对象工作台：搜索 / 筛选 / 排序 / 进入）═══ -->
 <section class="view" id="view-projects" hidden>
-  <div class="page-head">
+  <!-- V4.7 空库欢迎页：不再是空白墙——先讲清系统能做什么，再引导新建 -->
+  <div class="card" id="pjWelcome" hidden style="margin-bottom:14px">
+    <h2 style="border:none;margin:0 0 2px">开始用 GEO 智控台</h2>
+    <p class="muted" style="margin:0 0 14px">让 AI 搜索（豆包、DeepSeek、元宝、文心、千问、Kimi）提到你、推荐你、引用你的信息。三步就用起来：</p>
+    <div class="grid grid-3" style="margin-bottom:14px">
+      <div class="card" style="box-shadow:none">
+        <h3 style="border:none">① 查一查</h3>
+        <p style="font-size:var(--text-sm)">输入官网域名，或没有官网时只输入品牌词（如楼宇名），30 秒看到「AI 眼里的你」：网站能否被 AI 读取、品牌词搜索前排是谁、百科词条信息对不对——每项附证据。</p>
+      </div>
+      <div class="card" style="box-shadow:none">
+        <h3 style="border:none">② 拿物料</h3>
+        <p style="font-size:var(--text-sm)">一键生成能直接用的文件：百科词条更新稿、公众号文章、地图信息核对清单——不需要任何技术，品宣自己就能执行；有官网的项目另附官网配置文件。</p>
+      </div>
+      <div class="card" style="box-shadow:none">
+        <h3 style="border:none">③ 看变化</h3>
+        <p style="font-size:var(--text-sm)">双周跑一轮 30 问真实搜索，自有渠道排名、提及率的变化自动画成曲线——做得有没有效果，数据说话。</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="pjWelcomeNew" style="min-height:44px;padding:0 22px">＋ 新建项目</button>
+      <span class="muted" style="font-size:var(--text-sm)">园区、楼宇、任何要宣传的实体，2 分钟建好</span>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost" id="pjWelcomeClose">知道了，不再显示</button>
+    </div>
+  </div>
+  <div class="page-head" id="pjHead">
     <h2>项目库</h2>
     <p>全部诊断对象的入口：搜索、筛选、进入。</p>
   </div>
-  <div class="card pj-toolbar" style="margin-bottom:14px">
+  <div class="card pj-toolbar" id="pjToolbarCard" style="margin-bottom:14px">
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <input id="pjQ" class="inp" placeholder="搜索项目名 / 品牌词 / 域名" style="flex:1;min-width:220px" aria-label="搜索项目">
       <button class="btn btn-primary" id="pjNew">＋ 新建项目</button>
@@ -676,9 +701,9 @@
   </div>
 </div>
 
-<script src="js/data.js?v=4.6"></script>
-<script src="js/app.js?v=4.6"></script>
-<script src="js/ops.js?v=4.6.1"></script>
+<script src="js/data.js?v=4.7"></script>
+<script src="js/app.js?v=4.7"></script>
+<script src="js/ops.js?v=4.7"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
