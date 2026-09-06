@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>招商产园 GEO 智控台</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
-<link rel="stylesheet" href="css/tokens.css?v=0.1.11">
-<link rel="stylesheet" href="css/app.css?v=0.1.11">
-<link rel="stylesheet" href="css/tour.css?v=0.1.11">
+<link rel="stylesheet" href="css/tokens.css?v=0.1.12">
+<link rel="stylesheet" href="css/app.css?v=0.1.12">
+<link rel="stylesheet" href="css/tour.css?v=0.1.12">
 </head>
 <body>
 
@@ -128,7 +128,7 @@
         <a class="btn btn-primary" href="#/diag/scan" style="width:100%">去一键诊断 →</a>
       </div>
       <div class="wizard-col">
-        <p style="font-size:var(--text-sm)"><b>② 生成优化文件</b>：点「一键生成」——产出 5–7 个可直接使用的文件：有官网的项目含网站 AI 可读配置、AI 说明文件、结构化数据标签（交网站管理员）；没有官网的项目则是百科词条更新稿、一园一档公众号版（品宣自己就能做）。所有项目都有：一园一档、选址 FAQ20 问（过评分器再发）、地图信息核对清单（高德/百度/腾讯认领核对，约30分钟）、渠道分发指南（真实入口与首发内容）。</p>
+        <p style="font-size:var(--text-sm)"><b>② 生成优化文件</b>：点「一键生成」——产出 5–7 个可直接使用的文件：有官网的项目含网站 AI 可读配置、AI 说明文件、结构化数据标签（交网站管理员）；没有官网的项目则是百科词条更新稿、一园一档公众号版（品宣自己就能做）。所有项目都有：一园一档（园区标准介绍页：一段介绍+一张数据表+五个常见问题，官网/公众号通用）、选址 FAQ20 问（过评分器再发）、地图信息核对清单（高德/百度/腾讯认领核对，约30分钟）、渠道分发指南（真实入口与首发内容）。</p>
         <a class="btn btn-primary" href="#/act/toolkit" style="width:100%">去拿优化文件 →</a>
       </div>
       <div class="wizard-col">
@@ -187,7 +187,7 @@
       <p class="muted dg-launch-help" id="dgHelp">官网体检：网站能否被 AI 读取 · 是否允许 AI 爬取 · AI 说明文件 · 内容是否在源码里 · 结构化数据标签 · 图片说明文字 · 品牌词搜索前 10。真实联网检查 + 真实搜索，约 10–30 秒，结果自动填入体检表。</p>
       <p class="muted dg-launch-help" id="dgHelpEntity" hidden>实体体检：用品牌词做真实搜索，查我们的信息在网上的存在感——自有渠道是否进前 10、百科词条、企业信息平台、权威信源覆盖。没有官网的项目（如单楼宇/新园区）从这里开始，约 5–15 秒，结果自动填入体检表，并附 12 项实体资产核对清单。</p>
     </div>
-    <div id="dgOut" class="dg-out"><div id="dgPreview"></div></div>
+    <div id="dgOut" class="dg-out"></div>
   </div>
 
   <!-- 子页：诊断报告（查阅） -->
@@ -246,6 +246,8 @@
           <button class="btn btn-sm btn-primary" id="calAdd">+ 添加字段</button>
         </span>
       </h3>
+      <!-- V0.1.12 大白话（T1）：「口径」首现处给人话——品宣岗不需要统计行话 -->
+      <p class="muted" style="margin:-4px 0 10px;font-size:var(--text-sm)">口径表 = 园区对外数据的标准答案（面积、租金、企业数都以它为准）。全系统只认这份表：网上和咱们说法不一致的数据，登记到「外部冲突口径」列逐步清理。</p>
       <div class="tbl-wrap tbl-cards"><table class="tbl">
         <thead><tr><th>园区</th><th>字段</th><th>官方口径（唯一权威）</th><th>数据时点</th><th>来源</th><th>外部冲突口径（待清理）</th><th>操作</th></tr></thead>
         <tbody id="caliberBody"></tbody>
@@ -515,7 +517,7 @@
     <div id="probeOut" style="margin-top:10px"></div>
   </div>
   <div class="card" style="margin-top:16px">
-    <h3>⑦ 人工实测台账（六引擎AI问答）
+    <h3>⑦ 监测台账（六引擎AI问答 · 人工行与AI代问行分标，统计分开计）
       <span style="display:flex;gap:8px"><button class="btn btn-sm btn-ghost" id="mExport">导出表格</button><button class="btn btn-sm btn-danger" id="mClear">清空</button></span>
     </h3>
     <div class="tbl-wrap tbl-cards" id="mTable"></div>
@@ -763,10 +765,10 @@
   </div>
 </div>
 
-<script src="js/data.js?v=0.1.11"></script>
-<script src="js/app.js?v=0.1.11"></script>
-<script src="js/ops.js?v=0.1.11"></script>
-<script src="js/tour.js?v=0.1.11"></script>
+<script src="js/data.js?v=0.1.12"></script>
+<script src="js/app.js?v=0.1.12"></script>
+<script src="js/ops.js?v=0.1.12"></script>
+<script src="js/tour.js?v=0.1.12"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -781,7 +783,7 @@
     } catch (e) {}
   })();
 </script>
-<script src="js/chat-kb.js?v=0.1.11"></script>
-<script src="js/chat.js?v=0.1.11"></script>
+<script src="js/chat-kb.js?v=0.1.12"></script>
+<script src="js/chat.js?v=0.1.12"></script>
 </body>
 </html>

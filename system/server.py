@@ -35,7 +35,7 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "0.1.11"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（V0.1.x 序列：0.1.7=AI代问；旧 6.x 序列已封存）
+APP_VERSION = "0.1.12"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（V0.1.x 序列：0.1.7=AI代问；旧 6.x 序列已封存）
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}
@@ -1256,8 +1256,52 @@ class Handler(BaseHTTPRequestHandler):
             # 不写 Content-Length——让 nginx 用 chunked 而非定长
             self.end_headers()
 
+            def stream_remote(max_tokens):
+                """V0.1.12 空泡根治（AI评测P1）：DeepSeek V4 的 reasoning_content 与 content 共享
+                   max_tokens 预算——思考一长即把预算顶满、正文 0 字，用户端表现为空回答/永久思考中。
+                   返回累计正文字数，供外层在 0 字时自动加预算重试一次。"""
+                total = 0
+                with llm_remote_open(cfg, msgs, stream=True, timeout=180, max_tokens=max_tokens) as up:
+                    for raw in up:
+                        try:
+                            line = raw.decode("utf-8", "ignore").strip()
+                            if not line or line.startswith(":"): continue
+                            if line.startswith("data:"): line = line[5:].strip()
+                            if line == "[DONE]": break
+                            chunk = json.loads(line)
+                        except Exception:
+                            continue
+                        if chunk.get("error"):
+                            err = chunk["error"]
+                            if isinstance(err, dict): err = err.get("message") or json.dumps(err, ensure_ascii=False)
+                            self.wfile.write(f"data: 【模型错误】{err}\n\n".encode("utf-8")); self.wfile.flush()
+                            continue
+                        text = ""
+                        think = ""
+                        if "choices" in chunk:                       # DeepSeek/OpenAI 格式
+                            delta = chunk["choices"][0].get("delta") or {}
+                            # V4.3.4 关键修复：DeepSeek V4 把「思考过程」放在 reasoning_content、
+                            # 「最终回答」放在 content，两者独立流式返回，必须分开读。
+                            content = delta.get("content") or ""
+                            reasoning = delta.get("reasoning_content") or ""
+                            # 用特殊事件前缀让前端识别思考过程（折叠/淡化展示）
+                            if reasoning: think += reasoning
+                            if content:  text += content
+                        elif "message" in chunk:                      # Ollama 兼容格式
+                            text = (chunk.get("message") or {}).get("content", "")
+                        if think:
+                            self.wfile.write(f"event: think\ndata: {think}\n\n".encode("utf-8")); self.wfile.flush()
+                        if text:
+                            total += len(text)
+                            self.wfile.write(f"data: {text}\n\n".encode("utf-8")); self.wfile.flush()
+                return total
+
             if src in ("user", "server"):
-                up = llm_remote_open(cfg, msgs, stream=True, timeout=180, max_tokens=1024)
+                total = stream_remote(2048)   # 预算翻倍：容纳思考+正文（原 1024 会被思考顶满）
+                if total == 0:
+                    total = stream_remote(4096)   # 正文 0 字：更高预算自动重试一次
+                if total == 0:
+                    self.wfile.write("data: 【这条没答出来】模型思考超长占满了输出预算，正文为空——请再问一次或换个问法。\n\n".encode("utf-8")); self.wfile.flush()
             else:
                 payload = {"model": model_name, "messages": msgs, "stream": True,
                            "options": {"temperature": 0.4, "num_predict": 450},
@@ -1265,39 +1309,35 @@ class Handler(BaseHTTPRequestHandler):
                 req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(payload).encode(),
                                              headers={"Content-Type": "application/json"})
                 up = urllib.request.urlopen(req, timeout=180)
-
-            with up as up:
-                for raw in up:
-                    try:
-                        line = raw.decode("utf-8", "ignore").strip()
-                        if not line or line.startswith(":"): continue
-                        if line.startswith("data:"): line = line[5:].strip()
-                        if line == "[DONE]": break
-                        chunk = json.loads(line)
-                    except Exception:
-                        continue
-                    if chunk.get("error"):
-                        err = chunk["error"]
-                        if isinstance(err, dict): err = err.get("message") or json.dumps(err, ensure_ascii=False)
-                        self.wfile.write(f"data: 【模型错误】{err}\n\n".encode("utf-8")); self.wfile.flush()
-                        continue
-                    text = ""
-                    think = ""
-                    if "choices" in chunk:                       # DeepSeek/OpenAI 格式
-                        delta = chunk["choices"][0].get("delta") or {}
-                        # V4.3.4 关键修复：DeepSeek V4 把「思考过程」放在 reasoning_content、
-                        # 「最终回答」放在 content，两者独立流式返回，必须分开读。
-                        content = delta.get("content") or ""
-                        reasoning = delta.get("reasoning_content") or ""
-                        # 用特殊事件前缀让前端识别思考过程（折叠/淡化展示）
-                        if reasoning: think += reasoning
-                        if content:  text += content
-                    elif "message" in chunk:                      # Ollama 兼容格式
-                        text = (chunk.get("message") or {}).get("content", "")
-                    if think:
-                        self.wfile.write(f"event: think\ndata: {think}\n\n".encode("utf-8")); self.wfile.flush()
-                    if text:
-                        self.wfile.write(f"data: {text}\n\n".encode("utf-8")); self.wfile.flush()
+                with up as up:
+                    for raw in up:
+                        try:
+                            line = raw.decode("utf-8", "ignore").strip()
+                            if not line or line.startswith(":"): continue
+                            if line.startswith("data:"): line = line[5:].strip()
+                            if line == "[DONE]": break
+                            chunk = json.loads(line)
+                        except Exception:
+                            continue
+                        if chunk.get("error"):
+                            err = chunk["error"]
+                            if isinstance(err, dict): err = err.get("message") or json.dumps(err, ensure_ascii=False)
+                            self.wfile.write(f"data: 【模型错误】{err}\n\n".encode("utf-8")); self.wfile.flush()
+                            continue
+                        text = ""
+                        think = ""
+                        if "choices" in chunk:
+                            delta = chunk["choices"][0].get("delta") or {}
+                            content = delta.get("content") or ""
+                            reasoning = delta.get("reasoning_content") or ""
+                            if reasoning: think += reasoning
+                            if content:  text += content
+                        elif "message" in chunk:
+                            text = (chunk.get("message") or {}).get("content", "")
+                        if think:
+                            self.wfile.write(f"event: think\ndata: {think}\n\n".encode("utf-8")); self.wfile.flush()
+                        if text:
+                            self.wfile.write(f"data: {text}\n\n".encode("utf-8")); self.wfile.flush()
                 # V4.3.3：明确 [DONE] 终止符 + 收尾 flush，前端 reader 才能正常 done
                 try:
                     self.wfile.write(b"data: [DONE]\n\n"); self.wfile.flush()

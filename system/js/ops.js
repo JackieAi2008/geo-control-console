@@ -30,9 +30,11 @@ function setDgMode(m) {
   renderDiagPreview();   /* V0.1.8：切模式同步刷新预检清单（有结果时结果区不被本函数触碰） */
 }
 /* V0.1.8 空态预检清单：只预告「将查什么」，不出示任何未测结果（不编造数据）。
-   renderDiagResult 会整体替换 #dgOut，预览随之自然消失；再次进入本子页时按当前模式重建。 */
+   V0.1.12 串页修复：renderDiagResult 会整体替换 #dgOut（连带销毁内部 #dgPreview），
+   故预览必须直接写 #dgOut——否则换个项目进来时旧项目的诊断结果残留在 DOM 里（BUG#1a）。 */
 function renderDiagPreview() {
-  const box = $("#dgPreview"); if (!box) return;
+  const box = $("#dgOut"); if (!box) return;
+  if (box.querySelector(".dg-head")) return;   /* 结果已显示时不覆盖（模式切换只刷新无结果时的预检清单，原 #dgPreview 销毁语义等价实现） */
   const isSite = dgMode() === "site";
   const PLAN = isSite ? [
     ["技术可达", ["网站可达性与 HTTPS 证书", "robots.txt 是否放行 AI 爬虫", "llms.txt AI 说明文件（可选项）", "首页源码正文量（是否依赖 JS 渲染）", "Schema 结构化数据标记"]],
@@ -77,7 +79,11 @@ async function opsDiagnose() {
 
   const { filled, kept } = applyAutoScores(res.auto_scores);   /* V0.1.10：稀疏 audit 也认合法体检项 id；填入记「自动」痕 */
   res.brand = brand;   /* V4.5：实体体检报告/历史记录展示用 */
-  state.lastDiag = { ts: res.ts, url: res.url, brand, checks: res.checks, mode: res.mode || "site" };
+  /* V0.1.12 头条口径修复（BUG#1b）：填入结果随诊断结果一起持久化——
+     重渲染（切项目回来/刷新）时头条如实反映该次诊断的事实，而不是按 0/0 重算成「本次无自动可评项」 */
+  res.autoFilled = filled; res.autoKept = kept;
+  state.lastDiag = { ts: res.ts, url: res.url, brand, checks: res.checks, mode: res.mode || "site",
+                    autoFilled: filled, autoKept: kept };
   state.diagHistory = [JSON.parse(JSON.stringify(state.lastDiag)), ...(state.diagHistory || [])].slice(0, 20);
   if ((res.mode || "site") === "site") state.parkUrl = url;   /* 实体体检不动承载页地址 */
   save();
@@ -169,6 +175,15 @@ async function referrerClaim(host) {
   toast(`已归位为「${kind ? "自有·可控阵地" : "集团信源"}」——E2a 与命中统计按新口径生效`);
 }
 function renderDiagResult(res, filled, kept) {
+  /* V0.1.12：头条三态优先读该次诊断持久化的填入事实（autoFilled/autoKept）；
+     旧数据没存这两个字段时，从 checks 的 score 映射重推可自动评分项数（与 diagReportMd 同源逻辑），
+     不再按调用方缺省 0/0 重算成「本次无自动可评项」（BUG#1b：跨项目切换后头条被改写） */
+  if (res.autoFilled == null) {
+    const ks = new Set();
+    (res.checks || []).forEach(c => Object.keys(c.score || {}).forEach(k => ks.add(k)));
+    res.autoFilled = ks.size;
+  }
+  filled = res.autoFilled; kept = (res.autoKept != null) ? res.autoKept : (kept || 0);
   const LV = { pass: "pass", warn: "warn", fail: "fail" }, IC = { pass: "✓", warn: "⚠", fail: "✗" };
   const isEnt = res.mode === "entity";
   const checks = res.checks || [];
@@ -262,7 +277,16 @@ function genLlmsTxt(park, url) {
 }
 function genSchema(park, url, city, industry) {
   const op = (typeof projCtx === "function" ? projCtx().operator : "") || "【待补：运营主体】";
-  return `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "description": "${park}是${city}${industry}${venueNoun()}。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", venueNoun(), "企业选址"]\n}\n</script>`;
+  /* V0.1.12 F5 修复：knowsAbout 第二槽位此前把函数名 venueNoun() 以文本形式漏进 JSON（模板串里漏了 ${}），
+     用户照「可直接使用」贴进官网会得到非法 JSON-LD。两处生成器（genSchema/opsBuildToolkit）同修。 */
+  return `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "description": "${park}是${city}${industry}${venueNoun()}。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", "${venueNoun()}", "企业选址"]\n}\n</script>`;
+}
+/* V0.1.12 F5 防回归：生成的结构化数据必须能通过本地 JSON-LD 解析校验——
+   非法即禁用下载/复制并明示（「可直接使用」的承诺要经得起校验） */
+function validJsonld(text) {
+  const m = String(text || "").match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+  if (!m) return false;
+  try { JSON.parse(m[1]); return true; } catch (e) { return false; }
 }
 /* V4.5 无官网实体物料（不依赖官网承载页，品宣自己可执行）*/
 function genBaikeDraft(park, F, op) {
@@ -425,7 +449,7 @@ function opsBuildToolkit() {
 
   const llms = `# ${park}\n\n> ${city}${industry}产业园区 · 运营方：${op} · 官网 https://${url}\n\n## 核心事实（数据时点见口径表）\n\n- 入驻企业：${g("入驻企业数", "【待填：见口径表】")}\n- 产业聚集度：${g("产业聚集度", "【待填】")}\n- 运营面积：${g("面积", "【待填】")}㎡\n- 主导产业：${industry}\n- 权威背书：${g("行业排名", "【待填：榜单名+年份，引用须写明榜单名】")}\n\n## 页面导航\n\n- [园区官网](https://${url}/)\n- [一园一档页]（部署后把链接更新到这里）\n- [选址FAQ]（部署后把链接更新到这里）\n\n<!-- 更新时间 ${today()} · 责任人：__ -->`;
 
-  const jsonld = `<!-- 结构化数据：贴到园区页面 </head> 前（部署前把【待填】补齐，并对照口径表逐项核对） -->\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "alternateName": "${park}（${opShort}）",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "areaServed": "${city}",\n  "description": "${park}是${city}${industry}${venueNoun()}，入驻企业${g("入驻企业数", "【待填】")}，产业聚集度${g("产业聚集度", "【待填】")}。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", venueNoun(), "企业选址"]\n}\n</script>`;
+  const jsonld = `<!-- 结构化数据：贴到园区页面 </head> 前（部署前把【待填】补齐，并对照口径表逐项核对） -->\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "alternateName": "${park}（${opShort}）",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "areaServed": "${city}",\n  "description": "${park}是${city}${industry}${venueNoun()}，入驻企业${g("入驻企业数", "【待填】")}，产业聚集度${g("产业聚集度", "【待填】")}。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", "${venueNoun()}", "企业选址"]\n}\n</script>`;
 
   const profile = `# ${park}（一园一档）\n> 数据截至 ${today()} · 责任人：__ · 数字均取自口径表，发布前逐项核对\n\n## 一句话\n${park}是${op}旗下园区，位于${city}，主导${industry}产业。\n\n## 基本信息表\n| 项目 | 数据 | 时点 |\n|---|---|---|\n| 运营主体 | ${op} | — |\n| 区位交通 | 【待填：地址/地铁线站/距离】 | — |\n| 运营面积 | ${g("面积", "【待填】")} | 【待填】 |\n| 入驻企业 | ${g("入驻企业数", "【待填】")} | 【待填】 |\n| 产业聚集度 | ${g("产业聚集度", "【待填】")} | 【待填】 |\n| 租金区间 | 【待填：元/㎡/月】 | 【待填】 |\n| 龙头企业 | 【待填：500强/上市公司名单】 | — |\n| 权威背书 | ${g("行业排名", "【待填：榜单名+年份】")} | — |\n\n## 选址者最关心的5个问题（FAQ骨架，逐问补答≤300字）\n${P_prompts().filter(p => p.cat === "选址决策").slice(0, 5).map(p => `### ${p.q}\n【答案前置：先给结论+2个硬数据，再展开】`).join("\n\n")}\n\n## 企业说\n${(() => { const qs = (typeof evidenceQuotes === "function") ? evidenceQuotes(park) : [];
   return qs.length ? qs.map(q => `> 「${q.content}」\n> —— ${q.person}${q.title ? "·" + q.title : ""}${q.source ? `（${q.source}）` : ""}`).join("\n\n") : "> 【待采集：入驻企业负责人原话，带姓名职务（在「诊断→证据库」录入已核验引言后，此处自动填充）】"; })()}\n\n*更新时间：${today()} · 责任人：__*`;
@@ -440,7 +464,7 @@ function opsBuildToolkit() {
     { name: "robots-AI放行片段.txt", desc: "追加到官网 robots.txt；若用 CDN/WAF 还需控制台白名单", content: robots },
     { name: "llms.txt", desc: "传到官网根目录（可选项，5分钟成本；Google声明不使用，勿指望它替代内容）", content: llms },
     { name: "schema-结构化数据.html", desc: "贴到园区页 </head> 前，补齐【待填】", content: jsonld },
-    { name: "一园一档.md", desc: "官网/公众号/知乎通用的园区标准档案（GEO内容库最小单元）", content: profile },
+    { name: "一园一档.md", desc: "园区标准介绍页：一段介绍+一张数据表+五个常见问题（官网/公众号/知乎通用）", content: profile },
     { name: "选址FAQ-20问.md", desc: "答案前置的FAQ页源稿，逐问补答后过评分器≥75再发", content: faqMd },
     { name: "地图信息核对清单.md", desc: "高德/百度/腾讯三平台认领与核对（约30分钟，不需要技术；全项目基础层）", content: genMapChecklist(park) },
     { name: "渠道分发指南.md", desc: `${GEO.channels.length}个渠道的真实入口、动作与首发内容，按周执行`, content: channelPack },
@@ -451,13 +475,17 @@ function opsBuildToolkit() {
     { name: "选址FAQ-20问.md", desc: "答案前置的FAQ源稿，逐问补答后过评分器≥75再发（公众号/知乎均适用）", content: faqMd },
     { name: "渠道分发指南.md", desc: "无官网路线：百科+地图+公众号起步，再按引擎偏好铺内容", content: channelPack },
   ];
+  /* V0.1.12 F5：JSON-LD 本地校验——非法即标记禁用下载/复制并明示（「可直接使用」的文件要经得起校验，绝不给用户可贴坏官网的物料） */
+  const jsonldBad = [];
+  files.forEach(f => { if (f.name.includes("结构化数据")) { f.invalid = !validJsonld(f.content); if (f.invalid) jsonldBad.push(f.name); } });
+  if (jsonldBad.length) toast("⚠ " + jsonldBad.join("、") + " 未通过 JSON-LD 校验，已禁用下载——请把此提示截图反馈");
   window.__tkFiles = files;
   $("#tkOut").innerHTML = files.map((f, i) => `
     <div class="card" style="margin-bottom:12px">
-      <h3 style="border:none;margin:0 0 6px">${esc(f.name)}
+      <h3 style="border:none;margin:0 0 6px">${esc(f.name)}${f.invalid ? ' <span class="tag tag-bad">校验未过 · 已禁用下载</span>' : ""}
         <span style="display:flex;gap:6px">
-          <button class="btn btn-sm btn-primary" data-tkdl="${i}">下载</button>
-          <button class="btn btn-sm btn-ghost" data-tkcp="${i}" title="浏览器限制下载时的兜底：复制全文自行粘贴保存">复制内容</button>
+          <button class="btn btn-sm btn-primary" data-tkdl="${i}" ${f.invalid ? "disabled" : ""}>下载</button>
+          <button class="btn btn-sm btn-ghost" data-tkcp="${i}" ${f.invalid ? "disabled" : ""} title="浏览器限制下载时的兜底：复制全文自行粘贴保存">复制内容</button>
         </span></h3>
       <p class="muted" style="margin-bottom:6px">${esc(f.desc)}</p>
       <pre class="prompt-view" style="max-height:180px">${esc(f.content)}</pre>
@@ -467,11 +495,16 @@ function opsBuildToolkit() {
       <span class="muted" style="font-size:12px">${hasSite ? "若浏览器询问保存位置或未开始下载，用各文件「复制内容」即可" : "本项目暂无官网——已跳过官网部署三件（robots/说明文件/结构化数据），有官网后回来重新生成为 6 件"}</span></div>`;
   $$("#tkOut [data-tkdl]").forEach(b => b.addEventListener("click", () => {
     const f = files[+b.dataset.tkdl];
+    if (f.invalid) { toast("该文件未通过 JSON-LD 校验，已禁用下载——请反馈给管理员"); return; }
     download(`${park}-${f.name}`, f.content, "text/plain;charset=utf-8");
     registerWatch(`${park}-${f.name}`);   /* V4 2.4：下载即登记资产追踪（部署后补URL、查进榜） */
     renderWatch();
   }));
-  $$("#tkOut [data-tkcp]").forEach(b => b.addEventListener("click", () => copyText(files[+b.dataset.tkcp].content)));
+  $$("#tkOut [data-tkcp]").forEach(b => b.addEventListener("click", () => {
+    const f = files[+b.dataset.tkcp];
+    if (f.invalid) { toast("该文件未通过 JSON-LD 校验，已禁用复制——请反馈给管理员"); return; }
+    copyText(files[+b.dataset.tkcp].content);
+  }));
   $("#tkDlAll").addEventListener("click", () => {
     files.forEach((f, i) => setTimeout(() => download(`${park}-${f.name}`, f.content, "text/plain;charset=utf-8"), i * 350));
     files.forEach(f => registerWatch(`${park}-${f.name}`));   /* V4 2.4 */

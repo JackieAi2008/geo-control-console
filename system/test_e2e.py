@@ -161,7 +161,7 @@ def main():
             check("一键诊断页渲染", "dgRun" in html and ("开始一键诊断" in html or "开始实体体检" in html), f"诊断表单与按钮存在")
             check("V4.5诊断双入口", "实体体检" in html and "dgModeEntity" in html and "dgModeSite" in html,
                   "官网体检/实体体检双入口chip渲染")
-            check("V0.1.8 诊断发射台+预检清单", "dg-launch" in html and "dg-launch-row" in html and "dgPreview" in html
+            check("V0.1.8/0.1.12 诊断发射台+预检清单（dgOut 容器）", "dg-launch" in html and "dg-launch-row" in html and "dgOut" in html
                   and "将检查什么" in html and "is-todo" in html,
                   "表单横置发射台 + 空态预检清单（维度分组ghost卡）渲染")
             html = dump("projects")
@@ -617,18 +617,18 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V0.1 版本号0.1.11", d.get("version") == "0.1.11", f"v={d.get('version')}")
+        check("V0.1 版本号0.1.12", d.get("version") == "0.1.12", f"v={d.get('version')}")
         for path, mark in [("/js/tour.js", "南山大厦"), ("/css/tour.css", "tour-ring")]:
             with urllib.request.urlopen(ROOT + path + "?v=6.1.0", timeout=10) as resp:
                 body = resp.read().decode("utf-8", "ignore")
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V0.1 版本戳统一0.1.11", idx_html.count("?v=0.1.11") >= 9 and "?v=0.1.10" not in idx_html
+        check("V0.1 版本戳统一0.1.12", idx_html.count("?v=0.1.12") >= 9 and "?v=0.1.11" not in idx_html
               and "?v=6.2.0" not in idx_html and "?v=6.1.2" not in idx_html and "?v=6.1.1" not in idx_html
               and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html
               and "?v=4.7.3" not in idx_html,
-              f"?v=0.1.11×{idx_html.count('?v=0.1.11')}")
+              f"?v=0.1.12×{idx_html.count('?v=0.1.12')}")
         reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
         if os.path.exists(chrome):
             def dump_tour(urlpath):

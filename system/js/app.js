@@ -298,6 +298,9 @@ async function switchProject(pid) {
     if (pm) pm.lastOpen = Date.now();   /* V4.6 项目库「上次处理」置顶数据（本机个人视角） */
     saveProjectsMeta();
     try { localStorage.setItem("geodesk.visited", "1"); } catch (e) {}   /* V4.7 进过项目即视为老用户，欢迎区不再显示 */
+    /* V0.1.12 串页根治（BUG#1a）：诊断结果是「整体替换 #dgOut」的常驻 DOM 区，不随项目切换自动清空——
+       换项目时先清空，进入诊断子页由 render.scan 按当前项目重建（有历史=重演结果，无历史=空态预检清单） */
+    const dgOutEl = $("#dgOut"); if (dgOutEl) dgOutEl.innerHTML = "";
     loadCurrentState();
     renderProjectContext(); renderAllViews();
     if (SERVER_MODE) { await loadProjectFromServer(); renderProjectContext(); renderAllViews(); }
@@ -370,15 +373,52 @@ async function submitNewProject() {
   state.entityMode = mode;            /* V4.5：快照分母感知承载形态（none 时 T1–T6 不计分） */
   state.probesBackfilled = true;   /* V4修复③（正确层级）：新建项目无 V3 历史note，免填入；老项目state无此键→正常填入 */
   save();
-  $("#projModal").hidden = true;
+  closeProjModal();   /* V0.1.12 BUG#2：创建成功也清空表单——防旧草稿残留到下次新建 */
   /* V5：新建即按元数据实例化问题矩阵（模板自带兜底问法，不再需要 V4.2 的名字替换补丁） */
   renderProjectContext(); renderAllViews();
   go("dashboard");
-  toast(`项目「${meta.name}」已创建，问题矩阵已按本项目生成（${state.prompts.length} 问）。下一步：${mode === "none" ? "诊断 → 一键诊断 → 实体体检（用品牌词查网上存在感）" : "诊断 → 一键诊断；再到口径表 建立本项目唯一事实源"}`);
+  /* V0.1.12 F6：指引统一为「起步四步」顺序（先口径后体检，与物料取数的数据依赖一致），消除与工作台清单的矛盾 */
+  toast(`项目「${meta.name}」已创建，问题矩阵已按本项目生成（${state.prompts.length} 问）。下一步：先到「口径表」把最关键的几项数据定下来（约10分钟），${mode === "none" ? "再到「诊断 → 实体体检」用品牌词查网上存在感" : "再到「诊断 → 一键诊断」跑体检"}`);
   brandCheckHint(meta.brand, meta.city, async nb => { meta.brand = nb; await saveProjMeta({ brand: nb }); state.prompts = instPrompts(Object.assign({}, meta, { district: caliberDistrict() }), meta.matrixTier); save(); renderAllViews(); });
 }
 let state = {};   /* 由 initProjects() → loadCurrentState() 按 CUR 填充（调用在文件末尾，save 定义之后，避免 TDZ） */
 /* save() 定义在服务器模式区块（本地即时存 + 服务器防抖同步） */
+
+/* ── V0.1.12 新建弹窗纪律（BUG#2/3）：取消/创建成功/ESC 关闭一律清空草稿，
+   弹窗打开期间捕获键盘焦点（Tab 循环 + ESC 关闭）——键盘用户不再散焦到背景页 ── */
+function resetNewProjForm() {
+  ["npName", "npUrl", "npBrand", "npCity", "npInd", "npComp", "npOperator", "npOwn", "npGroup"]
+    .forEach(id => { const el = $("#" + id); if (el) el.value = ""; });
+  const m = document.querySelector('input[name="npMode"][value="parent"]'); if (m) m.checked = true;
+  const t = document.querySelector('input[name="npTier"][value="park"]'); if (t) t.checked = true;
+  const lb = $("#npUrlLb"); if (lb) lb.firstChild.textContent = "官方承载页域名（可后补，用于一键诊断）";
+}
+function closeProjModal() { $("#projModal").hidden = true; resetNewProjForm(); }
+function openModalMask() {
+  const pm = $("#projModal"), em = $("#projEditModal");
+  if (pm && !pm.hidden) return pm;
+  if (em && !em.hidden) return em;
+  return null;
+}
+function bindModalKeyboard() {
+  document.addEventListener("keydown", e => {
+    const mask = openModalMask(); if (!mask) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (mask.id === "projModal") closeProjModal();
+      else mask.hidden = true;   /* 编辑弹窗：ESC=取消（未保存的修改丢弃，与取消钮一致） */
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const f = $$("button, input, select, textarea, [href]", mask)
+      .filter(el => !el.disabled && !el.hidden && el.getClientRects().length);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (!mask.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+}
 
 let toastTimer;
 function toast(msg) {
@@ -662,11 +702,14 @@ function auditDims() {
 }
 function ledgerStats() {
   /* V4.2 口径分层：答案侧=六引擎人工轮；信源侧=搜索通道自动轮（channel="src"）。
-     所有指标只统计答案侧；信源命中单独由快照/computeSnapshot 的 mentionSrc 表达，禁止混均。 */
+     所有指标只统计答案侧；信源命中单独由快照/computeSnapshot 的 mentionSrc 表达，禁止混均。
+     V0.1.12（BUG#4）：答案侧再分层——人工行才是「人工实测」基线，AI代问行（src=api）单独计数
+     （与 server 写入口径一致：AI 行 src="api"），KPI 文案分开报数，不再把 AI 行冒充人工实测。 */
   const L = state.ledger;
   const isSrc = r => r.channel === "src" || r.engine === "搜索通道";
-  if (!L.length) return { n:0, ansN:0, mention:null, pos:null, engines:new Set(), share:null };
-  const ans = L.filter(r => !isSrc(r));
+  const isAI = r => r.src === "api" || /AI代问/.test(r.note || "");
+  if (!L.length) return { n:0, ansN:0, aiN:0, mention:null, pos:null, engines:new Set(), share:null };
+  const ans = L.filter(r => !isSrc(r) && !isAI(r));
   const mention = ans.length ? ans.reduce((a, r) => a + (+r.mention || 0), 0) / ans.length : null;
   const posBase = ans.filter(r => +r.mention > 0);
   const pos = posBase.length ? posBase.reduce((a, r) => a + (+r.sentiment || 0), 0) / posBase.length : null;
@@ -676,7 +719,7 @@ function ledgerStats() {
   const hitOwn = r => { try { const h = new URL(r.url).hostname.toLowerCase(); return OWN.some(d => h === d.toLowerCase() || h.endsWith("." + d.toLowerCase())); } catch (e) { return false; } };
   const hitGrp = r => { try { const h = new URL(r.url).hostname.toLowerCase(); return !hitOwn(r) && GRP.some(d => h === d.toLowerCase() || h.endsWith("." + d.toLowerCase())); } catch (e) { return false; } };
   const own = withUrl.filter(hitOwn), grp = withUrl.filter(hitGrp);
-  return { n:L.length, ansN:ans.length, mention, pos, engines:new Set(L.map(r => r.engine)), share: withUrl.length ? (own.length + grp.length) / withUrl.length : null,
+  return { n:L.length, ansN:ans.length, aiN:L.filter(r => !isSrc(r) && isAI(r)).length, mention, pos, engines:new Set(L.map(r => r.engine)), share: withUrl.length ? (own.length + grp.length) / withUrl.length : null,
            ownC: own.length, ownG: grp.length };
 }
 function heatData() {
@@ -894,7 +937,7 @@ function renderCurve() {
     <text x="${P - 6}" y="${(y(100) + 4).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--color-ink-3)">100</text>
     <text x="${P - 6}" y="${(y(50) + 4).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--color-ink-3)">50</text>
     ${bands}${lines}${marks}${dots}${xlabels}</svg>
-    <p class="muted" style="font-size:11px;margin:6px 0 0">口径：答案侧=六引擎人工轮，信源=搜索通道自动轮——分线独立解读，禁止混均。金色带=部署/工单事件预期窗口（深色 0–15 天首批引用，浅色至 8–12 周稳定）。空心点=样本量 n&lt;10（悬浮看点位值与 n）。竞品同时出现率=答案同时提及竞品的比例，归因参照：我们涨了还是整个品类都被提得多了。引用份额=被引链接中自有域名占比。AI线索为副轴归一化（悬浮看绝对值），月度数据来自「业务结果」卡。</p>`;
+    <p class="muted" style="font-size:11px;margin:6px 0 0">口径：答案侧（AI 回答里提没提咱们）=六引擎人工轮，信源侧（搜索结果里排没排咱们）=搜索通道自动轮——分线独立解读，禁止混均。金色带=部署/工单事件预期窗口（深色 0–15 天首批引用，浅色至 8–12 周稳定）。空心点=样本量 n&lt;10（悬浮看点位值与 n）。竞品同时出现率=答案同时提及竞品的比例，归因参照：我们涨了还是整个品类都被提得多了。引用份额=被引链接中自有域名占比。AI线索为副轴归一化（悬浮看绝对值），月度数据来自「业务结果」卡。</p>`;
 }
 
 /* ══ V4 2.4 资产追踪（Watched Pages：物料部署→进榜/被引时间线）══ */
@@ -1052,10 +1095,10 @@ function matrixData() {
     { key: "absentComp", label: "缺席且竞品在场", ch: "答案侧·台账", tone: "tag-bad",
       desc: "竞品被提及而我们缺席——shortlist 缺席，最高优先：对比类内容+第三方背书",
       items: Object.keys(absentComp).map(id => ({ id, n: absentComp[id], q: q(id) })) },
-    { key: "srcIn", label: "信源在榜·答案未引", ch: "信源·probes", tone: "tag-ok",
+    { key: "srcIn", label: "信源在榜·答案未引", ch: "信源·搜索轮（30问top-10域名）", tone: "tag-ok",
       desc: "素材已在检索池前列，AI 没引——强化证据层（口径一致+多源同步触发交叉验证加分）",
       items: srcIn.map(id => ({ id, n: 1, q: q(id) })) },
-    { key: "srcOut", label: "信源完全缺席", ch: "信源·probes", tone: "tag-bad",
+    { key: "srcOut", label: "信源完全缺席", ch: "信源·搜索轮（30问top-10域名）", tone: "tag-bad",
       desc: "素材池里就没有我们——先布源（一园一档+FAQ+渠道矩阵），其他都白搭",
       items: srcOut.map(id => ({ id, n: 1, q: q(id) })) },
   ];
@@ -1390,7 +1433,7 @@ render.dashboard = () => {
     <p>园区GEO成熟度（${auditN()}项体检）${sb.comparable ? deltaTag(sb.cur.auditPct, sb.base.auditPct, "分") : (sb.n === 1 ? '<span class="tag tag-gold" style="margin-left:6px">首测即起始数据</span>' : "")}</p>
     <a href="#/diag/audit" class="mini-link">去体检 →</a>`;
   $("#dashMon").innerHTML = `<div class="kpi-num">${curMention === null ? (st.mention === null ? "—" : Math.round(st.mention * 100) + "<small>%</small>") : curMention.v + "<small>%</small>"}</div>
-    <p>${curMention ? `${curMention.ch}提及率 · n=${curMention.n}${sb.comparable ? deltaTag(curMention.v, baseMention, "pp") : ""}` : `答案侧平均提及率 · ${st.ansN}条人工记录${st.ansN ? "" : "（先在监测页人工录入）"}`}</p>
+    <p>${curMention ? `${curMention.ch}提及率 · n=${curMention.n}${sb.comparable ? deltaTag(curMention.v, baseMention, "pp") : ""}` : `答案侧平均提及率 · ${st.ansN}条人工记录${st.aiN ? `（另有AI代问 ${st.aiN} 条，另计）` : ""}${st.ansN ? "" : "（先在监测页人工录入）"}`}</p>
     <a href="#/monitor" class="mini-link">去监测 →</a>`;
   const _og = (typeof ledgerStats === "function" ? (ledgerStats() || {}) : {});
   $("#dashCal").innerHTML = `<div class="kpi-num">${sb.cur && sb.cur.ownHitN !== null ? sb.cur.ownHitN + "<small> /" + (sb.cur.ownHitTotal || "?") + "</small>" : "—"}</div>
@@ -1433,7 +1476,7 @@ render.dashboard = () => {
   /* V4.2：冲突提示带出真实字段名，不再写死蛇口网谷案例 */
   const _confFields = state.caliber.filter(r => (r.conflicts || []).length).map(r => r.field);
   if (_confFields.length) todo.push(["口径", `口径表存在冲突字段（${_confFields.slice(0, 3).join("、")}），先统一再发布任何内容`, "#/diag/caliber"]);
-  if (st.n === 0) todo.push(["起始数据", "在六引擎执行30问首轮人工实测并录入台账", "#/monitor"]);
+  if (st.ansN === 0) todo.push(["起始数据", "在六引擎执行30问首轮人工实测并录入台账（AI代问行不算人工基线）", "#/monitor"]);
   if (st.n > 0 && st.n < 180) todo.push(["起始数据", `监测记录 ${st.n}/180（30问×6引擎），继续补齐`, "#/monitor"]);
   if (s.pct > 0) todo.push(["方案", "用方案生成器产出本园区90天行动方案", "#/act/plan"]);
   todo.push(["内容", "首批改写：一园一档 + 选址对比文（当前最空白场景）", "#/act/brief"]);
@@ -1894,7 +1937,8 @@ function runScorer() {
   const entity = $("#scorerEntity").value;
   const { checks, score } = scoreContent(text, entity);
   const color = score >= 75 ? "var(--color-ok)" : score >= 50 ? "var(--color-warn)" : "var(--color-accent)";
-  $("#scorerScore").innerHTML = `<span style="color:${color}">${score}</span> <small style="font-size:14px;color:var(--color-ink-3)">/ 100 被AI引用可能性</small>`;
+  /* V0.1.12（AI评测P1）：标签如实——这是 12 条 GEO 写作规则的规则达标率，不是任何 AI 实测的引用概率 */
+  $("#scorerScore").innerHTML = `<span style="color:${color}">${score}</span> <small style="font-size:14px;color:var(--color-ink-3)">/ 100 GEO 规则达标率</small>`;
   $("#scorerChecks").innerHTML = checks.map(c => `
     <div class="chk ${c.pass ? "pass" : "fail"}">
       <span class="ico">${c.pass ? "✓" : "✗"}</span>
@@ -1956,7 +2000,7 @@ render.monitor = () => {
   if (bb) bb.textContent = `跑一轮${nQ}问（真实搜索）`;
   const st = ledgerStats();
   $("#monStats").innerHTML = `
-    <div class="card kpi"><div class="kpi-num">${st.mention === null ? "—" : Math.round(st.mention * 100) + "<small>%</small>"}</div><p>平均提及率（答案侧 · 提及=1 / 相似=0.5）<br><span class="muted" style="font-size:11px">n=${st.ansN} 条人工实测</span></p></div>
+    <div class="card kpi"><div class="kpi-num">${st.mention === null ? "—" : Math.round(st.mention * 100) + "<small>%</small>"}</div><p>平均提及率（答案侧 · 提及=1 / 相似=0.5）<br><span class="muted" style="font-size:11px">n=${st.ansN} 条人工实测${st.aiN ? ` · AI代问 ${st.aiN} 条（另计，不入基线）` : ""}</span></p></div>
     <div class="card kpi"><div class="kpi-num">${st.pos === null || !isFinite(st.pos) ? "—" : Math.round(st.pos * 100) + "<small>%</small>"}</div><p>提及内容平均倾向（1=正面 · 0.5=中性 · 0=负面）</p></div>
     <div class="card kpi"><div class="kpi-num">${st.share === null ? "—" : Math.round(st.share * 100) + "<small>%</small>"}</div><p>引用份额（答案侧被引链接中自有域名占比）</p></div>`;
 
@@ -1968,7 +2012,7 @@ render.monitor = () => {
 
   $("#promptList").innerHTML = P_prompts()
     .filter(p => cat === "全部" || p.cat === cat)
-    .map(p => `<div class="prompt-li"><span class="code">${p.id}</span><span class="cat"><span class="tag">${p.cat}${p.severity >= 5 ? " ·S" + p.severity : ""}</span></span>
+    .map(p => `<div class="prompt-li"><span class="code">${p.id}</span><span class="cat"><span class="tag">${p.cat}${p.severity >= 5 ? " · 重要度极高" : ""}</span></span>
       <span style="flex:1;min-width:0">${esc(p.q)}</span>
       <button class="btn btn-sm btn-ghost" data-copyq="${esc(p.q)}">复制</button></div>`).join("");
   $$("#promptList [data-copyq]").forEach(b => b.addEventListener("click", () => copyText(b.dataset.copyq)));
@@ -2094,7 +2138,7 @@ function renderSampleCard() {
       return `<button class="chip ${ok ? "on" : ""}" data-sample="${p.id}|${e}" title="点击选入②区表单：${e} · ${esc(p.q)}">${ok ? "✓ " : ""}${e}</button>`;
     }).join("");
     return `<div class="prompt-li"><span class="code">${p.id}</span>
-      <span class="cat"><span class="tag">${esc(p.cat)} ·S${p.severity || 3}</span></span>
+      <span class="cat"><span class="tag">${esc(p.cat)} · 重要度${({ 5: "极高", 4: "高", 3: "中", 2: "低", 1: "低" })[p.severity || 3] || "中"}</span></span>
       <span style="flex:1;min-width:0">${esc(p.q)}</span>
       <button class="btn btn-sm btn-ghost" data-copyq2="${esc(p.q)}">复制</button>
       <span style="display:flex;gap:4px;flex-wrap:wrap">${cells}</span></div>`;
@@ -2122,7 +2166,7 @@ function renderSampleCard() {
   if (SERVER_MODE) API.botConfig().then(c => {
     const stat = $("#botStat");
     if (!stat || c.configured) return;
-    stat.innerHTML = '管理员尚未配置豆包通道，AI 代问暂不可用——<a href="javascript:void(0)" id="botCfg" style="color:var(--color-info);text-decoration:underline">通道设置</a>';
+    stat.innerHTML = '还没连接豆包账号：点「<a href="javascript:void(0)" id="botCfg" style="color:var(--color-info);text-decoration:underline">通道设置</a>」按提示填 Key（约 1 分钟）即可启用；暂不配置就先用右侧人工录入——两边数据分开记。';
     const cfgLink = $("#botCfg");
     if (cfgLink) cfgLink.addEventListener("click", async () => {
       const key = prompt("粘贴火山方舟 API Key（只存服务器，任何界面只显示尾 4 位）：");
@@ -2408,8 +2452,9 @@ function bind() {
     const card = e.target.closest(".proj-card");
     if (card && card.dataset.pid) switchProject(card.dataset.pid);
   });
-  $("#npCancel").addEventListener("click", () => { $("#projModal").hidden = true; });
+  $("#npCancel").addEventListener("click", closeProjModal);   /* V0.1.12 BUG#2：取消即清空草稿 */
   $("#npSubmit").addEventListener("click", submitNewProject);
+  bindModalKeyboard();   /* V0.1.12 BUG#3：弹窗 ESC 关闭 + Tab 焦点圈定 */
   /* V5 项目设置弹窗 */
   $("#peCancel").addEventListener("click", () => { $("#projEditModal").hidden = true; });
   $("#peSave").addEventListener("click", saveProjEdit);
@@ -2528,7 +2573,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "0.1.11";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.1.12";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }

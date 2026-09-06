@@ -224,10 +224,10 @@ const CHAT_SUGGEST = [
         const finalText = clean(acc).trim();
         if (!liveNode.isConnected) body.appendChild(liveNode);
         if (!finalText) {
-          /* V4.4：空回答直接移除气泡，不留空泡；V6：DOM 里的提问气泡同步移除（此前只撤数组，界面残留提问） */
-          liveNode.remove();
-          if (userNode && userNode.isConnected) userNode.remove();
-          history.pop();   /* 把刚 push 的 user 消息也撤回（本次问答无效） */
+          /* V0.1.12 空泡兜底：服务端已加预算+自动重试，这里再守一道——空回答不再静默消失
+             （提问气泡凭空蒸发比报错更让人怀疑系统），给出可见说明并撤回无效问答 */
+          liveNode.innerHTML = '<span style="color:var(--color-warn)">这条没生成回答（多为模型思考超长）——请再问一次或换个问法。</span>';
+          history.pop();   /* 把刚 push 的 user 消息撤回（本次问答无效，避免污染上下文） */
         } else {
           const badge = thought ? '<span class="think-badge">💡 已深度思考</span>' : "";
           liveNode.innerHTML = badge + mdToHtml(finalText);
