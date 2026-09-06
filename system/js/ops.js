@@ -172,8 +172,8 @@ function renderDiagResult(res, filled, kept) {
     copyText(diagReportMd(res));
     toast("若浏览器未开始下载场景同此：已复制全文，可粘贴到任意文档保存");
   });
-  /* V6 1.3：品牌词唯一性观察行（异步取 brandcheck 缓存，不阻塞渲染） */
-  if (isEnt && SERVER_MODE && res.brand) {
+  /* V6 1.3：品牌词唯一性观察行（异步取 brandcheck 缓存，不阻塞渲染；V6.1 引导演示态不发真实外呼） */
+  if (isEnt && SERVER_MODE && res.brand && !(window.Tour && window.Tour.active)) {
     fetch("/api/brandcheck", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ brand: res.brand, city: (projCtx().city || "") }) })
       .then(r => r.json()).then(d => {

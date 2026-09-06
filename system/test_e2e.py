@@ -91,6 +91,13 @@ def main():
                 check(f"GET {path}", resp.status == 200 and mark in body, f"含「{mark}」")
 
         print("T5 前端服务器模式渲染（无头Chrome）")
+        # V6.1：先给 local 用户标记已看引导——否则 T5 各 dump 里首登引导会自动弹出、
+        # 页面切入南山大厦演示态，污染既有断言（无头 Chrome 的 navigator.webdriver 不可靠，以服务端判定为准）
+        try:
+            urllib.request.urlopen(urllib.request.Request(ROOT + "/api/onboarding/seen", data=b"{}", method="POST",
+                                                          headers={"Content-Type": "application/json"}), timeout=10)
+        except Exception:
+            pass
         if os.path.exists(chrome):
             def dump(frag):
                 out = f"/tmp/e2e_{frag.replace('/', '_')}.html"
@@ -486,6 +493,55 @@ console.log(JSON.stringify({
                   "www 子域命中/父域命中/恶意子串不命中/路径子串不命中")
         except Exception as e:
             check("V5 own后缀匹配", False, f"exec 失败: {e}", skippable=True)
+
+        print("T13 V6.1 新用户首登引导（账号级一次性 + 南山大厦只读演示）")
+        def reqh(method, path, body=None, user=None):
+            data = json.dumps(body).encode() if body is not None else None
+            h = {"Content-Type": "application/json"}
+            if user: h["X-Geo-User"] = user
+            r = urllib.request.Request(ROOT + path, data=data, method=method, headers=h)
+            with urllib.request.urlopen(r, timeout=30) as resp:
+                return resp.status, json.loads(resp.read() or b"{}")
+        s, d = reqh("GET", "/api/onboarding", user="touruser1")
+        check("V6.1 首访显示引导", s == 200 and d.get("show") is True and d.get("user") == "touruser1", f"show={d.get('show')}")
+        s, d = reqh("POST", "/api/onboarding/seen", user="touruser1")
+        check("V6.1 标记已看", s == 200 and d.get("ok") is True, f"user={d.get('user')}")
+        s, d = reqh("GET", "/api/onboarding", user="touruser1")
+        check("V6.1 看过不再显示", d.get("show") is False, f"show={d.get('show')}")
+        s, d = reqh("GET", "/api/onboarding", user="touruser2")
+        check("V6.1 账号级隔离", d.get("show") is True, "另一账号不受影响（kv 按账号分键）")
+        s, d = reqh("GET", "/api/ping")
+        check("V6.1 版本号6.1.0", d.get("version") == "6.1.0", f"v={d.get('version')}")
+        for path, mark in [("/js/tour.js", "南山大厦"), ("/css/tour.css", "tour-ring")]:
+            with urllib.request.urlopen(ROOT + path + "?v=6.1.0", timeout=10) as resp:
+                body = resp.read().decode("utf-8", "ignore")
+            check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
+        with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
+            idx_html = resp.read().decode("utf-8", "ignore")
+        check("V6.1 版本戳统一6.1.0", idx_html.count("?v=6.1.0") >= 9 and "?v=6.0.0" not in idx_html
+              and "?v=4.7.7" not in idx_html and "?v=4.7.3" not in idx_html,
+              f"?v=6.1.0×{idx_html.count('?v=6.1.0')}")
+        reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
+        if os.path.exists(chrome):
+            def dump_tour(urlpath):
+                out = "/tmp/e2e_tour.html"
+                with open(out, "w") as fh:
+                    subprocess.run([chrome, "--headless=new", "--disable-gpu", "--virtual-time-budget=4000",
+                                    "--dump-dom", f"{ROOT}{urlpath}"], stdout=fh, stderr=subprocess.DEVNULL, timeout=60)
+                return open(out, encoding="utf-8", errors="ignore").read()
+            html = dump_tour("/?tour=force#/projects")
+            check("V6.1 欢迎步渲染", "tourBubble" in html and "南山大厦" in html and "不用再学了" in html and "开始带看" in html,
+                  "欢迎气泡+跳过按钮+案例名（?tour=force 强制通道，供 QA/演示复用）")
+            html = dump_tour("/?tour=force&tourStep=5#/projects")
+            check("V6.1 演示态渲染真实组件", "谁在替你说话" in html and "中介平台" in html and "已自动填入体检表" in html,
+                  "第6步=实体体检结果+发言权分析卡（真实组件渲染示例数据，非截图）")
+            html = dump_tour("/?tour=force&tourStep=7#/projects")
+            check("V6.1 监测曲线演示", "GEO 发展曲线" in html and html.count("<polyline") >= 2 and "南山大厦" in html,
+                  "第8步=发展曲线渲染示例快照（报头/演示态=南山大厦）")
+            html = dump_tour("/#/projects")
+            check("V6.1 已看过不再自动弹", "tourBubble" not in html, "seen 标记+webdriver 兜底双保险")
+        else:
+            check("V6.1 无头Chrome引导渲染", False, "未安装 Chrome", skippable=True)
     finally:
         srv.terminate(); srv.wait(timeout=5)
 

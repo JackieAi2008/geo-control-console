@@ -448,6 +448,7 @@ async function serverSave() {
 }
 let saveTimer;
 const save = () => {
+  if (window.Tour && window.Tour.active) return;   /* V6.1 引导演示态只读：演示数据绝不写入本机/服务器 */
   try { localStorage.setItem(projKey(CUR), JSON.stringify(state)); } catch (e) {}
   if (SERVER_MODE) { clearTimeout(saveTimer); saveTimer = setTimeout(serverSave, 400); }
 };
@@ -2276,6 +2277,10 @@ function bind() {
   })));
   $("#probeRun").addEventListener("click", runProbe);
 
+  /* V6.1 操作指引常驻入口：顶栏「?」与知识库卡片 → 重放南山大厦带看 */
+  const btnHelp = $("#btnHelp"); if (btnHelp) btnHelp.addEventListener("click", () => Tour.start({}));
+  const btnHelp2 = $("#btnHelp2"); if (btnHelp2) btnHelp2.addEventListener("click", () => Tour.start({}));
+
   /* V4 项目层：报头身份块 → 项目总览；总览卡片 → 进入项目 / 新建 */
   $("#projChip").addEventListener("click", () => go("projects"));
   $("#projGrid").addEventListener("click", e => {
@@ -2389,6 +2394,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateServerBadge();         /* V4.2：页脚显示服务端版本——代码更新未重启服务器时可立刻发现 */
   window.addEventListener("hashchange", route);
   route();
+  /* V6.1 首登操作指引：账号级一次性判定后自动弹出（tour.js 已在本脚本之后装载完成） */
+  if (typeof Tour !== "undefined" && typeof Tour.autoStart === "function") {
+    setTimeout(() => Tour.autoStart(), 700);
+  }
 });
 /* V4.2：页脚服务端状态徽标（服务器模式显示版本号；本地双击打开显示本地模式） */
 async function updateServerBadge() {
@@ -2399,7 +2408,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "4.7.6";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "6.1.0";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }

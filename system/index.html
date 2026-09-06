@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>招商产园 GEO 智控台</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
-<link rel="stylesheet" href="css/tokens.css?v=4.7.7">
-<link rel="stylesheet" href="css/app.css?v=4.7.7">
+<link rel="stylesheet" href="css/tokens.css?v=6.1.0">
+<link rel="stylesheet" href="css/app.css?v=6.1.0">
+<link rel="stylesheet" href="css/tour.css?v=6.1.0">
 </head>
 <body>
 
@@ -22,6 +23,7 @@
         <svg class="pc-caret" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </div>
+    <button class="help-btn" id="btnHelp" type="button" aria-label="操作指引" title="操作指引：南山大厦案例 3 分钟带看（首次登录自动播放，这里可随时重看）">?</button>
   </div>
   <nav class="tabs" id="mainNav" aria-label="主导航">
     <button class="tab on" data-view="dashboard">工作台</button>
@@ -537,6 +539,13 @@
     <p>方法论、引擎规则与案例参考。</p>
   </div>
 
+  <!-- V6.1 操作指引重看入口：首次登录自动播放过一遍后，随时从这里或顶栏「?」重看 -->
+  <div class="card" style="margin-bottom:16px">
+    <h3>新手操作指引 <span class="hint">南山大厦真实案例 · 约 3 分钟 · 只读演示不动数据</span></h3>
+    <p class="muted" style="font-size:var(--text-sm)">分四章带看一遍完整路径：建项目 → 建档案 → 体检（谁在替你说话）→ 行动与监测。随时可点「我知道了，不用再学了」退出。</p>
+    <button class="btn btn-primary" id="btnHelp2">开始操作指引 →</button>
+  </div>
+
   <div class="grid grid-4" id="kpiCards"></div>
 
   <div class="card" style="margin-top:16px">
@@ -756,9 +765,10 @@
   </div>
 </div>
 
-<script src="js/data.js?v=6.0.0"></script>
-<script src="js/app.js?v=6.0.0"></script>
-<script src="js/ops.js?v=6.0.0"></script>
+<script src="js/data.js?v=6.1.0"></script>
+<script src="js/app.js?v=6.1.0"></script>
+<script src="js/ops.js?v=6.1.0"></script>
+<script src="js/tour.js?v=6.1.0"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -773,7 +783,7 @@
     } catch (e) {}
   })();
 </script>
-<script src="js/chat-kb.js?v=4.7.3"></script>
-<script src="js/chat.js?v=6.0.0"></script>
+<script src="js/chat-kb.js?v=6.1.0"></script>
+<script src="js/chat.js?v=6.1.0"></script>
 </body>
 </html>

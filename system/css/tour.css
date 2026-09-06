@@ -1,0 +1,103 @@
+/* GEO智控台 V6.1 · 首登操作指引（guided tour）样式
+ * Hallmark · component: coach-mark overlay · genre: utilitarian（系统管理项目，跟随既有令牌）
+ * states: default/hover/focus-visible/active 覆盖（引导无 disabled/loading/error 态——按钮复用 app.css .btn 全状态）
+ * 双端策略：桌面=聚光灯+定位气泡；≤768=聚光灯+底部抽屉（触控≥44px，无 hover 依赖）
+ * 动效三原语（animation-vocabulary）：ring 连续位移 280ms ease-out / 气泡 fade-up 200ms ease-out /
+ *   按钮 press 反馈（继承 .btn:active）；prefers-reduced-motion 由 app.css 全局降级兜底
+ */
+
+/* ── 顶栏「?」帮助按钮（常驻入口）────────────── */
+.help-btn {
+  appearance: none; cursor: pointer;
+  width: 34px; height: 34px; flex-shrink: 0;
+  background: transparent; color: var(--color-gold-bright);
+  border: 1px solid color-mix(in oklab, var(--color-gold) 55%, transparent);
+  border-radius: var(--radius-s);
+  font-family: var(--font-display); font-size: 16px; font-weight: 700; line-height: 1;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.help-btn:hover { background: rgba(255,255,255,.08); border-color: var(--color-gold-bright); }
+.help-btn:focus-visible { outline: 2px solid var(--color-gold-bright); outline-offset: 2px; }
+.help-btn:active { transform: translateY(1px); }
+
+/* ── 遮罩与聚光灯 ───────────────────────────── */
+.tour-shade {
+  position: fixed; inset: 0; z-index: 200;   /* 压过 modal(90)/chat(60)，低于无障碍层 */
+}
+/* 居中步（欢迎/收尾）无 ring 可挖孔 → 遮罩层自身压暗 */
+.tour-shade.center { display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(8, 20, 32, .55); }
+.tour-ring {
+  position: absolute; pointer-events: none;
+  border: 2px solid var(--color-gold); border-radius: var(--radius-l);
+  box-shadow: 0 0 0 200vmax rgba(8, 20, 32, .55);   /* 巨大投影挖孔=聚光灯，免四块遮罩拼合 */
+  transition: left .28s var(--ease-out), top .28s var(--ease-out),
+              width .28s var(--ease-out), height .28s var(--ease-out);
+}
+.tour-shade.center .tour-ring { display: none; }
+
+/* ── 气泡（讲解卡）─────────────────────────── */
+.tour-bubble {
+  position: absolute;
+  width: min(400px, calc(100vw - 24px));
+  background: var(--color-paper); color: var(--color-ink);
+  border: 1px solid var(--color-line-2); border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-m);
+  padding: 14px 16px 12px;
+  box-shadow: 0 12px 32px rgba(8, 20, 32, .18);
+  animation: tour-in .2s var(--ease-out);
+}
+.tour-shade.center .tour-bubble { position: static; border-left-width: 3px; }
+@keyframes tour-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.tour-chap {
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  color: var(--color-accent); letter-spacing: 1px;
+}
+.tour-title {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: var(--text-md); margin: 2px 0 6px; line-height: 1.4;
+}
+.tour-body { font-size: var(--text-sm); line-height: 1.7; }
+.tour-body b { font-weight: 600; }
+.tour-demo {
+  margin-top: 8px; padding: 8px 10px;
+  background: var(--color-gold-soft); border: 1px dashed var(--color-gold);
+  border-radius: var(--radius-s);
+  font-size: 12px; color: var(--color-ink-2); line-height: 1.65;
+}
+.tour-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.tour-step-no { font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-3); }
+.tour-dots { display: flex; gap: 5px; align-items: center; }
+.tour-dots button {
+  appearance: none; cursor: pointer; padding: 0;
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 1px solid var(--color-line-2); background: var(--color-paper);
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.tour-dots button:hover { border-color: var(--color-accent); }
+.tour-dots button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.tour-dots button.on { background: var(--color-accent); border-color: var(--color-accent); }
+.tour-skip { color: var(--color-ink-3); }   /* 退出是安静链接式按钮，不与「下一步」抢焦点 */
+
+/* 引导进行中：收起对话助手悬浮窗，避免双浮层 */
+body.tour-active .chat-fab, body.tour-active .chat-panel { display: none !important; }
+
+/* ── 移动端：气泡改底部抽屉，触控≥44px ───────── */
+@media (max-width: 768px) {
+  .help-btn { width: 44px; height: 44px; font-size: 18px; }
+  .tour-bubble {
+    position: fixed; left: 8px; right: 8px; bottom: 8px; width: auto;
+    max-height: 64vh; overflow-y: auto;
+    border-left-width: 1px; border-top: 3px solid var(--color-accent);
+    animation-name: tour-in-up;
+  }
+  @keyframes tour-in-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .tour-bubble .btn { min-height: 44px; }
+  .tour-bubble .btn-sm { min-height: 36px; }
+  .tour-dots button { width: 12px; height: 12px; }
+}
