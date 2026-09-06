@@ -2086,7 +2086,10 @@ render.monitor = () => {
         <td data-col="倾向">${isSrc ? "—" : (+r.sentiment === 1 ? "正面" : +r.sentiment === 0.5 ? "中性" : "负面")}</td>
         <td data-col="同时出现" style="max-width:130px;font-size:12px">${r.cooccur && r.cooccur.length ? esc(r.cooccur.join("、")) : "—"}</td>
         <td data-col="引用链接" style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--color-info);word-break:break-all">${esc(r.url.slice(0, 30))}</a>` : "—"}</td>
-        <td data-col="备注" style="max-width:160px">${esc(r.note || "—")}</td>
+        <td data-col="备注" style="max-width:160px">${esc(r.note || "—")}${r.src === "api" && r.raw ? `
+          <details style="margin-top:2px"><summary style="cursor:pointer;color:var(--color-info);font-size:12px">答案全文</summary>
+            <div style="white-space:pre-wrap;max-width:420px;max-height:240px;overflow:auto;font-size:12px;background:var(--color-paper-2);padding:6px;border-radius:4px">${esc(r.raw)}</div></details>` : ""}${r.srcTier ? `
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">${r.srcTier.gov ? `<span class="tag tag-ok" title="答案引用里含 .gov.cn 政府一手来源">政府一手 ×${r.srcTier.gov}</span>` : ""}${(r.srcTier.suspect || []).length ? `<span class="tag tag-bad" title="这些域名看着像政府站但不是 .gov.cn——AI 把它们和政府一手源并列引用，引用内容请人工核实：${esc((r.srcTier.suspect || []).join("、"))}">⚠ 疑似仿政府域名 ×${(r.srcTier.suspect || []).length}</span>` : ""}</div>` : ""}</td>
         <td data-col="操作"><button class="btn btn-sm btn-danger" data-mdel="${id}">删</button></td></tr>`;
     }).join("")}</tbody></table>` : `<p class="muted" style="padding:16px 0;text-align:center">暂无记录。点上方「AI 代问」自动录入，或按30问矩阵在各引擎人工提问后录入。</p>`;
   $$("#mTable [data-mdel]").forEach(b => b.addEventListener("click", () => {
@@ -2650,7 +2653,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "0.1.13";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.2.0";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }

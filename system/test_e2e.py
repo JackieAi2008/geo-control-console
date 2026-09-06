@@ -116,6 +116,8 @@ def main():
         check("AI代问 台账AI行", len(rows) == 2 and all(r.get("engine") == "豆包" and "AI代问" in (r.get("note") or "") for r in rows),
               f"src=api行×{len(rows)}")
         check("AI代问 提及抽取", any(r.get("mention") == 1 for r in rows), "罐头答案含品牌词→提及=1")
+        check("V0.2.0 C3/C5 全文落盘+来源分层", bool(rows) and all(isinstance(r.get("srcTier"), dict) and "gov" in r["srcTier"] and "suspect" in r["srcTier"] and len(r.get("raw") or "") > 400 for r in rows),
+              f"rawLen={len((rows[0].get('raw') or '')) if rows else 0} srcTier={rows[0].get('srcTier') if rows else None}")
         s, d = req("POST", "/api/answerbot/start", {"project": "p_default", "prompts": prompts[:1],
                                                     "brand": "蛇口网谷", "competitors": [], "ownDomains": []})
         rid = d.get("runId")
@@ -413,6 +415,7 @@ const vm = require("vm");
 const ctx = vm.createContext(global);
 vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), ctx);  // data.js
 vm.runInContext(fs.readFileSync(process.argv[3], "utf8"), ctx);  // app.js
+try { vm.runInContext(fs.readFileSync(require("path").dirname(process.argv[2]) + "/chat-kb.js", "utf8"), ctx); } catch (e) {}  // V0.2.0 C2：KB 口语化命中
 const bad = fs.readFileSync(process.argv[4], "utf8");
 const good = fs.readFileSync(process.argv[5], "utf8");
 const r1 = vm.runInContext(`scoreContent(${JSON.stringify(bad)}, "蛇口网谷")`, ctx);
@@ -443,11 +446,16 @@ const af = vm.runInContext(`(() => {
 const pf1 = vm.runInContext(`diagPrefill({parkUrl:"www.cmsk1979.com"}, {brand:"蛇口网谷", name:"蛇口网谷", url:"www.cmsk1979.com"})`, ctx);
 const pf2 = vm.runInContext(`diagPrefill({}, {brand:"深圳新时代广场", name:"新时代广场", url:""})`, ctx);
 const landing = vm.runInContext('landingView()', ctx);
+const kb = vm.runInContext(`(() => { try {
+  return { d: !!kbSearch("数据会丢吗"), k: !!kbSearch("口径表冲突怎么处理"), m: !!kbSearch("监测是怎么做的"),
+           recoNull: kbSearch("咱们园区在AI里被推荐了吗") === null };
+} catch (e) { return { err: String(e) }; } })()`, ctx);
 console.log(JSON.stringify({bad: r1.score, good: r2.score,
   fp: {hi: fp1, mid: fp2, d: [dt1, dt2, dt3]},
   snap: {pct: snap.auditPct, fails: snap.diagFails, ans: snap.mentionAns, ansN: snap.mentionAnsN, src: snap.mentionSrc, srcN: snap.mentionSrcN, own: snap.ownHitN, ownT: snap.ownHitTotal, ownD: snap.ownHitDate},
   snapNone: {pct: snapNone.auditPct},
   landing,
+  kb,
   bp: {n: bp.rows.length, badn: bp.bad.length, co: (bp.rows[0] && bp.rows[0].cooccur || []).length},
   samp: {n: samp.qs.length, sev: samp.qs[0] ? samp.qs[0].severity : 0, noDoubao: !samp.engs.includes("豆包")},
   af,
@@ -463,6 +471,8 @@ console.log(JSON.stringify({bad: r1.score, good: r2.score,
             r = json.loads(p.stdout.strip().splitlines()[-1])
             check("营销腔<50", r["bad"] < 50, f"score={r['bad']}")
             check("GEO体≥75", r["good"] >= 75, f"score={r['good']}")
+            check("V0.2.0 C2 KB口语化命中", r.get("kb", {}).get("d") and r["kb"]["k"] and r["kb"]["m"] and r["kb"]["recoNull"],
+                  f"数据会丢={r['kb'].get('d')} 口径冲突={r['kb'].get('k')} 监测插字={r['kb'].get('m')} 被推荐走项目感知={r['kb'].get('recoNull')}")
             check("V4批量粘贴解析器", r["bp"]["n"] == 2 and r["bp"]["badn"] == 1 and r["bp"]["co"] == 2,
                   f"有效{r['bp']['n']}/拒{r['bp']['badn']}条·共现{r['bp']['co']}个")
             check("V4采样选择器", r["samp"]["n"] == 10 and r["samp"]["sev"] == 5 and r["samp"]["noDoubao"],
@@ -630,18 +640,22 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V0.1 版本号0.1.13", d.get("version") == "0.1.13", f"v={d.get('version')}")
+        check("V0.1 版本号0.2.0", d.get("version") == "0.2.0", f"v={d.get('version')}")
+        with urllib.request.urlopen(ROOT + "/js/chat.js", timeout=10) as _resp:
+            _cjs = _resp.read().decode("utf-8", "ignore"); _s2 = _resp.status
+        check("V0.2.0 C1 chat项目感知", _s2 == 200 and "projectRecoAnswer" in _cjs and "你的项目实时数据" in _cjs,
+              "「被推荐了吗」类问题走项目实时数据应答（F3）")
         for path, mark in [("/js/tour.js", "南山大厦"), ("/css/tour.css", "tour-ring")]:
             with urllib.request.urlopen(ROOT + path + "?v=6.1.0", timeout=10) as resp:
                 body = resp.read().decode("utf-8", "ignore")
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V0.1 版本戳统一0.1.13", idx_html.count("?v=0.1.13") >= 9 and "?v=0.1.12" not in idx_html
+        check("V0.1 版本戳统一0.2.0", idx_html.count("?v=0.2.0") >= 9 and "?v=0.1.13" not in idx_html
               and "?v=6.2.0" not in idx_html and "?v=6.1.2" not in idx_html and "?v=6.1.1" not in idx_html
               and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html
               and "?v=4.7.3" not in idx_html,
-              f"?v=0.1.13×{idx_html.count('?v=0.1.13')}")
+              f"?v=0.2.0×{idx_html.count('?v=0.2.0')}")
         reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
         if os.path.exists(chrome):
             def dump_tour(urlpath):

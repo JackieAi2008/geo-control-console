@@ -65,6 +65,43 @@ const CHAT_SUGGEST = [
     document.head.appendChild(st);
   }
 
+  /* V0.2.0 项目感知意图（F3）：识别「被推荐/提到我们了吗」类问题 → 返回按当前项目实时数据组装的
+     Markdown 回答；不命中返回 null（继续走 KB/LLM）。数据缺失时如实说缺什么、去哪补。 */
+  function projectRecoAnswer(q) {
+    const s = String(q || "");
+    if (!/(推荐|提及|提到|引用|被AI|AI里|AI回答|答案里|排第几|排前)/.test(s)) return null;
+    if (!/(我们|咱们|我|园区|本项目|自己|品牌)/.test(s)) return null;
+    try {
+      const p = (typeof curProject === "function") ? (curProject() || {}) : {};
+      const name = (p.brand || p.name) || "本项目";
+      const st = (typeof state !== "undefined" && state) ? state : {};
+      const ld = st.lastDiag || ((st.diagHistory || [])[0]) || null;
+      const e2a = ld && Array.isArray(ld.checks) ? ld.checks.find(c => c && c.id === "E2a") : null;
+      const stats = (typeof ledgerStats === "function") ? ledgerStats() : { mention: null, ansN: 0, aiN: 0 };
+      const siteIds = (typeof GEO !== "undefined" && GEO.SITE_IDS) || [];
+      const none = (typeof noSite === "function") ? noSite() : false;
+      const ids = Object.keys(st.audit || {}).filter(k => !(none && siteIds.includes(k)));
+      const got = ids.reduce((a, k) => a + ((st.audit || {})[k] || 0), 0);
+      const pct = ids.length ? Math.round(got / (ids.length * 2) * 100) : null;
+      if (!ld && stats.mention === null && pct === null) {
+        return `**${name} 还没有可回答的数据**\n\n先到「诊断 → ${none ? "实体体检" : "一键诊断"}」跑一次（约 10–30 秒，真实联网检查），再回来问我——我就能给你一句带证据的结论。`;
+      }
+      let md = `**${name} 被 AI 推荐了吗？——按系统现有数据回答：**\n`;
+      if (e2a) {
+        const stt = e2a.status === "pass" ? "✓ 自有阵地进了前 10" : e2a.status === "warn" ? "⚠ 部分在榜" : "✗ 未进前 10";
+        md += `\n- **品牌词搜索（${ld.ts || "最近一次"}）**：${stt}——${e2a.evidence || e2a.name}`;
+      } else if (ld) {
+        md += `\n- 最近一次诊断（${ld.ts}）未覆盖品牌词搜索项`;
+      }
+      if (stats.mention !== null) {
+        md += `\n- **AI 回答提及率（答案侧）**：${Math.round(stats.mention * 100)}%（人工 n=${stats.ansN}${stats.aiN ? `，另有 AI代问 ${stats.aiN} 条另计` : ""}）`;
+      }
+      if (pct !== null) md += `\n- **体检成熟度**：${pct}/100`;
+      md += `\n\n👉 完整证据在 **诊断 → 诊断报告**；变化趋势在 **监测 → GEO 发展曲线**。以上为「${name}」当前实时数据。`;
+      return md;
+    } catch (e) { return null; }
+  }
+
   function inject() {
     if ($("#chatPanel")) return;
     const fab = document.createElement("button");
@@ -164,6 +201,19 @@ const CHAT_SUGGEST = [
         const kbAnswer = (typeof seedLocalize === "function") ? seedLocalize(kb.answer) : kb.answer;
         liveNode.innerHTML = `<span class="kb-badge">📖 系统知识库</span><div class="kb-answer">${renderAssistantMd(kbAnswer)}</div>`;
         history.push({ role: "assistant", content: kbAnswer });
+        localStorage.setItem(chatKey(), JSON.stringify(history.filter(m => (m.content || "").trim()).slice(-24)));
+        scrollToBottom();
+        send.classList.remove("is-busy"); send.textContent = "发送"; busy = false;
+        return;
+      }
+
+      /* V0.2.0 项目感知（UX F3）：「咱们园区在AI里被推荐了吗」类问题不再被推去跑 2–4 分钟批任务——
+         直接读当前项目的诊断 E2a 证据/答案侧提及率/体检分，给一句能汇报的结论 + 证据入口。
+         跨 script 全局（app.js 已先行装载）：curProject/state/ledgerStats/GEO/noSite */
+      const reco = projectRecoAnswer(text);
+      if (reco) {
+        liveNode.innerHTML = `<span class="kb-badge">📊 你的项目实时数据</span><div class="kb-answer">${renderAssistantMd(reco)}</div>`;
+        history.push({ role: "assistant", content: reco });
         localStorage.setItem(chatKey(), JSON.stringify(history.filter(m => (m.content || "").trim()).slice(-24)));
         scrollToBottom();
         send.classList.remove("is-busy"); send.textContent = "发送"; busy = false;

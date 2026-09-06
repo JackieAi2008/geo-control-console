@@ -35,7 +35,7 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "0.1.13"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（V0.1.x 序列：0.1.7=AI代问；旧 6.x 序列已封存）
+APP_VERSION = "0.2.0"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（V0.1.x 序列：0.1.7=AI代问；旧 6.x 序列已封存）
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}
@@ -134,10 +134,13 @@ def llm_resolve(conn, headers):
         return "local", m, None
     return "none", "", None
 
-def llm_remote_open(cfg, msgs, stream, timeout=30, max_tokens=1024):
-    """OpenAI 兼容远端调用（DeepSeek/通义/Kimi/智谱/豆包/Ollama /v1/自定义通用）；无密钥不发 Authorization"""
+def llm_remote_open(cfg, msgs, stream, timeout=30, max_tokens=1024, extra=None):
+    """OpenAI 兼容远端调用（DeepSeek/通义/Kimi/智谱/豆包/Ollama /v1/自定义通用）；无密钥不发 Authorization
+       V0.2.0：extra 并入 payload（豆包 seed 系列关思考用 thinking 参数，其余通道不受影响）"""
     payload = {"model": cfg["model"], "messages": msgs, "stream": stream,
                "temperature": 0.4, "max_tokens": max_tokens}
+    if extra:
+        payload.update(extra)
     headers = {"Content-Type": "application/json"}
     if cfg.get("apiKey"):
         headers["Authorization"] = "Bearer " + cfg["apiKey"]
@@ -509,7 +512,15 @@ def parse_answer(text, brand, competitors, headers=None, conn=None):
     只抽取不判断对错；失败如实返回 error，前端优雅降级为手工填写。"""
     src, model, cfg = llm_resolve(conn, headers or {})
     if src == "none":
-        return {"error": "当前没有可用的大模型。两种解决方式：①点右下角「问」助手窗口右上角的 ⚙，配置你自己的模型（推荐，一次配置全系统可用）；②联系管理员在服务器设置。"}
+        # V0.2.0 C4（AI评测③）：无系统级 LLM/本机 Ollama 时回退豆包通道（AI代问已配即自动激活）——
+        # 此前生产 llm_resolve=none，「语气/引用/竞品共现」抽取退化为纯提及检测。300 token 级小抽取，
+        # 只在 answerbot 轮内发生（受 2000 次/月预算闸门与 24h 缓存约束），不改对话助手的模型选择（成本可控）。
+        ac = ark_cfg(conn)
+        if ac["key"] and ac["model"]:
+            src, cfg = "ark", {"provider": "ark", "baseUrl": ARK_URL.rsplit("/", 1)[0],
+                               "model": ac["model"], "apiKey": ac["key"]}
+        else:
+            return {"error": "当前没有可用的大模型。两种解决方式：①点右下角「问」助手窗口右上角的 ⚙，配置你自己的模型（推荐，一次配置全系统可用）；②管理员在「AI 代问 · 通道设置」配置豆包通道后，自动抽取即可用。"}
     if not text or not str(text).strip():
         return {"error": "text 不能为空"}
     comp = "、".join([str(c) for c in (competitors or []) if str(c).strip()][:8]) or "无指定候选——答案中出现其他知名同类也请列入"
@@ -527,6 +538,17 @@ def parse_answer(text, brand, competitors, headers=None, conn=None):
                 out = json.loads(r.read())
         except Exception as e:
             return {"error": f"模型调用失败：{e}"}
+        raw = (out.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    elif src == "ark":
+        # V0.2.0：豆包通道走 chat/completions + 关思考（抽取任务要快与省，与 ARK_SYS 关思考同理）
+        try:
+            with llm_remote_open(cfg, [{"role": "system", "content": sys_prompt},
+                                       {"role": "user", "content": str(text)[:6000]}],
+                                 stream=False, timeout=150, max_tokens=300,
+                                 extra={"thinking": {"type": "disabled"}}) as r:
+                out = json.loads(r.read())
+        except Exception as e:
+            return {"error": f"豆包通道抽取失败：{e}"}
         raw = (out.get("choices") or [{}])[0].get("message", {}).get("content", "")
     else:
         payload = {"model": model, "messages": [{"role": "system", "content": sys_prompt},
@@ -678,12 +700,28 @@ def ark_cfg(conn):
 
 ARK_SYS = "你是面向企业选址者的AI助手。直接回答用户问题；答案中若参考了网站，在相关句子后以（来源：域名）标注。"
 
+def src_tiers(urls):
+    """V0.2.0 C5（AI评测幻觉溯源）：答案引用来源的可信度分层。
+    gov.cn / *.gov.cn = 政府一手（计数）；域名里含 "gov" 却不是 .gov.cn = 疑似仿政府域名（列出警示——
+    幻觉溯源实测样本：zhaoshang-gov.cn 与顺企网/黄页混在政府一手源旁边被同等引用）。其余不评（不冒充权威白名单）。"""
+    tiers = {"gov": 0, "suspect": []}
+    for u in urls or []:
+        h = re.sub(r"^https?://", "", str(u)).split("/")[0].split("?")[0].strip().lower()
+        if not h or "." not in h:
+            continue
+        if h == "gov.cn" or h.endswith(".gov.cn"):
+            tiers["gov"] += 1
+        elif "gov" in h:
+            tiers["suspect"].append(h)
+    tiers["suspect"] = tiers["suspect"][:5]
+    return tiers
+
 def ark_ask(conn, question, brand=""):
     """向豆包发一问（Responses API + 内置 web_search 工具，模型自主联网检索）。
     返回 (answer_text, 检索URL列表, 错误文案)，成功时错误文案为空串。
     GEO_MOCK_ARK=1（e2e）返回罐头答案，绝不外呼。"""
     if os.environ.get("GEO_MOCK_ARK"):
-        return (f"（mock）关于这个问题：{brand or '该项目'}是区域内的代表性载体，相关信息可参考（来源：example.com）。", [], "")
+        return (f"（mock）关于这个问题：{brand or '该项目'}是区域内的代表性载体，相关信息可参考（来源：example.com）。（V0.2.0 全文落盘验证" + "补。" * 220 + "）", [], "")
     cfg = ark_cfg(conn)
     if not cfg["key"] or not cfg["model"]:
         return None, [], "豆包通道未配置：管理员在「监测 → AI 代问 · 通道设置」填入密钥与联网接入点 ID（ep-…）"
@@ -798,11 +836,14 @@ def answerbot_worker(db_path, rid, pid, prompts, brand, competitors, own_domains
                 if _own_hit(u, own_domains):
                     url = u
                     break
+            # V0.2.0 C3/C5（AI评测）：答案全文落盘（原只留前400字，审计/人工抽查看不到全文）+ 来源可信度分层
+            # （gov.cn=政府一手计数；域名含 gov 却非 .gov.cn=疑似仿政府——幻觉溯源实测抓到过 zhaoshang-gov.cn）
+            tiers = src_tiers(web_urls + ["https://" + c for c in cites])
             st["_rows"] = st.get("_rows", []) + [{
                 "date": today, "engine": "豆包", "promptId": p["id"],
                 "mention": mention if mention is not None else 0, "sentiment": senti or 0.5,
                 "url": url, "cooccur": [str(c)[:40] for c in cooccur][:6],
-                "note": f"AI代问·联网检索（{how}）", "src": "api", "raw": text[:400]}]
+                "note": f"AI代问·联网检索（{how}）", "src": "api", "raw": text[:4000], "srcTier": tiers}]
             st["items"].append({"promptId": p["id"], "ok": True, "mention": mention,
                                 "cite": "、".join(cites[:3])})
             added += 1
