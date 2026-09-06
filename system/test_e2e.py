@@ -403,6 +403,17 @@ def main():
         check("restore数据可读", dr.get("ledger") and dr["ledger"][0]["note"] == "来自备份" and dr.get("_rev") == 1, "备份内容落到新库")
 
         print("T6 评分器单元（node 直接驱动浏览器同源逻辑）")
+        # V0.2.1 闸门：CI 上 /tmp 没有外部坏例/好例，内联到脚本里（与改写示范 27/82 同源）
+        open("/tmp/bad.md", "w").write(
+            "蛇口网谷环境优美、配套完善、区位优越，是广大企业理想的办公选择，欢迎咨询入驻！")
+        open("/tmp/good.md", "w").write(
+            "蛇口网谷是招商蛇口产业园区（招商产园）旗下科创园区，位于深圳南山区。"
+            "截至2025年11月，园区入驻企业近460家，核心产业聚集度近70%，引入苹果、博世、雀巢等世界500强，"
+            "培育上市公司及新三板挂牌企业20余家（来源：中国工业新闻网，2025）。"
+            "\n\n## 园区租金什么水平？\n租金区间为XX元/㎡/月（以口径表为准）。\n"
+            "\n## 入驻企业有哪些？\n引入苹果、博世、雀巢等世界500强，培育上市公司20余家。\n"
+            "\n「招商既是房东也是公司股东——我们十多年没换过地方。」（纽迪瑞科技董事长李灏）\n"
+            "更新时间：2026-09 · 责任人：招商产园品牌部")
         harness = r'''
 const fs = require("fs");
 global.document = { addEventListener(){}, querySelector(){return null}, querySelectorAll(){return []}, createElement(){return {style:{},appendChild(){},remove(){},click(){},set href(v){},set download(v){}}} };
