@@ -121,8 +121,14 @@ def main():
             html = dump("diag/evidence")
             check("V4证据库渲染", "evBox" in html and "已核验引言" in html and ("王强" in html or "暂无证据" in html), "证据库子页+进度条+条目")
             html = dump("act/toolkit")
-            check("提升包页渲染", "tkBuild" in html and "渠道分发图" in html and html.count("agent-card") >= 8,
-                  f"生成按钮+渠道卡×{html.count('agent-card')}")
+            check("提升包页渲染", "tkBuild" in html and "渠道分发图" in html and html.count("打开入口") == 11,
+                  f"生成按钮+渠道卡×{html.count('打开入口')}")
+            check("V6.2 渠道图扩容", html.count("打开入口") == 11 and "B站（bilibili）" in html
+                  and "搜狐号/网易号/企鹅号" in html and "地图POI（高德/百度/腾讯）" in html
+                  and "11个真实入口" in html,
+                  f"渠道卡×{html.count('打开入口')}（B站/同步号/地图POI进图+提示11同步）")
+            check("V6.2 PR层指路", "谁在替你说话" in html and "数字 PR" in html and "争取被引" in html,
+                  "权威媒体不走开号入驻的指路文案")
             check("V4资产追踪卡", "watchBox" in html and "查排名" in html, "资产追踪管理区（空态引导文案含查排名）")
             html = dump("act/agent")
             check("Agent页4张卡片", html.count("agent-card") == 4, f"agent-card×{html.count('agent-card')}")
@@ -515,17 +521,17 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V6.1 版本号6.1.2", d.get("version") == "6.1.2", f"v={d.get('version')}")
+        check("V6.2 版本号6.2.0", d.get("version") == "6.2.0", f"v={d.get('version')}")
         for path, mark in [("/js/tour.js", "南山大厦"), ("/css/tour.css", "tour-ring")]:
             with urllib.request.urlopen(ROOT + path + "?v=6.1.0", timeout=10) as resp:
                 body = resp.read().decode("utf-8", "ignore")
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V6.1 版本戳统一6.1.2", idx_html.count("?v=6.1.2") >= 9 and "?v=6.1.1" not in idx_html
-              and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html
+        check("V6.2 版本戳统一6.2.0", idx_html.count("?v=6.2.0") >= 9 and "?v=6.1.2" not in idx_html
+              and "?v=6.1.1" not in idx_html and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html
               and "?v=4.7.7" not in idx_html and "?v=4.7.3" not in idx_html,
-              f"?v=6.1.2×{idx_html.count('?v=6.1.2')}")
+              f"?v=6.2.0×{idx_html.count('?v=6.2.0')}")
         reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
         if os.path.exists(chrome):
             def dump_tour(urlpath):

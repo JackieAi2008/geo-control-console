@@ -386,8 +386,8 @@ function opsBuildToolkit() {
   const faqMd = `# ${park} 选址FAQ（20问）\n> 每问一答、答案前置、≤300字、数据取自口径表；答完贴入「诊断→内容评分」≥75分再发布\n\n${[...P_prompts().filter(p => p.cat === "选址决策"), ...P_prompts().filter(p => p.cat === "品牌认知")].slice(0, 20).map((p, i) => `## ${i + 1}. ${p.q}\n【结论句式：${park}……（首个数字：${g("入驻企业数", "企业数【待填】")}；第二个数字：${g("产业聚集度", "聚集度【待填】")}）】\n【展开：区位/载体/政策/服务各一句，数字优先】\n【出处：（来源：口径表/权威榜单，年份）】`).join("\n\n")}`;
 
   const channelPack = `# ${park} 渠道分发指南\n> 生成 ${today()} · 每个渠道都是真实入口，按顺序执行；先发布、后监测（监测页一键跑30问）\n\n## 第一周（基础层+自有渠道）\n${hasSite
-      ? "1. 官网：部署 robots 片段 + 结构化数据 + 一园一档页 + FAQ页（文件在左侧已生成）\n2. 百度百科：按口径表更新词条，每个数字附权威来源\n3. 企查查/天眼查：核验运营主体信息"
-      : `1. 官方承载：按《百科词条更新稿》更新/创建百度百科词条（本项目暂无官网，百科就是第一官方门面）\n2. 三大地图：按《地图信息核对清单》在高德/百度/腾讯认领并核对信息\n3. 公众号：注册认证官方号，把《一园一档（公众号版）》作为首篇发布`}\n\n## 第二周起（内容矩阵，按引擎偏好排序）\n${GEO.channels.map((c, i) => `${i + 1}. **${c.name}** — ${c.engine}\n   入口：${c.entry}\n   动作：${c.action}\n   首发：${c.first.replace("{园区}", park).replace("{产业}", industry).replace("{city}", city)}`).join("\n\n")}\n\n## 节奏与红线\n- 节奏：公众号双周 / 知乎月2 / 头条百家随发 / 抖音周1\n- 红线：同一事实多渠道口径必须一致（DeepSeek 对不一致品牌首选率暴跌82%）；禁堆砌夸饰；效果预期 10–15天首批引用、8–12周稳定（行业参考值，以监测台账为准）`;
+      ? "1. 官网：部署 robots 片段 + 结构化数据 + 一园一档页 + FAQ页（文件在左侧已生成）\n2. 百度百科：按口径表更新词条，每个数字附权威来源\n3. 企查查/天眼查：核验运营主体信息\n4. 三大地图：按《地图信息核对清单》在高德/百度/腾讯认领并核对信息（实体一致性层，约30分钟）"
+      : `1. 官方承载：按《百科词条更新稿》更新/创建百度百科词条（本项目暂无官网，百科就是第一官方门面）\n2. 三大地图：按《地图信息核对清单》在高德/百度/腾讯认领并核对信息\n3. 公众号：注册认证官方号，把《一园一档（公众号版）》作为首篇发布`}\n\n## 第二周起（内容矩阵，按引擎偏好排序）\n${GEO.channels.map((c, i) => `${i + 1}. **${c.name}** — ${c.engine}\n   入口：${c.entry}\n   动作：${c.action}\n   首发：${c.first.replace("{园区}", park).replace("{产业}", industry).replace("{city}", city)}`).join("\n\n")}\n\n## 节奏与红线\n- 节奏：公众号双周 / 知乎月2 / 头条百家随发 / 抖音周1 / B站月1 / 搜狐网易企鹅随公众号同步\n- 红线：同一事实多渠道口径必须一致（DeepSeek 对不一致品牌首选率暴跌82%）；禁堆砌夸饰；效果预期 10–15天首批引用、8–12周稳定（行业参考值，以监测台账为准）`;
 
   const files = hasSite ? [
     { name: "robots-AI放行片段.txt", desc: "追加到官网 robots.txt；若用 CDN/WAF 还需控制台白名单", content: robots },
@@ -395,7 +395,8 @@ function opsBuildToolkit() {
     { name: "schema-结构化数据.html", desc: "贴到园区页 </head> 前，补齐【待填】", content: jsonld },
     { name: "一园一档.md", desc: "官网/公众号/知乎通用的园区标准档案（GEO内容库最小单元）", content: profile },
     { name: "选址FAQ-20问.md", desc: "答案前置的FAQ页源稿，逐问补答后过评分器≥75再发", content: faqMd },
-    { name: "渠道分发指南.md", desc: "8个渠道的真实入口、动作与首发内容，按周执行", content: channelPack },
+    { name: "地图信息核对清单.md", desc: "高德/百度/腾讯三平台认领与核对（约30分钟，不需要技术；全项目基础层）", content: genMapChecklist(park) },
+    { name: "渠道分发指南.md", desc: `${GEO.channels.length}个渠道的真实入口、动作与首发内容，按周执行`, content: channelPack },
   ] : [
     { name: "百科词条更新稿.md", desc: "百度百科词条的创建/更新终稿——无官网项目的第一官方门面，数字全部取口径表", content: genBaikeDraft(park, F, op) },
     { name: "地图信息核对清单.md", desc: "高德/百度/腾讯三平台认领与核对（约30分钟，不需要技术）", content: genMapChecklist(park) },
@@ -630,7 +631,7 @@ render.toolkit = () => {
   const tkHelp = $("#tkHelpLine");
   if (tkHelp) tkHelp.textContent = noSite()
     ? "生成5个不依赖官网、品宣自己就能执行的文件：百科词条更新稿（数字全部取口径表）· 地图信息核对清单（约30分钟）· 一园一档公众号版 · 选址FAQ20问（过评分器再发）· 渠道分发指南。"
-    : "生成6个可直接使用的文件：网站 AI 可读配置（交网站管理员）· AI 说明文件（传官网根目录）· 结构化数据标签（贴页面）· 一园一档（内容库最小单元）· 选址FAQ20问（过评分器再发）· 渠道分发指南。";
+    : "生成7个可直接使用的文件：网站 AI 可读配置（交网站管理员）· AI 说明文件（传官网根目录）· 结构化数据标签（贴页面）· 一园一档（内容库最小单元）· 选址FAQ20问（过评分器再发）· 渠道分发指南 · 地图信息核对清单（全项目基础层，约30分钟）。";
   const want = ((cur.brand || cur.name || "") + "").split("（")[0].trim();
   if ($("#tkPark").dataset.proj !== CUR) {
     const calPark = [...new Set(state.caliber.map(r => r.park))]
