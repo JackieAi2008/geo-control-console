@@ -199,7 +199,7 @@ def main():
                     subprocess.run([chrome, "--headless=new", "--disable-gpu", "--virtual-time-budget=8000",
                                     "--dump-dom", f"{ROOT}/?layoutcheck=1#/{frag}"], stdout=fh, stderr=subprocess.DEVNULL, timeout=90)
                 return open(out, encoding="utf-8", errors="ignore").read()
-            for frag, label in [("", "工作台"), ("act/toolkit", "渠道图"), ("monitor", "监测"),
+            for frag, label in [("", "工作台"), ("projects", "项目库"), ("act/toolkit", "渠道图"), ("monitor", "监测"),
                                 ("diag/scan", "诊断"), ("diag/audit", "体检")]:
                 lh = dump_lc(frag)
                 ok = ("W320" in lh and "W375" in lh and "W768" in lh
@@ -598,18 +598,18 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V0.1 版本号0.1.8", d.get("version") == "0.1.8", f"v={d.get('version')}")
+        check("V0.1 版本号0.1.9", d.get("version") == "0.1.9", f"v={d.get('version')}")
         for path, mark in [("/js/tour.js", "南山大厦"), ("/css/tour.css", "tour-ring")]:
             with urllib.request.urlopen(ROOT + path + "?v=6.1.0", timeout=10) as resp:
                 body = resp.read().decode("utf-8", "ignore")
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V0.1 版本戳统一0.1.8", idx_html.count("?v=0.1.8") >= 9 and "?v=0.1.7" not in idx_html
+        check("V0.1 版本戳统一0.1.9", idx_html.count("?v=0.1.9") >= 9 and "?v=0.1.8" not in idx_html
               and "?v=6.2.0" not in idx_html and "?v=6.1.2" not in idx_html and "?v=6.1.1" not in idx_html
               and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html
               and "?v=4.7.3" not in idx_html,
-              f"?v=0.1.8×{idx_html.count('?v=0.1.8')}")
+              f"?v=0.1.9×{idx_html.count('?v=0.1.9')}")
         reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
         if os.path.exists(chrome):
             def dump_tour(urlpath):

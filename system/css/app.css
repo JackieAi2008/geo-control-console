@@ -3,7 +3,7 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { overflow-x: clip; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 /* 关键修复：JS 用 hidden 属性显隐的元素必须真隐藏——
    作者样式里的 display:flex/inline-flex 会覆盖 UA 的 [hidden]{display:none}，
    曾导致对话助手面板与「停止」按钮点不掉。 */
@@ -454,6 +454,9 @@ pre.prompt-view {
 /* V4.6 项目库工具栏与统计 */
 .pj-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 .pj-chips .chip { min-height: 30px; }
+/* V0.1.9：筛选组（标签+胶囊同行成组）；桌面两组横排，移动端各组独占一行 */
+.pj-group { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+@media (min-width: 769px) { .pj-group + .pj-group { margin-left: 12px; } }
 .pj-lb { font-size: var(--text-xs); color: var(--color-ink-3); letter-spacing: .06em; flex-shrink: 0; }
 .pj-stat { font-size: var(--text-sm); color: var(--color-ink-2); }
 .pj-recent {
@@ -534,8 +537,13 @@ pre.prompt-view {
   .proj-card .pc-stats { display: grid; grid-template-columns: repeat(3, auto); gap: var(--space-sm) var(--space-lg); justify-content: start; }  /* 5 列挤压 → 3+2 两行 */
   /* V4.6 项目库工具栏：搜索全宽；chips 换行铺开（375宽不依赖横滑发现筛选）；统计独立成行 */
   #pjQ { flex: 1 1 100%; }
-  .pj-chips { row-gap: 8px; }
+  .pj-chips { flex-direction: column; align-items: flex-start; row-gap: 8px; }
   .pj-chips .chip { min-height: 44px; }
+  /* 报头「?」绝对定位右上角：不再参与 flex 换行（修复芯片占满行时 ? 被挤成独占一行）；
+     品牌区右侧预留按钮宽度，芯片再宽也不与按钮叠压 */
+  .masthead-inner { position: relative; }
+  .help-btn { position: absolute; top: 8px; right: var(--space-sm); }
+  .brand-wrap { padding-right: 56px; }
   .seg-item { min-height: 44px; }
   .pj-stat { flex: 1 1 100%; }
   .pj-recent { flex-wrap: wrap; }

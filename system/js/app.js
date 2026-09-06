@@ -1691,10 +1691,11 @@ function renderProjToolbar() {
   const box = $("#pjChips"); if (!box) return;
   const modes = [["all", "全部"], ["own", "有官网"], ["parent", "挂上级官网"], ["none", "无官网"]];
   const statuses = [["all", "全部"], ["undiagnosed", "未诊断"], ["warn", "有预警"]];
-  box.innerHTML = `<span class="pj-lb">形态</span>` +
+  /* V0.1.9：形态/状态各成一组（标签+胶囊同行），移动端每组独占一行——修复标签与胶囊挤贴/错位 */
+  box.innerHTML = `<span class="pj-group"><span class="pj-lb">形态</span>` +
     modes.map(([v, t]) => `<button class="chip${PJ_FILTERS.mode === v ? " on" : ""}" data-fm="${v}">${t}</button>`).join("") +
-    `<span class="pj-lb" style="margin-left:12px">状态</span>` +
-    statuses.map(([v, t]) => `<button class="chip${PJ_FILTERS.status === v ? " on" : ""}" data-fs="${v}">${t}</button>`).join("");
+    `</span><span class="pj-group"><span class="pj-lb">状态</span>` +
+    statuses.map(([v, t]) => `<button class="chip${PJ_FILTERS.status === v ? " on" : ""}" data-fs="${v}">${t}</button>`).join("") + `</span>`;
 }
 /* V4.6 报头两态：项目库页=「☰ 项目库」高亮；项目内=「‹ 项目库 | 项目名」一步返回 */
 let CUR_VIEW = "projects";
@@ -2485,7 +2486,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "0.1.8";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.1.9";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }
