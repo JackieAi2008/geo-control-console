@@ -11,9 +11,11 @@
   appearance: none; cursor: pointer;
   width: 34px; height: 34px; flex-shrink: 0;
   background: transparent; color: var(--color-gold-bright);
-  border: 1px solid color-mix(in oklab, var(--color-gold) 55%, transparent);
+  /* 深蓝底上金色 1px 描边实测对比只 5.8:1——提到亮金一档 + 1.5px，笔画才立得住 */
+  border: 1.5px solid color-mix(in oklab, var(--color-gold-bright) 60%, transparent);
   border-radius: var(--radius-s);
   font-family: var(--font-display); font-size: 16px; font-weight: 700; line-height: 1;
+  padding-top: 1px;   /* 宋体「？」基线偏下，光学中心上移 */
   transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 .help-btn:hover { background: rgba(255,255,255,.08); border-color: var(--color-gold-bright); }
@@ -51,9 +53,11 @@
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+.tour-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.tour-prog { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .tour-chap {
   font-family: var(--font-mono); font-size: var(--text-xs);
-  color: var(--color-accent); letter-spacing: 1px;
+  color: var(--color-accent); letter-spacing: 1px; min-width: 0;
 }
 .tour-title {
   font-family: var(--font-display); font-weight: 700;
@@ -63,7 +67,7 @@
 .tour-body b { font-weight: 600; }
 .tour-demo {
   margin-top: 8px; padding: 8px 10px;
-  background: var(--color-gold-soft); border: 1px dashed var(--color-gold);
+  background: var(--color-gold-soft); border: 1px solid color-mix(in oklab, var(--color-gold) 55%, transparent);
   border-radius: var(--radius-s);
   font-size: 12px; color: var(--color-ink-2); line-height: 1.65;
 }
@@ -72,7 +76,7 @@
 .tour-dots { display: flex; gap: 5px; align-items: center; }
 .tour-dots button {
   appearance: none; cursor: pointer; padding: 0;
-  width: 8px; height: 8px; border-radius: 50%;
+  width: 10px; height: 10px; border-radius: 50%;
   border: 1px solid var(--color-line-2); background: var(--color-paper);
   transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
@@ -87,8 +91,11 @@ body.tour-active .chat-fab, body.tour-active .chat-panel { display: none !import
 /* ── 移动端：气泡改底部抽屉，触控≥44px ───────── */
 @media (max-width: 768px) {
   .help-btn { width: 44px; height: 44px; font-size: 18px; }
+  .tour-head { flex-wrap: wrap; }   /* 芯片过长时步点换行，不与章节抢宽 */
   .tour-bubble {
-    position: fixed; left: 8px; right: 8px; bottom: 8px; width: auto;
+    position: fixed; left: 8px; right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));   /* iPhone 手势条安全区 */
+    width: auto;
     max-height: 64vh; overflow-y: auto;
     border-left-width: 1px; border-top: 3px solid var(--color-accent);
     animation-name: tour-in-up;

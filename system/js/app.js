@@ -2408,7 +2408,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "6.1.1";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "6.1.2";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }

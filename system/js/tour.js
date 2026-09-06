@@ -170,20 +170,23 @@ function tourBuildDom() {
 function tourRenderBubble() {
   const st = TOUR_STEPS[Tour.idx];
   const bub = $("#tourBubble"); if (!bub) return;
+  /* 信息架构：进度（章节+步点）归头部，动作（跳过/上一步/下一步）归脚部——四类控件不再混排一行 */
   bub.innerHTML = `
-    <div class="tour-chap">${st.chap} · 第 ${Tour.idx + 1} 步 / 共 ${TOUR_STEPS.length} 步</div>
+    <div class="tour-head">
+      <span class="tour-chap">${st.chap}</span>
+      <span class="tour-prog"><span class="tour-step-no">${Tour.idx + 1}/${TOUR_STEPS.length}</span><span class="tour-dots" aria-label="步骤进度">${TOUR_STEPS.map((_, k) =>
+        `<button data-tdot="${k}" class="${k === Tour.idx ? "on" : ""}" aria-label="跳到第${k + 1}步"></button>`).join("")}</span></span>
+    </div>
     <div class="tour-title">${st.title}</div>
     <div class="tour-body">${st.body}</div>
     ${st.demo ? `<div class="tour-demo">${st.demo}</div>` : ""}
     <div class="tour-foot">
-      <span class="tour-dots" aria-label="步骤">${TOUR_STEPS.map((_, k) =>
-        `<button data-tdot="${k}" class="${k === Tour.idx ? "on" : ""}" aria-label="跳到第${k + 1}步"></button>`).join("")}</span>
-      <span style="flex:1"></span>
       <button class="btn btn-sm btn-ghost tour-skip" id="tourSkip">我知道了，不用再学了</button>
+      <span style="flex:1"></span>
       ${Tour.idx > 0 && !st.cta ? '<button class="btn btn-sm btn-ghost" id="tourPrev">上一步</button>' : ""}
       ${st.cta ? '<button class="btn btn-sm btn-ghost" id="tourDone">先自己逛逛</button>' +
-                 '<button class="btn btn-primary" id="tourCta">＋ 新建我的第一个项目</button>'
-               : `<button class="btn btn-primary" id="tourNext">${Tour.idx === 0 ? "开始带看" : "下一步"}</button>`}
+                 '<button class="btn btn-sm btn-primary" id="tourCta">＋ 新建我的第一个项目</button>'
+               : `<button class="btn btn-sm btn-primary" id="tourNext">${Tour.idx === 0 ? "开始带看" : "下一步"}</button>`}
     </div>`;
   $("#tourSkip").onclick = () => tourEnd(true, "skip");
   const nx = $("#tourNext"); if (nx) nx.onclick = tourNext;

@@ -31,7 +31,7 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "6.1.1"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处
+APP_VERSION = "6.1.2"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}

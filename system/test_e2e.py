@@ -515,16 +515,17 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V6.1 版本号6.1.1", d.get("version") == "6.1.1", f"v={d.get('version')}")
+        check("V6.1 版本号6.1.2", d.get("version") == "6.1.2", f"v={d.get('version')}")
         for path, mark in [("/js/tour.js", "南山大厦"), ("/css/tour.css", "tour-ring")]:
             with urllib.request.urlopen(ROOT + path + "?v=6.1.0", timeout=10) as resp:
                 body = resp.read().decode("utf-8", "ignore")
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V6.1 版本戳统一6.1.1", idx_html.count("?v=6.1.1") >= 9 and "?v=6.1.0" not in idx_html
-              and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html and "?v=4.7.3" not in idx_html,
-              f"?v=6.1.1×{idx_html.count('?v=6.1.1')}")
+        check("V6.1 版本戳统一6.1.2", idx_html.count("?v=6.1.2") >= 9 and "?v=6.1.1" not in idx_html
+              and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html
+              and "?v=4.7.7" not in idx_html and "?v=4.7.3" not in idx_html,
+              f"?v=6.1.2×{idx_html.count('?v=6.1.2')}")
         reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
         if os.path.exists(chrome):
             def dump_tour(urlpath):
@@ -534,8 +535,9 @@ console.log(JSON.stringify({
                                     "--dump-dom", f"{ROOT}{urlpath}"], stdout=fh, stderr=subprocess.DEVNULL, timeout=60)
                 return open(out, encoding="utf-8", errors="ignore").read()
             html = dump_tour("/?tour=force#/projects")
-            check("V6.1 欢迎步渲染", "tourBubble" in html and "南山大厦" in html and "不用再学了" in html and "开始带看" in html,
-                  "欢迎气泡+跳过按钮+案例名（?tour=force 强制通道，供 QA/演示复用）")
+            check("V6.1 欢迎步渲染", "tourBubble" in html and "南山大厦" in html and "不用再学了" in html and "开始带看" in html
+                  and "tour-head" in html and "tour-prog" in html,
+                  "欢迎气泡+跳过按钮+案例名+头部进度行（V6.1.2 结构：进度归头/动作归脚）")
             html = dump_tour("/?tour=force&tourStep=4#/projects")
             check("V6.1.1 导航地图步", "全流程地图" in html and "mainNav" in html, "新增聚光主导航步（教地图不只教流程）")
             html = dump_tour("/?tour=force&tourStep=6#/projects")
