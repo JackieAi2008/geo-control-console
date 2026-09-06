@@ -366,6 +366,74 @@ console.log(JSON.stringify({bad: r1.score, good: r2.score,
                   f"node环境无lastOpen→projects（有项目卡片+全貌导航）·实测{r.get('landing')}")
         else:
             check("评分器单元", False, p.stderr[:200] or "node 输出为空", skippable=True)
+
+        print("T11 V5 通用化（第二项目：任何项目进来，尺子必须跟着变）")
+        # 1. 建虚构第二项目（9 字段全量）
+        s, d = req("POST", "/api/projects", {"name": "南京金融城", "brand": "南京金融城", "entityMode": "none",
+            "city": "南京河西", "industries": ["金融科技", "人工智能"], "competitors": ["德基广场", "南京国际金融中心"],
+            "matrixTier": "park", "operator": "南京河西新城区开发委员会", "ownDomains": ["mp.weixin.qq.com"]})
+        pid2 = d.get("id")
+        check("V5第二项目创建", s == 200 and pid2, f"status={s} id={pid2}")
+        # 2. 元数据回读（server 存了新字段）
+        s, d = req("GET", "/api/projects")
+        pj = next((x for x in d.get("projects", []) if x.get("id") == pid2), {})
+        check("V5元数据9字段回读", pj.get("city") == "南京河西" and pj.get("industries") == ["金融科技", "人工智能"]
+              and pj.get("competitors") == ["德基广场", "南京国际金融中心"] and pj.get("matrixTier") == "park",
+              f"city={pj.get('city')} ind={pj.get('industries')} comp={pj.get('competitors')} tier={pj.get('matrixTier')}")
+        # 3. update 端点改档位/城市
+        s, d = req("POST", "/api/projects/update", {"id": pid2, "matrixTier": "lite", "city": "南京建邺"})
+        s, d = req("GET", "/api/projects")
+        pj = next((x for x in d.get("projects", []) if x.get("id") == pid2), {})
+        check("V5项目设置更新生效", pj.get("matrixTier") == "lite" and pj.get("city") == "南京建邺",
+              f"tier={pj.get('matrixTier')} city={pj.get('city')}")
+        # 4. node 驱动模板实例化（GEO.promptTemplates 为被测对象）
+        node_probe = """
+const fs = require('fs');
+const GEO = new Function(fs.readFileSync('js/data.js', 'utf8') + '; return GEO;')();
+const m = { park: '南京金融城', city: '南京河西', industry: ['金融科技','人工智能'], competitors: ['德基广场','南京国际金融中心'], operator: '南京河西新城区开发委员会' };
+const inst = (tier, mm) => (GEO.promptTemplates[tier] || []).map(t => ({ id: t.id, cat: t.cat, q: t.q(mm) }));
+const park = inst('park', m);
+const lite = inst('lite', m);
+const bare = inst('park', { park: '某园区', city: '某市', industry: [], competitors: [], operator: '' });
+const allQ = park.concat(lite, bare).map(x => x.q).join('|');
+const bad = ['蛇口','招商','深圳','南海意库','张江','联东','网谷'].filter(w => allQ.includes(w));
+console.log(JSON.stringify({
+  parkN: park.length, liteN: lite.length,
+  hasBrand: park.some(x => x.q.includes('南京金融城')),
+  hasCity: park.some(x => x.q.includes('南京河西')),
+  hasComp: park.some(x => x.q.includes('德基广场')),
+  badWords: bad, bareOk: bare.length === 30 && bare.every(x => x.q && x.q.length >= 8),
+  cats: [...new Set(park.map(x => x.cat))].join('/')
+}));
+"""
+        np = subprocess.run(["node", "-e", node_probe], capture_output=True, text=True, cwd=BASE)
+        if np.returncode == 0 and np.stdout.strip():
+            r = json.loads(np.stdout)
+            check("V5园区版30问实例化", r["parkN"] == 30 and r["cats"] == "品牌认知/选址决策/对比竞品/产业服务",
+                  f"n={r['parkN']} 类别={r['cats']}")
+            check("V5轻量版12问", r["liteN"] == 12, f"n={r['liteN']}")
+            check("V5参数注入", r["hasBrand"] and r["hasCity"] and r["hasComp"], f"品牌/城市/竞品 全部进入问题")
+            check("V5零种子残留", not r["badWords"], f"蛇口/招商/深圳等字样={r['badWords'] or '无'}")
+            check("V5缺参兜底通顺", r["bareOk"], "全空元数据仍生成30问且每问≥8字")
+        else:
+            check("V5模板实例化", False, np.stderr[:160] or "node 输出为空", skippable=True)
+        # 5. parse 轨道：有模型（本机 Ollama）应成功抽取；无模型时报错必须是大白话（禁 ollama pull 指令）
+        s, d = req("POST", "/api/parse", {"text": "南京金融城是南京河西的金融科技产业园区，德基广场也在附近。", "brand": "南京金融城", "competitors": ["德基广场"]})
+        err = str(d.get("error", ""))
+        if d.get("mention") is not None:
+            check("V5 parse可用（本机Ollama轨道）", True, f"mention={d.get('mention')} 共现={d.get('competitorMentions')}")
+        else:
+            check("V5 parse无模型大白话报错", "配置你自己的模型" in err and "ollama" not in err, f"error={err[:60]}")
+        # 6. own 后缀匹配单元（python exec server.py 顶层取 _own_hit）
+        g = {"__file__": os.path.join(BASE, "server.py")}
+        try:
+            exec(compile(open(os.path.join(BASE, "server.py"), encoding="utf-8").read(), "server.py", "exec"), g)
+            oh = g["_own_hit"]
+            check("V5 own后缀匹配", oh("https://www.cmhk.com/x", ["cmhk.com"]) and oh("https://mp.weixin.qq.com/y", ["weixin.qq.com"])
+                  and not oh("https://fake-cmhk.com.evil.com/z", ["cmhk.com"]) and not oh("https://x.com/a/b-cmhk.com", ["cmhk.com"]),
+                  "www 子域命中/父域命中/恶意子串不命中/路径子串不命中")
+        except Exception as e:
+            check("V5 own后缀匹配", False, f"exec 失败: {e}", skippable=True)
     finally:
         srv.terminate(); srv.wait(timeout=5)
 

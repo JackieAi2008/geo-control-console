@@ -482,12 +482,13 @@ def _diagnose_entity(brand, own_domains):
             "auto_scores": score_map, "ts": __import__("time").strftime("%Y-%m-%d %H:%M"), "mode": "entity"}
 
 
-def parse_answer(text, brand, competitors):
-    """V4 3.4：用本机 Ollama 把人工粘贴的 AI 回答原文结构化（提及/情感/引用域名/竞品共现）。
+def parse_answer(text, brand, competitors, headers=None, conn=None):
+    """V4 3.4：把人工粘贴的 AI 回答原文结构化（提及/情感/引用域名/竞品共现）。
+    V5：模型走三级回退（本账号配置 > 服务器 DeepSeek > 本机 Ollama），与对话助手同一条轨道；
     只抽取不判断对错；失败如实返回 error，前端优雅降级为手工填写。"""
-    model = pick_chat_model()
-    if not model:
-        return {"error": "本机未检测到可用的 Ollama 对话模型（ollama pull qwen3:4b-instruct-2507-q4_K_M 后重试）"}
+    src, model, cfg = llm_resolve(conn, headers or {})
+    if src == "none":
+        return {"error": "当前没有可用的大模型。两种解决方式：①点右下角「问」助手窗口右上角的 ⚙，配置你自己的模型（推荐，一次配置全系统可用）；②联系管理员在服务器设置。"}
     if not text or not str(text).strip():
         return {"error": "text 不能为空"}
     comp = "、".join([str(c) for c in (competitors or []) if str(c).strip()][:8]) or "无指定候选——答案中出现其他知名同类也请列入"
@@ -497,18 +498,28 @@ def parse_answer(text, brand, competitors):
 "citedDomains": [回答中出现的引用/参考链接域名数组，没有则空数组],
 "competitorMentions": [答案中同时出现的竞品名数组（候选：{comp}），没有则空数组]}}
 规则：只依据原文判断，不猜测不补全；citedDomains 只收真正的链接域名（形如 xx.yy），「来源：某机构名/某研究」这类机构名不算域名、不得编造成域名。"""
-    payload = {"model": model, "messages": [{"role": "system", "content": sys_prompt},
-               {"role": "user", "content": str(text)[:6000]}],
-               "stream": False, "think": False, "format": "json",
-               "options": {"temperature": 0.1, "num_predict": 300}, "keep_alive": "30m"}
-    try:
-        req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(payload).encode(),
-                                     headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=150) as r:
-            out = json.loads(r.read())
-    except Exception as e:
-        return {"error": f"模型调用失败：{e}"}
-    raw = (out.get("message") or {}).get("content", "")
+    if src in ("user", "server"):
+        try:
+            with llm_remote_open(cfg, [{"role": "system", "content": sys_prompt},
+                                       {"role": "user", "content": str(text)[:6000]}],
+                                 stream=False, timeout=150, max_tokens=300) as r:
+                out = json.loads(r.read())
+        except Exception as e:
+            return {"error": f"模型调用失败：{e}"}
+        raw = (out.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    else:
+        payload = {"model": model, "messages": [{"role": "system", "content": sys_prompt},
+                   {"role": "user", "content": str(text)[:6000]}],
+                   "stream": False, "think": False, "format": "json",
+                   "options": {"temperature": 0.1, "num_predict": 300}, "keep_alive": "30m"}
+        try:
+            req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(payload).encode(),
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=150) as r:
+                out = json.loads(r.read())
+        except Exception as e:
+            return {"error": f"模型调用失败：{e}"}
+        raw = (out.get("message") or {}).get("content", "")
     try:
         d = json.loads(raw)
     except Exception:
@@ -539,6 +550,15 @@ def parse_answer(text, brand, competitors):
             "citedDomains": doms[:10],
             "competitorMentions": [str(x).strip() for x in (d.get("competitorMentions") or []) if str(x).strip()][:10]}
 
+def _own_hit(url, owns):
+    """V5：自有域名判定改 hostname 后缀匹配（host 等于 d 或以 .d 结尾），
+    修复旧子串匹配偏宽（自有域名出现在第三方 URL 路径中会误判）与偏窄（缺 www 变体）两个方向的失真。"""
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except Exception:
+        return False
+    return any(host == d.lower() or host.endswith("." + d.lower()) for d in owns if d)
+
 def run_probe(query, own_domains=None):
     """真实外呼：调用本机 anysearch（失败时如实返回 error，不编造结果）。
     own_domains：该项目的自有域名列表（V4 参数化，未传时回退全局默认）"""
@@ -555,7 +575,7 @@ def run_probe(query, own_domains=None):
     if p.returncode != 0:
         return {"error": f"anysearch 退出码 {p.returncode}: {p.stderr.strip()[:200]}"}
     out = p.stdout or ""
-    results = [{"title": t.strip(), "url": u.strip(), "own": any(d in u for d in owns)}
+    results = [{"title": t.strip(), "url": u.strip(), "own": _own_hit(u.strip(), owns)}
                for t, u in re.findall(r"###\s*\d+\.\s*(.+?)\n\s*-\s*\*\*URL\*\*:\s*(\S+)", out)]
     if not results:
         fb = _probe_mmx(query, owns)          # V4 4.5：anysearch 空结果时回退 mmx（标注来源）
@@ -576,7 +596,7 @@ def _probe_mmx(query, owns):
     except Exception:
         return None
     res = [{"title": str(r.get("title") or ""), "url": str(r.get("link") or ""),
-            "own": any(o in str(r.get("link") or "") for o in owns)}
+            "own": _own_hit(str(r.get("link") or ""), owns)}
            for r in (d.get("organic") or []) if r.get("link")][:10]
     if not res:
         return None
@@ -712,6 +732,10 @@ class Handler(BaseHTTPRequestHandler):
                         "brand": str(body.get("brand") or "").strip()[:60],
                         "operator": str(body.get("operator") or "").strip()[:60],
                         "entityMode": str(body.get("entityMode") or "").strip()[:10] or ("none" if not str(body.get("url") or "").strip() else "parent"),
+                        "city": str(body.get("city") or "").strip()[:40],
+                        "industries": [str(i).strip()[:30] for i in (body.get("industries") or []) if str(i).strip()][:5],
+                        "competitors": [str(c).strip()[:40] for c in (body.get("competitors") or []) if str(c).strip()][:5],
+                        "matrixTier": "lite" if str(body.get("matrixTier") or "").strip() == "lite" else "park",
                         "ownDomains": [str(d).strip()[:80] for d in (body.get("ownDomains") or []) if str(d).strip()][:20],
                         "createdAt": time.strftime("%Y-%m-%d"), "archived": False}
                 kv_put(self.conn, "projects", plist + [proj])
@@ -735,6 +759,13 @@ class Handler(BaseHTTPRequestHandler):
                 if "brand" in body: p["brand"] = str(body.get("brand") or "").strip()[:60]
                 if "operator" in body: p["operator"] = str(body.get("operator") or "").strip()[:60]
                 if "entityMode" in body: p["entityMode"] = str(body.get("entityMode") or "").strip()[:10]
+                if "city" in body: p["city"] = str(body.get("city") or "").strip()[:40]
+                if "industries" in body:
+                    p["industries"] = [str(i).strip()[:30] for i in (body.get("industries") or []) if str(i).strip()][:5]
+                if "competitors" in body:
+                    p["competitors"] = [str(c).strip()[:40] for c in (body.get("competitors") or []) if str(c).strip()][:5]
+                if "matrixTier" in body:
+                    p["matrixTier"] = "lite" if str(body.get("matrixTier") or "").strip() == "lite" else "park"
                 if "ownDomains" in body:
                     p["ownDomains"] = [str(d).strip()[:80] for d in (body.get("ownDomains") or []) if str(d).strip()][:20]
                 kv_put(self.conn, "projects", plist)
@@ -798,7 +829,7 @@ class Handler(BaseHTTPRequestHandler):
             """V4 3.4：贴答案自动填（结构化抽取，人确认后才入库）"""
             try:
                 body = self._body() or {}
-                return self._send(200, parse_answer(body.get("text"), body.get("brand"), body.get("competitors")))
+                return self._send(200, parse_answer(body.get("text"), body.get("brand"), body.get("competitors"), self.headers, self.conn))
             except Exception as e:
                 return self._send(500, {"error": str(e)})
         if path == "/api/llm/settings":

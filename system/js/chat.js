@@ -157,11 +157,13 @@ const CHAT_SUGGEST = [
       const scrollToBottom = () => { body.scrollTop = body.scrollHeight; };
       scrollToBottom();
 
-      /* V4.4：①知识库优先——命中高频问题秒回标准答案 */
+      /* V4.4：①知识库优先——命中高频问题秒回标准答案
+         V5：答案按当前项目本地化（蛇口举例仅蛇口项目保留原文） */
       const kb = (typeof kbSearch === "function") ? kbSearch(text) : null;
       if (kb) {
-        liveNode.innerHTML = `<span class="kb-badge">📖 系统知识库</span><div class="kb-answer">${renderAssistantMd(kb.answer)}</div>`;
-        history.push({ role: "assistant", content: kb.answer });
+        const kbAnswer = (typeof seedLocalize === "function") ? seedLocalize(kb.answer) : kb.answer;
+        liveNode.innerHTML = `<span class="kb-badge">📖 系统知识库</span><div class="kb-answer">${renderAssistantMd(kbAnswer)}</div>`;
+        history.push({ role: "assistant", content: kbAnswer });
         localStorage.setItem(chatKey(), JSON.stringify(history.filter(m => (m.content || "").trim()).slice(-24)));
         scrollToBottom();
         send.classList.remove("is-busy"); send.textContent = "发送"; busy = false;

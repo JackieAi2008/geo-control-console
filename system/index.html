@@ -140,7 +140,7 @@
       <ul class="rule-list" id="dashTodo"></ul>
     </div>
     <div class="card">
-      <h3>基线发现 <span class="hint">蛇口网谷信源侧静态快照（2026-09-04）· 有时效，以最新一键诊断为准</span></h3>
+      <h3>基线发现 <span class="hint" id="dashBaseHint">蛇口网谷信源侧静态快照（2026-09-04）· 有时效，以最新一键诊断为准</span></h3>
       <ul class="rule-list" id="dashBase"></ul>
     </div>
   </div>
@@ -171,7 +171,7 @@
           <button class="seg-item" id="dgModeEntity" role="tab">实体体检</button>
         </div>
         <div class="form-grid" id="dgSiteForm">
-          <label class="full lb">官方承载页域名（园区若无独立官网，填上级官网——蛇口网谷填招商蛇口官网 www.cmsk1979.com）<input id="dgUrl" class="inp" placeholder="www.cmsk1979.com"></label>
+          <label class="full lb">官方承载页域名（本项目自己的官网；若园区挂在上级单位官网下，填上级官网域名）<input id="dgUrl" class="inp" placeholder="如：www.你的官网域名.com"></label>
         </div>
         <div class="form-grid">
           <label class="full lb">品牌词（官网体检用于搜索验证；实体体检以它为检查对象）<input id="dgBrand" class="inp" placeholder="如：蛇口网谷"></label>
@@ -282,7 +282,7 @@
       <h3>改写示范：营销腔 → GEO体</h3>
       <div class="rw">
         <div class="rw-col"><span class="tag tag-bad">改写前 · 33分</span>
-          <p>蛇口网谷环境优美、配套完善、区位优越，是广大企业理想的办公选择，欢迎咨询入驻！</p></div>
+          <p>某某园区环境优美、配套完善、区位优越，是广大企业理想的办公选择，欢迎咨询入驻！（示例：典型营销腔，预计<50分——粘贴你的真实文案试试）</p></div>
         <div class="rw-col"><span class="tag tag-ok">改写后 · 83分</span>
           <p>蛇口网谷是招商蛇口产业园区（招商产园）旗下科创园区，位于深圳南山区。截至2025年11月，园区入驻企业近460家，核心产业聚集度近70%，引入苹果、博世、雀巢等世界500强，培育上市公司及新三板挂牌企业20余家（来源：中国工业新闻网，2025）。「招商既是房东也是公司股东——我们十多年没换过地方。」（纽迪瑞科技董事长李灏）更新时间：2026-09 · 责任人：招商产园品牌部</p></div>
       </div>
@@ -319,9 +319,9 @@
         <label class="full lb">主导产业<input id="tkIndustry" class="inp" placeholder="如：数字经济、人工智能"></label>
       </div>
       <button class="btn btn-primary" id="tkBuild" style="margin-top:12px">一键生成优化文件</button>
-      <p class="muted" style="margin-top:8px">生成6个可直接使用的文件：网站 AI 可读配置（交网站管理员）· AI 说明文件（传官网根目录）· 结构化数据标签（贴页面）· 一园一档（内容库最小单元）· 选址FAQ20问（过评分器再发）· 渠道分发指南。</p>
+      <p class="muted" style="margin-top:8px" id="tkHelpLine"></p>
     </div>
-    <div id="tkOut" style="margin-top:16px"><p class="muted" style="padding:16px 0;text-align:center">点击「一键生成优化文件」后，6个文件在此预览并可下载。</p></div>
+    <div id="tkOut" style="margin-top:16px"><p class="muted" style="padding:16px 0;text-align:center">点击「一键生成优化文件」后，物料文件在此预览并可下载。</p></div>
     <div class="card" style="margin-top:16px">
       <h3>资产追踪 <span class="hint">下载物料即登记 · 部署后补URL · 查排名看效果</span></h3>
       <div id="watchBox"></div>
@@ -349,7 +349,7 @@
           </div>
         </div>
       </div>
-      <p class="muted" style="margin-top:8px">对比竞品场景当前最空白（2026-09-04实测：全网不存在含蛇口网谷的三方对比内容），转化价值最高，建议首批。</p>
+      <p class="muted" style="margin-top:8px">对比竞品场景通常最空白（多数园区全网不存在含自己的三方对比内容），转化价值最高，建议首批——是否空白以「监测→引用诊断」数据为准。</p>
     </div>
   </div>
 
@@ -422,7 +422,7 @@
     <div class="card" style="margin-bottom:16px">
       <h3>怎么用</h3>
       <ul class="rule-list">
-        <li><b>对话AI：</b>复制提示词 → 粘贴到豆包 / DeepSeek / Kimi / 元宝 / ChatGPT 新对话即可；内置 2026-08 引擎规则与招商产园背景。</li>
+        <li><b>对话AI：</b>复制提示词 → 粘贴到豆包 / DeepSeek / Kimi / 元宝 / ChatGPT 新对话即可；内置 2026-08 引擎规则；提示词背景按当前项目自动生成（项目设置里的城市/产业/竞品会写进去）。</li>
         <li><b>本机 AI 助手：</b>已装  <b class="num" style="color:var(--color-accent)"></b>，可直接执行：出方案 / 改写内容并评分 / 导出报告。</li>
         <li><b>提示词更新：</b>随系统知识库同步维护，复制即用，无需配置。</li>
       </ul>
@@ -469,7 +469,7 @@
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
         <button class="btn btn-primary" id="mSave">保存记录</button>
         <button class="btn btn-ghost" id="batchPasteBtn">批量粘贴录入（Excel/记事本）</button>
-        <button class="btn btn-ghost" id="parseBtn">贴答案自动填（本机AI解析）</button>
+        <button class="btn btn-ghost" id="parseBtn">贴答案自动填</button>
       </div>
     </div>
   </div>
@@ -630,12 +630,59 @@
       </div>
       <label class="full lb" id="npUrlLb">官方承载页域名（可后补，用于一键诊断）<input id="npUrl" class="inp" placeholder="www.example.com" maxlength="120"></label>
       <label class="full lb">品牌词（品牌词搜索验证用）<input id="npBrand" class="inp" placeholder="如：南京金融城" maxlength="60"></label>
-      <label class="full lb">运营主体（生成物料时的归属表述，可改）<input id="npOperator" class="inp" value="招商蛇口产业园区（招商产园）" maxlength="60"></label>
-      <label class="full lb">自有域名（每行一个——用于自有渠道判定、AI 引用中来自自有渠道的比例与品牌词搜索）<textarea id="npOwn" class="inp" rows="3" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号）"></textarea></label>
+      <label class="full lb">城市/片区（生成选址类问题与物料用）<input id="npCity" class="inp" placeholder="如：深圳南山 / 南京河西" maxlength="40"></label>
+      <label class="full lb">主导产业（逗号分隔，最多5个——生成产业类问题与物料用）<input id="npInd" class="inp" placeholder="如：数字经济、人工智能、生命科学" maxlength="80"></label>
+      <label class="full lb">主要竞品（顿号或逗号分隔，2–5个——生成对比类问题与竞品参照线用）<input id="npComp" class="inp" placeholder="如：深圳湾科技园、天安数码城" maxlength="120"></label>
+      <label class="full lb">运营主体（生成物料时的归属表述，可留空）<input id="npOperator" class="inp" placeholder="如：招商蛇口产业园区（招商产园）" maxlength="60"></label>
+      <div class="full lb">问题矩阵档位（监测用；之后可改）
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px" id="npTierBox">
+          <label class="chip" style="cursor:pointer"><input type="radio" name="npTier" value="park" checked style="margin-right:4px">完整版 30 问（园区/多项目）</label>
+          <label class="chip" style="cursor:pointer"><input type="radio" name="npTier" value="lite" style="margin-right:4px">轻量版 12 问（单楼宇/单体项目）</label>
+        </div>
+      </div>
+      <label class="full lb">自有域名（每行一个——用于自有渠道判定、AI 引用中来自自有渠道的比例与品牌词搜索）<textarea id="npOwn" class="inp" rows="3" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号，有就填）"></textarea></label>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
       <button class="btn btn-ghost" id="npCancel" type="button">取消</button>
       <button class="btn btn-primary" id="npSubmit" type="button">创建项目</button>
+    </div>
+  </div>
+</div>
+
+<!-- V5 项目设置弹窗（形态/档位/城市/产业/竞品/运营主体随时可改） -->
+<div class="modal-mask" id="projEditModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="项目设置">
+    <h3 style="margin-top:0">项目设置</h3>
+    <p class="muted" style="font-size:var(--text-sm);margin-top:-6px">生成问题矩阵、物料与对比参照都取这些信息；改完保存立即生效。</p>
+    <div class="form-grid">
+      <label class="full lb">项目名称<input id="peName" class="inp" maxlength="60"></label>
+      <label class="full lb">品牌词<input id="peBrand" class="inp" maxlength="60"></label>
+      <div class="full lb">承载形态（决定体检路线与分母：无官网=24项，有=30项）
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px" id="peMode">
+          <label class="chip" style="cursor:pointer"><input type="radio" name="peMode" value="own" style="margin-right:4px">有自己的官网</label>
+          <label class="chip" style="cursor:pointer"><input type="radio" name="peMode" value="parent" style="margin-right:4px">挂在上级单位官网</label>
+          <label class="chip" style="cursor:pointer"><input type="radio" name="peMode" value="none" style="margin-right:4px">无官网（实体体检路线）</label>
+        </div>
+      </div>
+      <label class="full lb">官方承载页域名<input id="peUrl" class="inp" placeholder="www.example.com" maxlength="120"></label>
+      <label class="full lb">城市/片区<input id="peCity" class="inp" placeholder="如：深圳南山" maxlength="40"></label>
+      <label class="full lb">主导产业（逗号分隔）<input id="peInd" class="inp" placeholder="如：数字经济、人工智能" maxlength="80"></label>
+      <label class="full lb">主要竞品（逗号分隔，2–5个——对比类问题与竞品参照线用）<input id="peComp" class="inp" placeholder="如：深圳湾科技园、天安数码城" maxlength="120"></label>
+      <label class="full lb">运营主体<input id="peOperator" class="inp" placeholder="如：××集团产业园区事业部" maxlength="60"></label>
+      <label class="full lb">自有域名（每行一个）<textarea id="peOwn" class="inp" rows="2" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号，有就填）"></textarea></label>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <span class="lb" style="margin:0">问题矩阵档位</span>
+      <select id="peTier" class="sel" style="width:auto">
+        <option value="park">完整版 30 问（园区/多项目）</option>
+        <option value="lite">轻量版 12 问（单楼宇/单体）</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" id="peRebuild">按此档位重新生成问题矩阵</button>
+    </div>
+    <p class="muted" style="font-size:var(--text-xs);margin:6px 0 0">重新生成会覆盖问题矩阵的手动编辑（已录台账与曲线不受影响）；只在换了档位或补齐城市/产业/竞品后需要。</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-ghost" id="peCancel" type="button">取消</button>
+      <button class="btn btn-primary" id="peSave" type="button">保存</button>
     </div>
   </div>
 </div>
@@ -701,9 +748,9 @@
   </div>
 </div>
 
-<script src="js/data.js?v=4.7.3"></script>
-<script src="js/app.js?v=4.7.3"></script>
-<script src="js/ops.js?v=4.7.7"></script>
+<script src="js/data.js?v=5.0.0"></script>
+<script src="js/app.js?v=5.0.0"></script>
+<script src="js/ops.js?v=5.0.0"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -719,6 +766,6 @@
   })();
 </script>
 <script src="js/chat-kb.js?v=4.7.3"></script>
-<script src="js/chat.js?v=4.4"></script>
+<script src="js/chat.js?v=5.0.0"></script>
 </body>
 </html>

@@ -30,3 +30,6 @@ V2.1 招商产园GEO智控系统V2.html
 # Python 缓存
 __pycache__/
 *.pyc
+
+# CodeGraph 本地索引（codegraph init 生成）
+.codegraph/

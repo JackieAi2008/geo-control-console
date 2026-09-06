@@ -10,11 +10,12 @@ const today = () => new Date().toISOString().slice(0, 10);
 const STORE_KEY = "geodesk.v3";                 // 旧单项目键（迁移源，保留兜底）
 const PKEY = "geodesk.projects";                // V4 项目层：{list, current}
 const DEFAULT_OWN = ["cmsk1979.com", "cmhk.com", "mp.weixin.qq.com", "weixin.qq.com"];
-const defaultState = (fresh) => ({
+const defaultState = (fresh, meta) => ({
   audit: Object.fromEntries(GEO.audit.flatMap(d => d.items.map(i => [i.id, 0]))),
   caliber: fresh ? [] : JSON.parse(JSON.stringify(GEO.caliberSeed)),   // 新项目不带蛇口网谷口径种子
-  prompts: GEO.prompts.map(p => ({ id: p.id, cat: p.cat, q: p.q,
-    severity: { "对比竞品": 5, "选址决策": 4, "品牌认知": 3, "产业服务": 3 }[p.cat] || 3 })),  // V4：severity 种子（1b 起监测工具读 state.prompts）
+  prompts: fresh ? instPrompts(meta || {}, (meta || {}).matrixTier)    // V5：新项目按元数据实例化模板（不再继承蛇口30问）
+                 : GEO.prompts.map(p => ({ id: p.id, cat: p.cat, q: p.q,
+      severity: { "对比竞品": 5, "选址决策": 4, "品牌认知": 3, "产业服务": 3 }[p.cat] || 3 })),  // 非 fresh 仅作老项目/本地模式兼容基底
   ledger: [],
   battlefield: {},
   planInputs: {},
@@ -40,19 +41,45 @@ function entMode() {
   return (p.url || "").trim() ? "parent" : "none";
 }
 function noSite() { return entMode() === "none"; }
-/* V4.2 模板参数化：所有生成器/文案的园区·城市·产业·运营主体统一从这里取值，禁止再硬编码具体园区名 */
 function projCtx() {
-  const p = curProject();
-  const op = (p.operator || "招商蛇口产业园区（招商产园）").trim();
+  const p = curProject() || {};
+  const op = (p.operator || "").trim();
   return {
     park: (p.brand || p.name || "本园区").trim(),
-    city: (state && state.planInputs && state.planInputs.city) || "",
-    industry: (state && state.planInputs && state.planInputs.industry) || "",
+    city: (p.city || "").trim(),
+    industry: (p.industries && p.industries[0]) || "",
+    competitors: (p.competitors || []).slice(0, 5),
     operator: op,
     operatorShort: op.replace(/（.*?）/g, "")
   };
 }
+/* V5 通用化文案本地化：知识库答案/Agent提示词里的种子项目（蛇口网谷）表述，
+ * 仅在当前项目不是种子项目时替换为当前项目语境；蛇口网谷项目本身保持原文（背景对它是正确的）。 */
+function isSeedParkCtx() {
+  const p = curProject() || {};
+  return (p.operator || "").includes("招商蛇口") || (p.brand || p.name || "") === "蛇口网谷";
+}
+function seedLocalize(text) {
+  if (!text || isSeedParkCtx()) return text;
+  const ctx = projCtx();
+  const op = ctx.operator || ctx.park;
+  let s = String(text);
+  s = s.split("招商蛇口产业园区（招商产园）").join(op);
+  s = s.split("招商产园").join(op);
+  s = s.split("蛇口网谷").join(ctx.park);
+  s = s.replace(/5）招商产园背景：[\s\S]*?(?=【工作方式】)/,
+    `5）项目背景：${ctx.park}（${ctx.city || "城市待补"}，主导${ctx.industry || "产业待补"}）${ctx.competitors.length ? "；主要竞品：" + ctx.competitors.join("、") : ""}。涉及本项目的事实一律以系统口径表为准，不确定时明说。\n`);
+  return s;
+}
 function saveProjectsMeta() { try { localStorage.setItem(PKEY, JSON.stringify({ list: PROJECTS, current: CUR })); } catch (e) {} }
+/* V5：更新当前项目元数据（本地 PROJECTS 即时生效；服务器模式落库）。partial 只含变更字段。 */
+async function saveProjMeta(partial) {
+  const p = PROJECTS.find(x => x.id === CUR);
+  if (!p) return;
+  Object.assign(p, partial);
+  saveProjectsMeta();
+  if (SERVER_MODE) await API.updateProject(Object.assign({ id: CUR }, partial));
+}
 function loadCurrentState() {
   try { state = Object.assign(defaultState(), JSON.parse(localStorage.getItem(projKey(CUR)) || "{}")); }
   catch (e) { state = defaultState(); }
@@ -96,8 +123,21 @@ function migrateProbes() {
 const SEV_SEED = { "对比竞品": 5, "选址决策": 4, "品牌认知": 3, "产业服务": 3 };
 function P_prompts() {
   if (state.prompts && state.prompts.length) return state.prompts;
-  state.prompts = GEO.prompts.map(p => ({ id: p.id, cat: p.cat, q: p.q, severity: SEV_SEED[p.cat] || 3 }));
+  /* V5 通用化：空矩阵不再继承蛇口种子，按当前项目元数据实例化模板 */
+  state.prompts = instPrompts(curProject() || {}, (curProject() || {}).matrixTier);
   return state.prompts;
+}
+/* V5 模板实例化器：项目元数据 → 问题矩阵（缺参走各模板自带兜底问法） */
+function instPrompts(meta, tier) {
+  const bank = (GEO.promptTemplates || {})[tier] || (GEO.promptTemplates || {}).park || [];
+  const m = {
+    park: (meta.brand || meta.name || "本项目").trim(),
+    city: (meta.city || "").trim(),
+    industry: (meta.industries || []).map(s => String(s).trim()).filter(Boolean),
+    competitors: (meta.competitors || []).map(s => String(s).trim()).filter(Boolean),
+    operator: (meta.operator || "").trim(),
+  };
+  return bank.map(t => ({ id: t.id, cat: t.cat, q: t.q(m), severity: SEV_SEED[t.cat] || 3 }));
 }
 function P_cats() { const c = [...new Set(P_prompts().map(p => p.cat))]; return c.length ? c : GEO.promptCats; }
 
@@ -276,6 +316,10 @@ async function submitNewProject() {
     brand: $("#npBrand").value.trim().slice(0, 60),
     operator: ($("#npOperator") ? $("#npOperator").value.trim() : "").slice(0, 60),
     entityMode: mode,
+    city: ($("#npCity") ? $("#npCity").value.trim() : "").slice(0, 40),
+    industries: ($("#npInd") ? $("#npInd").value : "").split(/[,，、;；\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 5),
+    competitors: ($("#npComp") ? $("#npComp").value : "").split(/[,，、;；\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 5),
+    matrixTier: (document.querySelector('input[name="npTier"]:checked') || {}).value || "park",
     ownDomains: $("#npOwn").value.split(/[\n,，;；]+/).map(s => s.trim()).filter(Boolean).slice(0, 20),
     createdAt: today(),
   };
@@ -290,21 +334,15 @@ async function submitNewProject() {
   }
   CUR = meta.id; saveProjectsMeta();
   REV_BASE = 0; SERVER_BASE = null;   /* V4修复①：新项目系统 rev 从 0 起，必须重置乐观锁起始数据（否则沿用上一项目 REV_BASE → 永久 409） */
-  state = defaultState(true);
+  state = defaultState(true, meta);
   state.entityMode = mode;            /* V4.5：快照分母感知承载形态（none 时 T1–T6 不计分） */
   state.probesBackfilled = true;   /* V4修复③（正确层级）：新建项目无 V3 历史note，免填入；老项目state无此键→正常填入 */
   save();
   $("#projModal").hidden = true;
-  /* V4.2：新项目自动把30问矩阵里的种子园区名（蛇口网谷）替换为本项目名，避免监测语义污染 */
-  const parkName = meta.brand || meta.name;
-  if (parkName && parkName !== "蛇口网谷") {
-    let n = 0;
-    P_prompts().forEach(p => { if (p.q.includes("蛇口网谷")) { p.q = p.q.split("蛇口网谷").join(parkName); n++; } });
-    if (n) save();
-  }
+  /* V5：新建即按元数据实例化问题矩阵（模板自带兜底问法，不再需要 V4.2 的名字替换补丁） */
   renderProjectContext(); renderAllViews();
   go("dashboard");
-  toast(`项目「${meta.name}」已创建${parkName && parkName !== "蛇口网谷" ? "，30问已替换为本园区口径" : ""}。下一步：${mode === "none" ? "诊断 → 一键诊断 → 实体体检（用品牌词查网上存在感）" : "诊断 → 一键诊断；再到口径表 建立本项目唯一事实源"}`);
+  toast(`项目「${meta.name}」已创建，30问矩阵已按本项目生成。下一步：${mode === "none" ? "诊断 → 一键诊断 → 实体体检（用品牌词查网上存在感）" : "诊断 → 一键诊断；再到口径表 建立本项目唯一事实源"}`);
 }
 let state = {};   /* 由 initProjects() → loadCurrentState() 按 CUR 填充（调用在文件末尾，save 定义之后，避免 TDZ） */
 /* save() 定义在服务器模式区块（本地即时存 + 服务器防抖同步） */
@@ -440,13 +478,19 @@ async function initServerMode() {
       if (!lm) continue;
       const diff = (lm.name && lm.name !== sp.name) || ((lm.brand || "") !== (sp.brand || "")) ||
         ((lm.operator || "") !== (sp.operator || "")) || ((lm.entityMode || "") !== (sp.entityMode || "")) ||
+        ((lm.city || "") !== (sp.city || "")) || JSON.stringify(lm.industries || []) !== JSON.stringify(sp.industries || []) ||
+        JSON.stringify(lm.competitors || []) !== JSON.stringify(sp.competitors || []) || ((lm.matrixTier || "park") !== (sp.matrixTier || "park")) ||
         JSON.stringify(lm.ownDomains || []) !== JSON.stringify(sp.ownDomains || []);
-      if (diff) await API.updateProject({ id: sp.id, name: lm.name, brand: lm.brand || "", operator: lm.operator || "", entityMode: lm.entityMode || "", ownDomains: lm.ownDomains || sp.ownDomains || [] });
+      if (diff) await API.updateProject({ id: sp.id, name: lm.name, brand: lm.brand || "", operator: lm.operator || "", entityMode: lm.entityMode || "",
+        city: lm.city || "", industries: lm.industries || [], competitors: lm.competitors || [], matrixTier: lm.matrixTier || "park",
+        ownDomains: lm.ownDomains || sp.ownDomains || [] });
     }
     const fresh = await API.projects();
     /* V4.6 活跃/归档分离：PROJECTS=可进入项目；ARCHIVED_PROJS=项目库「含已归档」开关下灰显+可恢复 */
     const mapP = p => ({ id: p.id, name: p.name, url: p.url || "", brand: p.brand || "",
                          operator: p.operator || "", entityMode: p.entityMode || "", archived: !!p.archived,
+                         city: p.city || "", industries: p.industries || [], competitors: p.competitors || [],
+                         matrixTier: p.matrixTier || "park",
                          ownDomains: p.ownDomains || [], createdAt: p.createdAt });
     ARCHIVED_PROJS = fresh.projects.filter(p => p.archived).map(mapP);
     PROJECTS = fresh.projects.filter(p => !p.archived).map(p => {
@@ -568,8 +612,8 @@ function ledgerStats() {
   const posBase = ans.filter(r => +r.mention > 0);
   const pos = posBase.length ? posBase.reduce((a, r) => a + (+r.sentiment || 0), 0) / posBase.length : null;
     const withUrl = ans.filter(r => (r.url || "").trim());
-    const OWN = curOwn();   /* V4：引用份额按当前项目自有域名计算 */
-  const own = withUrl.filter(r => OWN.some(d => (r.url || "").includes(d)));
+    const OWN = curOwn();   /* V4：引用份额按当前项目自有域名计算；V5：hostname 后缀匹配（与 server _own_hit 同口径） */
+  const own = withUrl.filter(r => { try { const h = new URL(r.url).hostname.toLowerCase(); return OWN.some(d => h === d.toLowerCase() || h.endsWith("." + d.toLowerCase())); } catch (e) { return false; } });
   return { n:L.length, ansN:ans.length, mention, pos, engines:new Set(L.map(r => r.engine)), share: withUrl.length ? own.length / withUrl.length : null };
 }
 function heatData() {
@@ -1218,9 +1262,12 @@ function sevPromptAssistant(onDone) {
 
 /* ══ V4 3.4 贴答案自动填（/api/parse，人确认后才入库）══ */
 function competitorCandidates() {
+  /* V5：项目设置配置的竞品置顶，台账高频共现补充（去重） */
   const freq = {};
   (state.ledger || []).forEach(r => (r.cooccur || []).forEach(c => { freq[c] = (freq[c] || 0) + 1; }));
-  return Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, 8);
+  const fromLedger = Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, 8);
+  const fromMeta = (curProject().competitors || []).slice(0, 5);
+  return [...new Set([...fromMeta, ...fromLedger])].slice(0, 10);
 }
 function openParseModal() {
   $("#parseModal").hidden = false;
@@ -1232,7 +1279,7 @@ async function runParseFill() {
   const text = $("#pmTa").value.trim();
   if (!text) { toast("先粘贴 AI 回答原文"); return; }
   const btn = $("#pmRun"); btn.classList.add("is-busy"); btn.textContent = "解析中…";
-  $("#pmOut").innerHTML = '<p class="muted">本机模型解析中（约5–20秒）…</p>';
+  $("#pmOut").innerHTML = '<p class="muted">模型解析中（约5–20秒）…</p>';
   let d;
   try {
     const r = await fetch("/api/parse", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -1303,7 +1350,12 @@ render.dashboard = () => {
   /* 起始数据观察 */
   const LV = { ok:["tag-ok","✓"], warn:["tag-warn","⚠"], bad:["tag-bad","✗"], risk:["tag-bad","✗"] };
   /* V4.2：蛇口网谷基线发现是种子项目的静态快照，只在对应项目显示；其他项目给数据驱动的占位 */
+  /* V4.2：蛇口网谷基线发现是种子项目的静态快照，只在对应项目显示；其他项目给数据驱动的占位
+     V5：卡片副标题（hint）同样按项目切换（此前只换了内容没换标题——非种子项目仍显示蛇口快照标题） */
   const _isSeedPark = CUR === "p_default" || /蛇口网谷/.test(curProject().brand || "") || /蛇口网谷/.test(curProject().name || "");
+  const bh = $("#dashBaseHint");
+  if (bh) bh.textContent = _isSeedPark ? "蛇口网谷信源侧静态快照（2026-09-04）· 有时效，以最新一键诊断为准"
+                                       : "本园区的起始数据要点（完成一键诊断与首轮30问后自动汇总）";
   $("#dashBase").innerHTML = _isSeedPark ? GEO.baselineNotes.map(b =>
     `<li><span class="tag ${LV[b.level][0]}">${LV[b.level][1]} ${esc(b.cat)}</span><span style="margin-left:6px">${esc(b.finding)}</span></li>`).join("")
     : `<li><span class="tag tag-info">i</span><span style="margin-left:6px">本项目暂无基线发现——完成「一键诊断」和一轮「30问监测」后，这里汇总本园区的起始数据要点。</span></li>`;
@@ -1379,6 +1431,7 @@ function renderProjectCards(useServer) {
       ${woPending ? `<span class="pc-todo">⚠ ${woPending} 件工单待验收</span>` : ""}
       ${warn.length ? `<span class="pc-warn">${warn.slice(0, 2).map(w => `<span class="tag tag-warn">⚠ ${esc(w)}</span>`).join("")}</span>` : ""}
       <span class="pc-go">进入工作台 →</span>
+      <span class="pc-arch" data-set="${esc(p.id)}" title="修改项目信息（形态/城市/产业/竞品等）" role="button" tabindex="0">设置</span>
       <span class="pc-arch" data-arch="${esc(p.id)}" title="归档（数据保留，可恢复）" role="button" tabindex="0">归档</span>
     </button>`;
   }).join("");
@@ -1412,6 +1465,8 @@ async function refreshProjectsFromServer() {
     SERVER_SUM = d.projects;
     const mapP = p => ({ id: p.id, name: p.name, url: p.url || "", brand: p.brand || "",
                          operator: p.operator || "", entityMode: p.entityMode || "", archived: !!p.archived,
+                         city: p.city || "", industries: p.industries || [], competitors: p.competitors || [],
+                         matrixTier: p.matrixTier || "park",
                          ownDomains: p.ownDomains || [], createdAt: p.createdAt });
     const oldOpen = Object.fromEntries(PROJECTS.map(p => [p.id, p.lastOpen]));
     ARCHIVED_PROJS = d.projects.filter(p => p.archived).map(mapP);
@@ -1452,6 +1507,76 @@ function bindProjCardEvents(useServer) {
     renderProjectCards(useServer && !!SERVER_SUM);
     toast("已归档（在「含已归档」开关下可随时恢复）");
   }));
+  /* V5：项目设置（形态/城市/产业/竞品/档位随时可改） */
+  $$("#projGrid [data-set]").forEach(el => el.addEventListener("click", e => {
+    e.stopPropagation();
+    openProjEdit(el.dataset.set);
+  }));
+}
+/* V5 项目设置弹窗 */
+function openProjEdit(pid) {
+  const p = PROJECTS.find(x => x.id === pid) || ARCHIVED_PROJS.find(x => x.id === pid);
+  if (!p) return;
+  $("#peName").value = p.name || "";
+  $("#peBrand").value = p.brand || "";
+  const mode = p.entityMode || entMode();
+  const mEl = document.querySelector(`input[name="peMode"][value="${mode === "own" ? "own" : mode === "none" ? "none" : "parent"}"]`);
+  if (mEl) mEl.checked = true;
+  $("#peUrl").value = p.url || "";
+  $("#peCity").value = p.city || "";
+  $("#peInd").value = (p.industries || []).join("、");
+  $("#peComp").value = (p.competitors || []).join("、");
+  $("#peOperator").value = p.operator || "";
+  $("#peOwn").value = (p.ownDomains || []).join("\n");
+  $("#peTier").value = p.matrixTier || "park";
+  $("#projEditModal").dataset.pid = pid;
+  $("#projEditModal").hidden = false;
+}
+async function saveProjEdit() {
+  const pid = $("#projEditModal").dataset.pid;
+  const p = PROJECTS.find(x => x.id === pid);
+  if (!p) return;
+  const modeEl = document.querySelector('input[name="peMode"]:checked');
+  const partial = {
+    name: $("#peName").value.trim().slice(0, 60) || p.name,
+    brand: $("#peBrand").value.trim().slice(0, 60),
+    entityMode: modeEl ? modeEl.value : p.entityMode,
+    url: (modeEl && modeEl.value === "none") ? "" : $("#peUrl").value.trim().slice(0, 120),
+    city: $("#peCity").value.trim().slice(0, 40),
+    industries: $("#peInd").value.split(/[,，、;；\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 5),
+    competitors: $("#peComp").value.split(/[,，、;；\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 5),
+    operator: $("#peOperator").value.trim().slice(0, 60),
+    ownDomains: $("#peOwn").value.split(/[\n,，;；]+/).map(s => s.trim()).filter(Boolean).slice(0, 20),
+    matrixTier: $("#peTier").value === "lite" ? "lite" : "park",
+  };
+  await saveProjMetaFor(pid, partial);
+  if (CUR === pid) { state.entityMode = partial.entityMode; save(); renderProjectContext(); renderAllViews(); }
+  $("#projEditModal").hidden = true;
+  renderProjectCards(SERVER_MODE && !!SERVER_SUM);
+  toast("项目信息已保存" + (partial.entityMode === "none" ? "（体检分母已按 24 项口径）" : ""));
+}
+async function rebuildPromptsByTier() {
+  const pid = $("#projEditModal").dataset.pid;
+  const p = PROJECTS.find(x => x.id === pid);
+  if (!p) return;
+  const tier = $("#peTier").value === "lite" ? "lite" : "park";
+  /* 保存当前表单值（重建矩阵要用最新元数据） */
+  await saveProjEdit();
+  if (!confirm(`按「${tier === "lite" ? "轻量版 12 问" : "完整版 30 问"}」重新生成问题矩阵？\n（会覆盖问题矩阵里的手动编辑；已录台账与曲线不受影响）`)) return;
+  if (CUR === pid) {
+    state.prompts = instPrompts(p, tier);
+    save();
+    toast(`问题矩阵已重新生成（${state.prompts.length} 问）——到「监测」查看`);
+    go("monitor");
+  }
+}
+/* 按指定项目更新元数据（saveProjMeta 只管当前项目） */
+async function saveProjMetaFor(pid, partial) {
+  const p = PROJECTS.find(x => x.id === pid);
+  if (!p) return;
+  Object.assign(p, partial);
+  saveProjectsMeta();
+  if (SERVER_MODE) await API.updateProject(Object.assign({ id: pid }, partial));
 }
 render.projects = () => {
   /* V4.7 欢迎页：空库必显；有项目时仅本机首次访问显示（新同事第一次进来看得懂系统是什么，
@@ -2020,10 +2145,11 @@ render.agents = () => {
     </div>`).join("");
   $$("#agentGrid [data-agent]").forEach(b => b.addEventListener("click", () => {
     const a = GEO.agents.find(x => x.id === b.dataset.agent);
+    const promptTxt = seedLocalize(a.prompt);   /* V5：非种子项目注入本项目背景 */
     $("#agentDetail").hidden = false;
     $("#agentTitle").textContent = a.name;
-    $("#agentPrompt").textContent = a.prompt;
-    $("#agentCopy").onclick = () => copyText(a.prompt);
+    $("#agentPrompt").textContent = promptTxt;
+    $("#agentCopy").onclick = () => copyText(promptTxt);
     $("#agentDetail").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }));
 };
@@ -2075,6 +2201,10 @@ function bind() {
   });
   $("#npCancel").addEventListener("click", () => { $("#projModal").hidden = true; });
   $("#npSubmit").addEventListener("click", submitNewProject);
+  /* V5 项目设置弹窗 */
+  $("#peCancel").addEventListener("click", () => { $("#projEditModal").hidden = true; });
+  $("#peSave").addEventListener("click", saveProjEdit);
+  $("#peRebuild").addEventListener("click", rebuildPromptsByTier);
   $("#npName").addEventListener("keydown", e => { if (e.key === "Enter") submitNewProject(); });
 
   /* V4.6 项目库工具栏：新建按钮 / 搜索（防抖）/ 形态与状态 chips（委托）/ 排序 / 含归档开关 */

@@ -28,7 +28,7 @@ async function opsDiagnose() {
   const mode = dgMode();
   const url = $("#dgUrl").value.trim(), brand = $("#dgBrand").value.trim();
   if (mode === "site" && !url) { toast("请先填写官方承载页域名（如 www.cmsk1979.com）；确实没有官网就切「实体体检」"); return; }
-  if (mode === "entity" && !brand) { toast("实体体检以品牌词为检查对象，请先填写品牌词（如：万海大厦）"); return; }
+  if (mode === "entity" && !brand) { toast(`实体体检以品牌词为检查对象，请先填写品牌词（如：${projCtx().park}）`); return; }
   const btn = $("#dgRun");
   btn.classList.add("is-busy"); btn.textContent = mode === "site" ? "真实探测中（约10–30秒）…" : "真实搜索中（约5–15秒）…";
   $("#dgOut").innerHTML = mode === "site"
@@ -130,11 +130,11 @@ function genRobotsTxt() {
     OPS_BOTS.map(b => `User-agent: ${b}\nAllow: /`).join("\n\n");
 }
 function genLlmsTxt(park, url) {
-  const op = (typeof projCtx === "function") ? projCtx().operator : "招商蛇口产业园区（招商产园）";
+  const op = (typeof projCtx === "function" ? projCtx().operator : "") || "【待补：运营主体全称（项目设置里填）】";
   return `# ${park}\n\n> 官方承载页 https://${url}/ · 运营方：${op}\n\n## 核心事实（数据时点见口径表）\n- 入驻企业：【见口径表】\n- 产业聚集度：【见口径表】\n\n## 页面导航\n- [官方承载页](https://${url}/)\n\n<!-- 更新时间 ${today()} -->`;
 }
 function genSchema(park, url, city, industry) {
-  const op = (typeof projCtx === "function") ? projCtx().operator : "招商蛇口产业园区（招商产园）";
+  const op = (typeof projCtx === "function" ? projCtx().operator : "") || "【待补：运营主体】";
   return `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "description": "${park}是${city}${industry}产业园区。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", "产业园区", "企业选址"]\n}\n</script>`;
 }
 /* V4.5 无官网实体物料（不依赖官网承载页，品宣自己可执行）*/
@@ -158,10 +158,18 @@ function cycleRst(ts, id) {
   if (RST[(cur + 1) % RST.length] === "已验收") addEvent("wo", `工单验收 ${id}`, today());   /* V4 2.2：验收事件上曲线 */
   save(); render.report();
 }
+/* V5 工单事实层（通用化红线）：what 一律写该次诊断的真实证据；种子卡里蛇口实况描述不再使用。
+ * 无证据=该项未被本轮体检覆盖 → 明示引导去跑体检，绝不编造"官网缺XX"之类的假现状。 */
+function factWhat(c, e) {
+  const ev = String(c.evidence || "").trim();
+  if (ev) return ev;
+  return `本次体检没有覆盖到这项。先到「诊断 → ${e && e.mode === "entity" ? "实体体检" : "一键诊断"}」跑一次（约10–30秒），这里会自动写明本项目的实际情况。`;
+}
 function woParts(e) {
-  const park = e.brand || ([...new Set(state.caliber.map(r => r.park))][0] || "园区").split("（")[0];
-  const city = (state.planInputs && state.planInputs.city) || "深圳";
-  const industry = (state.planInputs && state.planInputs.industry) || "数智科技";
+  const ctx = projCtx();
+  const park = e.brand || (ctx.park !== "本园区" ? ctx.park : "园区");
+  const city = ctx.city || "【待补：城市，见项目设置】";
+  const industry = ctx.industry || "【待补：主导产业，见项目设置】";
   const issues = (e.checks || []).filter(c => c.status !== "pass");
   const byOrder = GEO.woOrder.map(id => issues.find(c => c.id === id)).filter(Boolean)
     .concat(issues.filter(c => !GEO.woOrder.includes(c.id)));
@@ -173,9 +181,10 @@ function woParts(e) {
 function woCard(c, e, idx) {
   const raw = GEO.woPlain[c.id] || {};
   const parkNow = woParts(e).park;
-  /* V4.6.1 行动卡项目化：种子卡文案里的「蛇口网谷」替换为本项目名（与生成器模板参数化同一红线） */
+  /* V4.6.1 行动卡项目化：种子卡文案里的「蛇口网谷」替换为本项目名（与生成器模板参数化同一红线）
+     V5：what 走 factWhat（该次诊断真实证据），只有 title/why/steps 保留通用模板+名字替换 */
   const sub = s => String(s).split("蛇口网谷").join(parkNow);
-  const p = { title: sub(raw.title), what: sub(raw.what), why: sub(raw.why), who: raw.who, steps: (raw.steps || []).map(sub) };
+  const p = { title: sub(raw.title), what: factWhat(c, e), why: sub(raw.why), who: raw.who, steps: (raw.steps || []).map(sub) };
   const isSelf = (e.mode === "entity") || c.id === "E2a";
   const mat = c.id === "T4" ? genSchema(parkNow, e.url, woParts(e).city, woParts(e).industry)
     : c.id === "T5" ? genLlmsTxt(parkNow, e.url)
@@ -243,9 +252,9 @@ function buildWorkOrderHtml(e) {
 }
 function workOrderMd(e) {
   const { issues, SELF, IT, isEnt, park: parkNow } = woParts(e);
-  /* V4.6.1 行动卡项目化（与 woCard 同规则）：种子文案「蛇口网谷」→本项目名 */
+  /* V4.6.1 行动卡项目化（与 woCard 同规则）：种子文案「蛇口网谷」→本项目名；V5：what 走 factWhat */
   const card = c => { const r = GEO.woPlain[c.id] || {}; const sub = s => String(s).split("蛇口网谷").join(parkNow);
-    return { title: sub(r.title) || c.name, what: sub(r.what), steps: (r.steps || []).map(sub) }; };
+    return { title: sub(r.title) || c.name, what: factWhat(c, e), steps: (r.steps || []).map(sub) }; };
   let md = `# 整改行动清单（共${issues.length}件事，按重要程度排序）\n> 基于 ${e.ts} ${isEnt ? "实体体检" : "诊断"} · ${e.mode === "entity" ? `品牌词「${e.brand || e.url}」` : e.url}\n\n${isEnt ? "## 执行清单（贴进工作群）" : "## 给网站管理员的转发消息（直接粘贴）"}\n\n${buildItMessage(e)}\n`;
   let n = 0;
   SELF.forEach(c => { n++; const p = card(c); md += `\n## 第${n}件事（自己做）· ${p.title}\n${p.what || ""}\n怎么做：\n${p.steps.map(s => "- " + s).join("\n")}\n验收：重跑${e.mode === "entity" ? "实体体检" : "诊断"}/30问\n`; });
@@ -267,8 +276,11 @@ function woPrintDoc(e) {
 function opsBuildToolkit() {
   const ctx = projCtx();
   const park = $("#tkPark").value.trim() || ctx.park || "试点园区";
-  const city = $("#tkCity").value.trim() || ctx.city || "深圳";
-  const industry = $("#tkIndustry").value.trim() || ctx.industry || "数智科技";
+  const city = $("#tkCity").value.trim() || ctx.city;
+  const industry = $("#tkIndustry").value.trim() || ctx.industry;
+  if (!city || !industry) { toast("城市与主导产业必填——顶部「项目设置」补一次，以后自动带出"); return; }
+  /* V5：表单值回写项目元数据（单一事实源；下次任何表单自动带出） */
+  saveProjMeta({ city: city.slice(0, 40), industries: industry.split(/[,，、;；\s]+/).filter(Boolean).slice(0, 5) });
   const url = (state.parkUrl || curProject().url || "").trim();
   const hasSite = !!url;   /* V4.5：无官网项目不再回退假域名——官网三件物料不生成，改出百科/地图/公众号实体物料 */
   const op = ctx.operator, opShort = ctx.operatorShort;
@@ -521,21 +533,33 @@ function rptPrintDoc(e) {
 /* ══════ 渲染钩子 & 绑定（脚本置于 body 末尾，DOM 已就绪）═══════ */
 render.scan = () => {
   if (state.parkUrl) $("#dgUrl").value = state.parkUrl;
+  else { const u = (curProject().url || "").trim(); if (u) $("#dgUrl").value = u; }   /* V5：项目元数据域名兜底预填 */
+  const brandInp = $("#dgBrand");
+  if (brandInp && !brandInp.value.trim()) brandInp.value = projCtx().park;   /* V5：品牌词预填（不覆盖已输入） */
   setDgMode(dgMode());   /* V4.5：双入口默认跟随项目承载形态（无官网项目直接落在实体体检） */
   if (state.lastDiag) renderDiagResult(state.lastDiag, 0);
 };
 render.toolkit = () => {
-  /* V4.2：园区名默认值跟随当前项目（品牌词/项目名），禁止把种子项目（蛇口网谷）带进其他项目 */
+  /* V4.2：园区名默认值跟随当前项目（品牌词/项目名），禁止把种子项目（蛇口网谷）带进其他项目
+     V5：城市/主导产业一并从项目元数据预填（元数据空则留空待补，不再默认深圳/数智科技） */
   const cur = curProject();
+  const ctx = projCtx();
+  /* V5 双形态说明文案（V4.6.1 只改了工作台，此处曾漏改）：按项目承载形态三态渲染 */
+  const tkHelp = $("#tkHelpLine");
+  if (tkHelp) tkHelp.textContent = noSite()
+    ? "生成5个不依赖官网、品宣自己就能执行的文件：百科词条更新稿（数字全部取口径表）· 地图信息核对清单（约30分钟）· 一园一档公众号版 · 选址FAQ20问（过评分器再发）· 渠道分发指南。"
+    : "生成6个可直接使用的文件：网站 AI 可读配置（交网站管理员）· AI 说明文件（传官网根目录）· 结构化数据标签（贴页面）· 一园一档（内容库最小单元）· 选址FAQ20问（过评分器再发）· 渠道分发指南。";
   const want = ((cur.brand || cur.name || "") + "").split("（")[0].trim();
   if ($("#tkPark").dataset.proj !== CUR) {
     const calPark = [...new Set(state.caliber.map(r => r.park))]
       .find(pk => want && (pk.includes(want) || want.includes(pk.split("（")[0])));
     $("#tkPark").value = calPark ? calPark.split("（")[0] : want;
+    $("#tkCity").value = ctx.city; $("#tkCity").placeholder = "如：深圳南山（项目设置里补一次，以后自动带出）";
+    $("#tkIndustry").value = ctx.industry; $("#tkIndustry").placeholder = "如：数字经济、人工智能（项目设置里补一次，以后自动带出）";
     $("#tkPark").dataset.proj = CUR;
   }
   render.content();  /* 选题单 表单选项填充（复用） */
-  if ($("#channelBox").children.length === 0) renderChannels(cur.brand || cur.name || "试点园区", "数智科技");
+  if ($("#channelBox").children.length === 0) renderChannels(cur.brand || cur.name || "试点园区", ctx.industry || "");
 };
 document.addEventListener("DOMContentLoaded", () => {
   const dg = $("#dgRun"); if (dg) dg.addEventListener("click", opsDiagnose);
