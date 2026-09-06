@@ -15,7 +15,7 @@ const TOUR_LS_KEY = "geodesk.tourSeen";
 const TOUR_META = {
   id: "p_tour_demo", name: "南山大厦", url: "", brand: "南山大厦",
   operator: "（示例）南山大厦物业服务中心",
-  entityMode: "none",                     /* 单楼宇无独立官网 → 实体体检路线（轻量 12 问档） */
+  entityMode: "none",                     /* 单楼宇无独立官网 → 实体体检路线（轻量 14 问档，V6 起含 L13/L14 区位词探针） */
   city: "深圳市南山区蛇口",
   industries: ["科技企业总部", "现代服务业"],
   competitors: ["新时代广场", "海上世界商务广场"],
@@ -118,14 +118,17 @@ const TOUR_STEPS = [
   { phase: "A", chap: "第一章 · 认识系统", view: "projects", target: ["#pjWelcomeNew", "#pjNew"],
     title: "一切从一个项目开始",
     body: `系统里一个项目 = 一个要管网上形象的<b>楼宇、园区或品牌</b>。你看到的「南山大厦」卡片就是示例项目。建项目只需填几个字段：名称、是楼宇还是园区、所在城市片区、主导产业、主要竞品——2 分钟建好。`,
-    demo: `<span class="tag tag-gold">示例</span> 新建弹窗这样填：南山大厦 · 楼宇 · <b>轻量版 12 问</b>档 · 深圳市南山区蛇口 · 竞品：新时代广场等。` },
+    demo: `<span class="tag tag-gold">示例</span> 新建弹窗这样填：南山大厦 · 楼宇 · <b>轻量版 14 问</b>档（含区位词探针） · 深圳市南山区蛇口 · 竞品：新时代广场等。` },
   { phase: "A", chap: "第二章 · 建立档案", view: "diag/caliber", target: ["#caliberBody tr"],
     title: "先把「官方口径」定下来",
-    body: `新建后系统自动生成这张<b>口径骨架表</b>。锚定区三项（全称/地址/片区）防止和其他城市同名项目混淆；再把租金区间、入驻率等关键数字补齐——每个数字带时点和来源，AI 才敢引用。这张表是全系统唯一事实源：物料、百科稿、报告里的数字全部取自这里。`,
+    body: `新建后系统自动生成这张<b>口径骨架表</b>。锚定区三项（全称/地址/片区）防止和其他城市同名项目混淆；再把租金区间、入驻率等关键数字补齐——每个数字带时点和来源，AI 才敢引用。这张表是全系统唯一事实源：优化物料、百科词条更新稿的数字全部取自这里，对外发布前逐个数字对照本表。`,
     demo: `<span class="tag tag-gold">示例</span> 租金区间 120–180 元/㎡/月 · 入驻率 82%（2026-H1）——来源列均标注「示例数据」。` },
   { phase: "A", chap: "第二章 · 建立档案", view: "dashboard", target: ["#dashOnboard"],
     title: "新建之后，四步起步清单自动亮起",
     body: `填口径骨架（10 分钟）→ 跑体检（2 分钟）→ 下载百科词条更新稿（15 分钟）→ 三大地图认领（10 分钟）。做完这四步，项目在网上就有「自己的家」了——<b>你以后建的每个新项目，都会看到这张卡</b>。` },
+  { phase: "A", chap: "系统地图", view: "dashboard", target: ["#mainNav"],
+    title: "顶部导航就是全流程地图",
+    body: `<b>工作台</b>看状态与下一步 · <b>诊断Ⅰ</b>做体检与口径 · <b>执行Ⅱ</b>拿物料与方案 · <b>监测Ⅲ</b>看数据与曲线 · <b>知识库</b>查方法论。左上角芯片随时切换/返回项目。以后迷路了，看这一条就够。` },
   { phase: "B", chap: "第三章 · 体检", view: "diag/scan", target: ["#dgRun"],
     title: "体检：AI 眼里你存在吗？",
     body: `没有官网也能做——「<b>实体体检</b>」用品牌词做真实搜索（约 5–15 秒），查我们的信息在网上的存在感。右侧是南山大厦的示例结果：搜「南山大厦」，前 10 条里官方阵地 0 条。`,
@@ -140,13 +143,13 @@ const TOUR_STEPS = [
     body: `一个按钮生成全套<b>拿来就能用</b>的物料：百科词条更新稿、地图信息核对清单、一园一档（公众号版）、选址 FAQ、渠道分发指南——不依赖官网，品宣自己就能执行。下方「资产追踪」登记每次部署，改了什么一目了然。` },
   { phase: "C", chap: "第四章 · 行动与验证", view: "monitor", target: ["#curveBox"],
     title: "改了有没有用，看曲线说话",
-    body: `双周跑一轮 12 问真实搜索 + 六引擎人工实测，系统自动画曲线。示例故事：8/24 基线几乎无人提及 → 8/28 部署百科稿和公众号一园一档 → 9/6 豆包、元宝开始提及并引用公众号。曲线每点带样本量，起始数据自动锁定。` },
+    body: `双周跑一轮 14 问真实搜索（含 2 个区位词探针）+ 六引擎人工实测，系统自动画曲线。示例故事：8/24 基线几乎无人提及 → 8/28 部署百科稿和公众号一园一档 → 9/6 豆包、元宝开始提及，引用落在公众号与百科词条。曲线每点带样本量，起始数据自动锁定。` },
   { center: true, phase: "C", chap: "完成", title: "轮到你了", cta: true,
-    body: `以上全部是只读示例——真实结果以你自己的项目实际诊断为准。三件事现在就能做：<br>① 新建你的第一个项目（2 分钟）；② 想重看本指引：顶栏「?」；③ 卡住了：右下角「问」直接问助手。` },
+    body: `以上全部是只读示例——真实结果以你自己的项目实际诊断为准。三件事现在就能做：<br>① 新建你的第一个项目（2 分钟）；② 想重看本指引：顶栏「?」；③ 卡住了：右下角「问」直接问助手（首次使用按弹窗提示配一次模型密钥，约 1 分钟）。` },
 ];
 
 /* ══ 引擎 ════════════════════════════════════════════════ */
-const Tour = { active: false, idx: 0, phase: "", _real: null, _raf: 0 };
+const Tour = { active: false, idx: 0, maxIdx: 0, phase: "", _real: null, _raf: 0 };
 
 function tourTarget(st) {
   if (!st.target) return null;
@@ -182,16 +185,16 @@ function tourRenderBubble() {
                  '<button class="btn btn-primary" id="tourCta">＋ 新建我的第一个项目</button>'
                : `<button class="btn btn-primary" id="tourNext">${Tour.idx === 0 ? "开始带看" : "下一步"}</button>`}
     </div>`;
-  $("#tourSkip").onclick = () => tourEnd(true);
+  $("#tourSkip").onclick = () => tourEnd(true, "skip");
   const nx = $("#tourNext"); if (nx) nx.onclick = tourNext;
   const pv = $("#tourPrev"); if (pv) pv.onclick = tourPrev;
   const cta = $("#tourCta"); if (cta) cta.onclick = () => {
-    tourEnd(true);
+    tourEnd(true, "cta");
     go("projects");
     /* 打开真实新建弹窗（空表单、不预填示例，防止演示数据直接入库） */
     setTimeout(() => { $("#projModal").hidden = false; $("#npName").focus(); }, 100);
   };
-  const dn = $("#tourDone"); if (dn) dn.onclick = () => tourEnd(true);
+  const dn = $("#tourDone"); if (dn) dn.onclick = () => tourEnd(true, "done");
   $$("#tourBubble [data-tdot]").forEach(b => b.onclick = () => tourShow(+b.dataset.tdot));
 }
 function tourPosition() {
@@ -229,6 +232,7 @@ function tourPosition() {
 function tourShow(i) {
   if (!Tour.active) return;
   Tour.idx = Math.max(0, Math.min(TOUR_STEPS.length - 1, i));
+  Tour.maxIdx = Math.max(Tour.maxIdx, Tour.idx);   /* 漏斗：到达最深步（比退出步更能说明看到过什么） */
   const st = TOUR_STEPS[Tour.idx];
   if (st.phase && st.phase !== Tour.phase) { Tour.phase = st.phase; state = tourDemoState(st.phase); }
   if (st.view && location.hash !== "#/" + st.view) location.hash = "#/" + st.view;
@@ -240,12 +244,12 @@ function tourShow(i) {
     tourPosition();
   }, 60);
 }
-function tourNext() { Tour.idx >= TOUR_STEPS.length - 1 ? tourEnd(true) : tourShow(Tour.idx + 1); }
+function tourNext() { Tour.idx >= TOUR_STEPS.length - 1 ? tourEnd(true, "finish") : tourShow(Tour.idx + 1); }
 function tourPrev() { if (Tour.idx > 0) tourShow(Tour.idx - 1); }
 function tourOnReposition() { cancelAnimationFrame(Tour._raf); Tour._raf = requestAnimationFrame(tourPosition); }
 function tourKeys(e) {
   if (!Tour.active) return;
-  if (e.key === "Escape") { e.preventDefault(); tourEnd(true); }
+  if (e.key === "Escape") { e.preventDefault(); tourEnd(true, "esc"); }
   else if (e.key === "ArrowRight") { e.preventDefault(); tourNext(); }
   else if (e.key === "ArrowLeft") { e.preventDefault(); tourPrev(); }
   else if (e.key === "Tab") {   /* 焦点圈进气泡，不落到被遮罩的页面上 */
@@ -256,16 +260,19 @@ function tourKeys(e) {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 }
-function tourMarkSeen() {
-  try { localStorage.setItem(TOUR_LS_KEY, "1"); } catch (e) {}
+/* 漏斗埋点：exit ∈ skip(按钮)/esc/cta(新建)/done(先逛逛)/finish(键盘走完)，随 seen 一起落 kv 供运营复盘 */
+function tourMarkSeen(exit) {
+  const rec = { exit: exit || "other", step: Tour.idx, maxStep: Tour.maxIdx };
+  try { localStorage.setItem(TOUR_LS_KEY, JSON.stringify(rec)); } catch (e) {}
   try {
-    fetch("/api/onboarding/seen", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
+    fetch("/api/onboarding/seen", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rec) }).catch(() => {});
   } catch (e) {}
 }
 Tour.start = function (opts) {
   if (Tour.active) return;
   opts = opts || {};
-  Tour.active = true; Tour.phase = "";
+  Tour.active = true; Tour.phase = ""; Tour.maxIdx = 0;
   Tour._real = { projects: PROJECTS, cur: CUR, state: state, hash: location.hash };
   /* 演示态接管：项目层与状态层一起换成南山大厦示例（报头 chip/venueNoun/渲染全部跟随案例） */
   PROJECTS = [Object.assign({}, TOUR_META, { lastOpen: Date.now() })];
@@ -278,7 +285,7 @@ Tour.start = function (opts) {
   document.addEventListener("keydown", tourKeys);
   tourShow(opts.step || 0);
 };
-function tourEnd(markSeen) {
+function tourEnd(markSeen, exit) {
   if (!Tour.active) return;
   Tour.active = false;
   /* 还原用户真实状态（三个绑定全程未被穿透：save() 已在 app.js 侧守卫） */
@@ -292,7 +299,7 @@ function tourEnd(markSeen) {
   const sh = $("#tourShade"); if (sh) sh.remove();
   if (location.hash !== Tour._real.hash) location.hash = Tour._real.hash;
   renderProjectContext(); route();
-  if (markSeen) tourMarkSeen();
+  if (markSeen) tourMarkSeen(exit);
 }
 /* 首登自动弹出：?tour=force 强制 > 服务端账号级判定 > 本地 localStorage；自动化环境（webdriver）不自动弹 */
 Tour.autoStart = async function () {

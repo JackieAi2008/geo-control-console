@@ -31,7 +31,7 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "6.1.0"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处
+APP_VERSION = "6.1.1"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}
@@ -682,9 +682,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "server": "geodesk", "version": APP_VERSION})
         if path == "/api/onboarding":
             """V6.1 首登引导（账号级一次性）：kv user:onboard:<用户> 存在即看过。
-               与 localStorage 方案的区别：换设备/清缓存不重复弹；按登录账号隔离。"""
+               与 localStorage 方案的区别：换设备/清缓存不重复弹；按登录账号隔离。
+               V6.1.1 record 携带引导漏斗（exit=出口方式/step=退出步/maxStep=到达最深步），上线后可量化完成率。"""
             u = geo_user(self.headers)
-            return self._send(200, {"user": u, "show": kv_get(self.conn, "user:onboard:" + u) is None})
+            rec = kv_get(self.conn, "user:onboard:" + u)
+            return self._send(200, {"user": u, "show": rec is None, "record": rec})
         if path == "/api/llm/status":
             src, model, cfg = llm_resolve(self.conn, self.headers)
             return self._send(200, {"backend": "remote" if src in ("user", "server") else src,
@@ -768,9 +770,18 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
         if path == "/api/onboarding/seen":
-            """V6.1：标记当前账号已看过首登引导（幂等；跳过或看完都写）"""
+            """V6.1：标记当前账号已看过首登引导（幂等；跳过或看完都写）。
+               V6.1.1：body 可带引导漏斗 {exit: skip/esc/cta/done/finish, step, maxStep}。"""
             u = geo_user(self.headers)
-            kv_put(self.conn, "user:onboard:" + u, {"seenAt": time.strftime("%Y-%m-%d %H:%M:%S")})
+            try:
+                body = self._body() or {}
+            except Exception:
+                body = {}
+            rec = {"seenAt": time.strftime("%Y-%m-%d %H:%M:%S"),
+                   "exit": str(body.get("exit") or "unknown")[:12],
+                   "step": int(body.get("step") or 0),
+                   "maxStep": int(body.get("maxStep") or 0)}
+            kv_put(self.conn, "user:onboard:" + u, rec)
             return self._send(200, {"ok": True, "user": u})
         if path == "/api/projects":
             try:

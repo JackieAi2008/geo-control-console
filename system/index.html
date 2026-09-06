@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>招商产园 GEO 智控台</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
-<link rel="stylesheet" href="css/tokens.css?v=6.1.0">
-<link rel="stylesheet" href="css/app.css?v=6.1.0">
-<link rel="stylesheet" href="css/tour.css?v=6.1.0">
+<link rel="stylesheet" href="css/tokens.css?v=6.1.1">
+<link rel="stylesheet" href="css/app.css?v=6.1.1">
+<link rel="stylesheet" href="css/tour.css?v=6.1.1">
 </head>
 <body>
 
@@ -652,7 +652,7 @@
       <div class="full lb">问题矩阵档位（监测用；之后可改）
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px" id="npTierBox">
           <label class="chip" style="cursor:pointer"><input type="radio" name="npTier" value="park" checked style="margin-right:4px">完整版 30 问（园区/多项目）</label>
-          <label class="chip" style="cursor:pointer"><input type="radio" name="npTier" value="lite" style="margin-right:4px">轻量版 12 问（单楼宇/单体项目）</label>
+          <label class="chip" style="cursor:pointer"><input type="radio" name="npTier" value="lite" style="margin-right:4px">轻量版 14 问（单楼宇/单体，含区位词探针）</label>
         </div>
       </div>
       <label class="full lb">自有域名·可控阵地（每行一个：官网/公众号——能发布内容的才算）<textarea id="npOwn" class="inp" rows="2" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号，有就填）"></textarea></label>
@@ -692,7 +692,7 @@
       <span class="lb" style="margin:0">问题矩阵档位</span>
       <select id="peTier" class="sel" style="width:auto">
         <option value="park">完整版 30 问（园区/多项目）</option>
-        <option value="lite">轻量版 12 问（单楼宇/单体）</option>
+        <option value="lite">轻量版 14 问（单楼宇/单体，含区位词探针）</option>
       </select>
       <button class="btn btn-ghost btn-sm" id="peRebuild">按此档位重新生成问题矩阵</button>
     </div>
@@ -765,10 +765,10 @@
   </div>
 </div>
 
-<script src="js/data.js?v=6.1.0"></script>
-<script src="js/app.js?v=6.1.0"></script>
-<script src="js/ops.js?v=6.1.0"></script>
-<script src="js/tour.js?v=6.1.0"></script>
+<script src="js/data.js?v=6.1.1"></script>
+<script src="js/app.js?v=6.1.1"></script>
+<script src="js/ops.js?v=6.1.1"></script>
+<script src="js/tour.js?v=6.1.1"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -783,7 +783,7 @@
     } catch (e) {}
   })();
 </script>
-<script src="js/chat-kb.js?v=6.1.0"></script>
-<script src="js/chat.js?v=6.1.0"></script>
+<script src="js/chat-kb.js?v=6.1.1"></script>
+<script src="js/chat.js?v=6.1.1"></script>
 </body>
 </html>
