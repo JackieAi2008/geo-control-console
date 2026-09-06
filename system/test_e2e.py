@@ -11,7 +11,7 @@
   T5 前端服务器模式渲染（无头Chrome：体检30项、Agent4卡、监测30问）
   T6 内容评分器单元（营销腔<50 / GEO体≥75，与geo_score.py同源判定）
 """
-import json, os, subprocess, sys, time, urllib.request, urllib.error
+import json, os, re, subprocess, sys, time, urllib.request, urllib.error
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 PORT = 8341
@@ -130,6 +130,20 @@ def main():
             check("V6.2 PR层指路", "谁在替你说话" in html and "数字 PR" in html and "争取被引" in html,
                   "权威媒体不走开号入驻的指路文案")
             check("V4资产追踪卡", "watchBox" in html and "查排名" in html, "资产追踪管理区（空态引导文案含查排名）")
+
+            def dump_lc(frag):
+                out = f"/tmp/e2e_lc_{frag.replace('/', '_') or 'home'}.html"
+                with open(out, "w") as fh:
+                    subprocess.run([chrome, "--headless=new", "--disable-gpu", "--virtual-time-budget=8000",
+                                    "--dump-dom", f"{ROOT}/?layoutcheck=1#/{frag}"], stdout=fh, stderr=subprocess.DEVNULL, timeout=90)
+                return open(out, encoding="utf-8", errors="ignore").read()
+            for frag, label in [("", "工作台"), ("act/toolkit", "渠道图"), ("monitor", "监测")]:
+                lh = dump_lc(frag)
+                ok = ("W320" in lh and "W375" in lh and "W768" in lh
+                      and "LAYOUT_FAIL" not in lh and "LAYOUT_ERR" not in lh and "测量中" not in lh)
+                bad = re.search(r"(LAYOUT_FAIL[^<]*|LAYOUT_ERR[^<]*)", lh)
+                check(f"V6.2.1 移动端布局无溢出·{label}", ok,
+                      bad.group(1)[:180] if bad else "SELF+iframe真实320/375/768三视口全 OK")
             html = dump("act/agent")
             check("Agent页4张卡片", html.count("agent-card") == 4, f"agent-card×{html.count('agent-card')}")
             html = dump("monitor")
@@ -521,17 +535,17 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V6.2 版本号6.2.0", d.get("version") == "6.2.0", f"v={d.get('version')}")
+        check("V6.2 版本号6.2.1", d.get("version") == "6.2.1", f"v={d.get('version')}")
         for path, mark in [("/js/tour.js", "南山大厦"), ("/css/tour.css", "tour-ring")]:
             with urllib.request.urlopen(ROOT + path + "?v=6.1.0", timeout=10) as resp:
                 body = resp.read().decode("utf-8", "ignore")
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V6.2 版本戳统一6.2.0", idx_html.count("?v=6.2.0") >= 9 and "?v=6.1.2" not in idx_html
-              and "?v=6.1.1" not in idx_html and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html
-              and "?v=4.7.7" not in idx_html and "?v=4.7.3" not in idx_html,
-              f"?v=6.2.0×{idx_html.count('?v=6.2.0')}")
+        check("V6.2 版本戳统一6.2.1", idx_html.count("?v=6.2.1") >= 9 and "?v=6.2.0" not in idx_html
+              and "?v=6.1.2" not in idx_html and "?v=6.1.1" not in idx_html and "?v=6.1.0" not in idx_html
+              and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html and "?v=4.7.3" not in idx_html,
+              f"?v=6.2.1×{idx_html.count('?v=6.2.1')}")
         reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
         if os.path.exists(chrome):
             def dump_tour(urlpath):

@@ -2408,7 +2408,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "6.2.0";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "6.2.1";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }
@@ -2420,3 +2420,82 @@ async function updateServerBadge() {
     el.textContent = "服务器已连接 · v" + (d.version || "?") + (document.documentElement.dataset.jsv && document.documentElement.dataset.jsv !== d.version ? "（前端与版本不一致，请刷新/重启服务器）" : "");
   } catch (e) { el.textContent = "服务器连接异常"; }
 }
+
+/* ═══ V6.2.1 布局自检（?layoutcheck=1 调试通道，e2e 回归横向溢出用；正常访问零开销）═══
+   背景：.tag 曾因 nowrap+body overflow-x:clip 把超长标签在屏幕边缘裁断（渠道图 B站卡）。
+   无头 Chrome 会把 --window-size 钳到 500px 宽，测不到真手机布局——所以用同源 iframe 造
+   真实 375/768 视口（媒体查询/换行完全真实），父页逐元素扫描"可见且未被容器合法裁剪、
+   却超出该视口左右边界"的元素，结果写进 #layoutCheckOut 供 dump-dom 断言：
+   每档宽度一行 `W375: LAYOUT_OK` / `W375: LAYOUT_FAIL n=…`+逐条坐标与文案。 */
+(function () {
+  if (!/[?&]layoutcheck=1/.test(location.search)) return;
+  /* &shot=1：页面顶部放一个 375×3200 真实视口预览 iframe——无头 Chrome 的窗口宽会被钳到 500
+     （截图模式也是 500 布局裁成 375 宽的图），要拿真手机布局的整页截图只能借 iframe。 */
+  if (new URLSearchParams(location.search).get("shot") === "1") {
+    const f = document.createElement("iframe");
+    f.style.cssText = "position:absolute;top:0;left:0;width:375px;height:3200px;border:0;z-index:99998;background:#fff";
+    f.src = location.pathname + "?lcsrc=1" + (location.hash || "#/");
+    document.documentElement.appendChild(f);
+    return;
+  }
+  const WANT = [320, 375, 768];
+  function scanDoc(doc, tag) {
+    const lines = []; let n = 0;
+    const win = doc.defaultView, vw = doc.documentElement.clientWidth;
+    /* html/body 的 overflow-x:clip 是"在视口边裁断"本身，不算合法裁剪容器 */
+    const clipped = (el) => {
+      for (let p = el.parentElement; p && p !== doc.body; p = p.parentElement) {
+        const o = win.getComputedStyle(p).overflowX;
+        if (o === "hidden" || o === "clip" || o === "auto" || o === "scroll") return true;
+      }
+      return false;
+    };
+    doc.querySelectorAll("body *").forEach(el => {
+      if (el.closest("#layoutCheckOut")) return;
+      const st = win.getComputedStyle(el);
+      if (st.display === "none" || st.visibility === "hidden") return;
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) return;
+      if (clipped(el)) return;
+      if (r.right > vw + 3 || r.left < -3) {
+        n++;
+        if (lines.length < 12) lines.push(`  ${el.tagName.toLowerCase()}.${((el.className + "").split(" ") || [""])[0]} right=${Math.round(r.right)}/${vw} 「${(el.textContent || "").trim().slice(0, 24)}」`);
+      }
+    });
+    return `${tag} vw=${vw}: ` + (n === 0 ? "LAYOUT_OK" : `LAYOUT_FAIL n=${n}\n` + lines.join("\n"));
+  }
+  const box = document.createElement("div");
+  box.id = "layoutCheckOut";
+  box.style.cssText = "position:fixed;left:0;bottom:0;width:100%;max-height:46vh;overflow:auto;background:#fff;border-top:2px solid #900;padding:4px;z-index:99999";
+  document.body.appendChild(box);
+  /* 槽位输出：parts[0]=SELF 本视口，parts[i+1]=WANT[i] 的 iframe 视口，顺序确定便于断言 */
+  const parts = new Array(WANT.length + 1);
+  function report() {
+    let pre = box.querySelector("pre");
+    if (!pre) { pre = document.createElement("pre"); pre.style.cssText = "margin:0 0 4px;font:11px/1.5 monospace;white-space:pre-wrap"; box.prepend(pre); }
+    pre.textContent = parts.map((p, i) => p || `W${WANT[i - 1]}: 测量中…`).join("\n");
+  }
+  function run() {
+    parts[0] = scanDoc(document, "SELF");
+    box.querySelectorAll("iframe").forEach(f => f.remove());
+    report();
+    WANT.forEach((W, i) => {
+      const f = document.createElement("iframe");
+      f.style.cssText = `width:${W}px;height:200px;border:1px solid #900;margin:2px 0;background:#fff`;
+      f.setAttribute("title", "layout" + W);
+      f.src = location.pathname + "?lcsrc=1" + (location.hash || "#/");
+      f.addEventListener("load", () => {
+        setTimeout(() => {
+          try { parts[i + 1] = scanDoc(f.contentDocument, `W${W}`); }
+          catch (e) { parts[i + 1] = `W${W}: LAYOUT_ERR ${e}`; }
+          report();
+        }, 500);
+      });
+      box.appendChild(f);
+    });
+  }
+  let t;
+  const deb = () => { clearTimeout(t); t = setTimeout(run, 350); };
+  if (document.readyState === "loading") addEventListener("DOMContentLoaded", deb); else deb();
+  addEventListener("hashchange", deb);   /* 调试通道：切路由后重扫 */
+})();

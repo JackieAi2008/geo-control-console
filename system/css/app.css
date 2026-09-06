@@ -196,7 +196,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 .tag {
   display: inline-block; font-size: var(--text-xs); line-height: 1.5;
   border: var(--rule-hair) solid var(--color-line-2); border-radius: var(--radius-s);
-  padding: 0 6px; color: var(--color-ink-2); background: var(--color-paper-2); white-space: nowrap;
+  padding: 0 6px; color: var(--color-ink-2); background: var(--color-paper-2);
+  white-space: normal; overflow-wrap: anywhere; max-width: 100%;
 }
 .tag-accent { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft); }
 .tag-gold { border-color: var(--color-gold); color: color-mix(in oklab, var(--color-gold), black 35%); background: var(--color-gold-soft); }
