@@ -302,6 +302,11 @@ function tourEnd(markSeen, exit) {
   document.removeEventListener("keydown", tourKeys);
   cancelAnimationFrame(Tour._raf);
   const sh = $("#tourShade"); if (sh) sh.remove();
+  /* V0.1.13 F1 演示泄漏根治：演示期间 renderDiagResult/renderChannels 把「南山大厦」示例写进了
+     常驻 DOM（#dgOut 结果区 / #channelBox 渠道图）。state 还原不会自动清它们——退出时一并清空，
+     由 route() 按用户真实项目重建（无诊断历史=空态预检清单；渠道图带项目归属章，见 render.toolkit） */
+  const dgo = $("#dgOut"); if (dgo) dgo.innerHTML = "";
+  const cb = $("#channelBox"); if (cb) { cb.innerHTML = ""; delete cb.dataset.proj; }
   if (location.hash !== Tour._real.hash) location.hash = Tour._real.hash;
   renderProjectContext(); route();
   if (markSeen) tourMarkSeen(exit);

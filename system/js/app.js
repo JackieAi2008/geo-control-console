@@ -254,24 +254,31 @@ function addEvent(type, label, date) {
   save();
 }
 function initProjects() {
+  let old = null, oldState = {};
+  try { old = localStorage.getItem(STORE_KEY); if (old) oldState = JSON.parse(old) || {}; } catch (e) {}
   try {
     const meta = JSON.parse(localStorage.getItem(PKEY) || "null");
     if (meta && Array.isArray(meta.list) && meta.list.length) {
       PROJECTS = meta.list;
       CUR = (meta.current && meta.list.some(p => p.id === meta.current)) ? meta.current : meta.list[0].id;
-    } else {
+    } else if (old) {
       /* 旧单项目数据 → 默认项目（一次性迁移；旧键保留兜底，不删）。名字用可读名，域名落 url 字段 */
-      const old = localStorage.getItem(STORE_KEY);
-      let oldState = {}; if (old) { try { oldState = JSON.parse(old); } catch (e) {} }
       const pid = "p_default";
       PROJECTS = [{ id: pid, name: "蛇口网谷", url: String(oldState.parkUrl || "").slice(0, 120),
                     brand: "", ownDomains: DEFAULT_OWN, createdAt: today() }];
       CUR = pid;
-      if (old) { try { localStorage.setItem(projKey(pid), old); } catch (e) {} }
+      try { localStorage.setItem(projKey(pid), old); } catch (e) {}
+      saveProjectsMeta();
+    } else {
+      /* V0.1.13 F2：全新本地（无旧数据）不再凭空造「蛇口网谷」——与服务器口径一致给示例项目 */
+      PROJECTS = [{ id: "p_default", name: "示例项目", url: "", brand: "示例园区",
+                    ownDomains: [], entityMode: "none", sample: true, createdAt: today() }];
+      CUR = "p_default";
       saveProjectsMeta();
     }
   } catch (e) {
-    PROJECTS = [{ id: "p_default", name: "蛇口网谷", url: "", brand: "", ownDomains: DEFAULT_OWN, createdAt: today() }];
+    PROJECTS = [{ id: "p_default", name: "示例项目", url: "", brand: "示例园区",
+                  ownDomains: [], entityMode: "none", sample: true, createdAt: today() }];
     CUR = "p_default";
   }
   normalizeProjects();
@@ -391,7 +398,7 @@ function resetNewProjForm() {
     .forEach(id => { const el = $("#" + id); if (el) el.value = ""; });
   const m = document.querySelector('input[name="npMode"][value="parent"]'); if (m) m.checked = true;
   const t = document.querySelector('input[name="npTier"][value="park"]'); if (t) t.checked = true;
-  const lb = $("#npUrlLb"); if (lb) lb.firstChild.textContent = "官方承载页域名（可后补，用于一键诊断）";
+  const lb = $("#npUrlLb"); if (lb) lb.firstChild.textContent = "官网网址（可后补，用于一键诊断）";
 }
 function closeProjModal() { $("#projModal").hidden = true; resetNewProjForm(); }
 function openModalMask() {
@@ -454,10 +461,13 @@ const API = {
   async projects() { try { const r = await fetch("/api/projects"); if (!r.ok) return null; return await r.json(); } catch (e) { return null; } },
   async createProject(p) { try { const r = await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }); return await r.json(); } catch (e) { return { error: String(e) }; } },
   async updateProject(p) { try { const r = await fetch("/api/projects/update", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }); return await r.json(); } catch (e) { return { error: String(e) }; } },
-  async save(obj, baseRev) {
+  async save(obj, baseRev, audit) {
     try {
-      return await fetch("/api/data", { method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: CUR, state: obj, base_rev: baseRev, operator: (localStorage.getItem("geodesk.operator") || "") }) });
+      const body = { project: CUR, state: obj, base_rev: baseRev, operator: (localStorage.getItem("geodesk.operator") || "") };
+      /* V0.1.13 F7：批任务静默保存（不逐条留痕）或聚合留痕（一条带动作名的记录） */
+      if (audit && audit.silent) body.auditSilent = true;
+      if (audit && audit.action) { body.auditAction = audit.action; body.auditDetail = audit.detail || ""; }
+      return await fetch("/api/data", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     } catch (e) { return null; }
   },
   async probe(q, ownDomains) { try { const r = await fetch("/api/probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q, ownDomains: ownDomains || curOwn() }) }); return await r.json(); } catch (e) { return { error: String(e) }; } },
@@ -490,7 +500,8 @@ function mergeServerState(server, local, base) {
   return merged;
 }
 async function serverSave() {
-  const r = await API.save(state, REV_BASE);
+  const r = await API.save(state, REV_BASE, SAVE_AUDIT);
+  SAVE_AUDIT = null;   /* V0.1.13 F7：留痕指令一次性消费（防后续普通保存误带聚合动作名） */
   if (!r) return;
   let d = {}; try { d = await r.json(); } catch (e) {}
   if (r.status === 409 && d.state) {
@@ -503,8 +514,10 @@ async function serverSave() {
   if (d.rev) { REV_BASE = d.rev; SERVER_BASE = JSON.parse(JSON.stringify(state)); }
 }
 let saveTimer;
-const save = () => {
+let SAVE_AUDIT = null;   /* V0.1.13 F7：save({silent}) 批内不留痕 / save({action,detail}) 聚合一条留痕（防抖合并后最后一次生效） */
+const save = (opts) => {
   if (window.Tour && window.Tour.active) return;   /* V6.1 引导演示态只读：演示数据绝不写入本机/服务器 */
+  if (opts) SAVE_AUDIT = opts.silent ? { silent: true } : (opts.action ? { action: opts.action, detail: opts.detail || "" } : null);
   try { localStorage.setItem(projKey(CUR), JSON.stringify(state)); } catch (e) {}
   if (SERVER_MODE) { clearTimeout(saveTimer); saveTimer = setTimeout(serverSave, 400); }
 };
@@ -1299,7 +1312,7 @@ function renderBusiness() {
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
       <button class="btn btn-primary" id="bizSave">保存月度数据</button>
       ${rows.length ? '<button class="btn btn-ghost" id="bizCsv">导出表格</button>' : ""}
-      <button class="btn btn-ghost" id="bizIt">复制IT字段建议文案</button>
+      <button class="btn btn-ghost" id="bizIt">复制给IT的统计字段配置说明</button>
     </div>
     ${rows.length ? `<div class="tbl-wrap" style="max-height:220px;overflow:auto;margin-top:10px"><table class="tbl"><thead><tr><th>月份</th><th>AI引荐流量</th><th>AI线索</th><th>备注</th><th></th></tr></thead><tbody>
       ${rows.map((b, i) => `<tr><td class="num">${esc(b.month)}</td><td class="num">${+b.aiVisits || 0}</td><td class="num">${+b.aiLeads || 0}</td>
@@ -1539,7 +1552,7 @@ function renderProjectCards(useServer) {
   /* 统计条（按当前筛选动态） */
   const undN = list.filter(x => !x.lastDiag).length, warnN = list.filter(x => x.warn.length > 0).length, woN = list.filter(x => x.woPending > 0).length;
   const stat = $("#pjStat");
-  if (stat) stat.innerHTML = `共 <b class="num">${list.length}</b> 个项目 · <b class="num"${undN ? ' style="color:var(--color-warn)"' : ""}>${undN}</b> 个未诊断 · <b class="num"${warnN ? ' style="color:var(--color-warn)"' : ""}>${warnN}</b> 个有预警 · <b class="num"${woN ? ' style="color:var(--color-bad)"' : ""}>${woN}</b> 个有工单待验收`;
+  if (stat) stat.innerHTML = `共 <b class="num">${list.length}</b> 个项目 · <b class="num"${undN ? ' style="color:var(--color-warn)"' : ""}>${undN}</b> 个未诊断 · <b class="num"${warnN ? ' style="color:var(--color-warn)"' : ""}>${warnN}</b> 个有预警 · <b class="num"${woN ? ' style="color:var(--color-bad)"' : ""}>${woN}</b> 个有整改任务待确认`;
   /* 上次处理条：最近打开优先，无记录时取最近活动，与筛选无关、一步直达 */
   const rec = $("#pjRecent");
   if (rec) {
@@ -1552,19 +1565,24 @@ function renderProjectCards(useServer) {
       <span class="pj-rec-lb">上次处理</span><b>${esc(cand.p.name)}</b><span class="muted" style="font-size:var(--text-xs)">${esc(String(cand.day).slice(5))}</span><span class="pc-go">继续 →</span></button>` : "";
     $$("#pjRecent [data-pid]").forEach(b => b.addEventListener("click", () => switchProject(b.dataset.pid)));
   }
+  /* V0.1.13 F2：重名区分——同名项目在标题后追加域名/形态，不再让两张同名卡靠猜 */
+  const nameCount = {};
+  PROJECTS.forEach(p => { nameCount[p.name] = (nameCount[p.name] || 0) + 1; });
   const cards = list.map(({ p, entMode, pct, trend, warn, woPending, lastDiag }) => {
     const scoreColor = pct !== null && pct !== undefined
       ? (pct >= 70 ? "var(--color-ok)" : pct >= 40 ? "var(--color-warn)" : "var(--color-accent)")
       : "var(--color-ink-3)";
+    const dupTag = nameCount[p.name] > 1
+      ? `<span class="muted" style="font-size:11px">· ${esc(p.url || ENT_LABEL[entMode] || "")}</span>` : "";
     return `<button class="proj-card${p.id === CUR ? " cur" : ""}" type="button" data-pid="${esc(p.id)}" aria-label="进入项目 ${esc(p.name)}"${(p.entityMode === "none" || entMode === "none") && pct !== null && pct !== undefined ? ` title="体检分为${entMode === "none" ? 24 : 30}项口径；跨项目请比趋势，不建议比绝对分"` : ""}>
-      <span class="pc-top"><b class="pc-title">${esc(p.name)}</b>${p.id === CUR ? '<span class="tag tag-gold">当前</span>' : ""}</span>
+      <span class="pc-top"><b class="pc-title">${esc(p.name)}</b>${dupTag}${p.sample ? '<span class="tag" title="演示用示例项目——在「设置」里改成你自己的园区，或直接归档">示例·可改名</span>' : ""}${p.id === CUR ? '<span class="tag tag-gold">当前</span>' : ""}</span>
       <span class="pc-badges"><span class="tag ${entMode === "none" ? "tag-warn" : entMode === "own" ? "tag-info" : "tag-gold"}">${ENT_LABEL[entMode] || "挂上级官网"}</span>
         ${!lastDiag ? '<span class="tag tag-bad">● 未诊断</span>' : ""}</span>
       <span class="pc-stats">
-        <span><i>体检分${entMode === "none" ? "（24项）" : ""}</i><b style="color:${scoreColor}">${pct ?? "—"}</b></span>
+        <span><i>体检分（${entMode === "none" ? 24 : 30}项）</i><b style="color:${scoreColor}">${pct ?? "—"}</b></span>
         <span><i>vs起始数据</i>${trendArrow(trend)}</span>
       </span>
-      ${woPending ? `<span class="pc-todo">⚠ ${woPending} 件工单待验收</span>` : ""}
+      ${woPending ? `<span class="pc-todo">⚠ ${woPending} 件整改任务待确认</span>` : ""}
       ${warn.length ? `<span class="pc-warn">${warn.slice(0, 2).map(w => `<span class="tag tag-warn">⚠ ${esc(w)}</span>`).join("")}</span>` : ""}
       <span class="pc-go">进入工作台 →</span>
       <span class="pc-arch" data-set="${esc(p.id)}" title="修改项目信息（形态/城市/产业/竞品等）" role="button" tabindex="0">设置</span>
@@ -1835,7 +1853,7 @@ render.audit = () => {
     const dimSkip = noSite() && d.dim === "技术可达";   /* V4.5：无官网项目这6项不适用，灰显不计分 */
     return `
     <div class="card audit-dim" id="dimcard-${di}"${dimSkip ? ' style="opacity:.55"' : ""}>
-      <h3>${esc(d.dim)} <span class="hint" id="dim-${esc(d.dim)}"></span></h3>
+      <h3>${esc(d.dim)}${d.dim === "生态布源" ? ' <span class="hint">在 AI 爱引用的平台上开号发内容</span>' : ""} <span class="hint" id="dim-${esc(d.dim)}"></span></h3>
       ${dimSkip ? '<p class="muted" style="font-size:var(--text-sm);margin:0 0 8px">本项目暂无官网承载页——这 6 项不适用、不进总分。先做下面「实体与权威」「渠道铺设」两组；有了官网回来补测。</p>' : ""}
       ${d.items.map(i => `
         <div class="audit-item${autoFocus && state.autoAudit && state.autoAudit[i.id] ? " auto-hl" : ""}"${dimSkip ? ' title="无官网项目不适用"' : ""}>
@@ -1882,7 +1900,10 @@ const SUPERLATIVE = ["最先进","最优秀","第一品牌","唯一","顶级","�
 function scoreContent(text, entity) {
   const checks = [];
   const paras = text.split(/\n\s*\n/).filter(x => x.trim());
-  const first = (paras[0] || "");
+  /* V0.1.13 ①正确性修复（AI评测）：标题行（# 开头的 Markdown 标题）不算首段——
+     此前把标题行当首段判定，带标题的合格文案被误判「答案前置」不达标 */
+  const bodyParas = paras.filter(p => !/^\s*#{1,6}\s/.test(p));
+  const first = (bodyParas[0] || paras[0] || "");
   const digits = (text.match(/\d+(\.\d+)?/g) || []).length;
   const units = (text.match(/[㎡平方米家条支亿万元%％倍强个座]/g) || []).length;
   const mkq = (text.match(/[??]/g) || []).length;
@@ -1890,9 +1911,10 @@ function scoreContent(text, entity) {
   const sup = SUPERLATIVE.filter(w => text.includes(w));
   const hasTable = /\|.*\|/.test(text) || (digits >= 5 && units >= 4);
   const hasQuote = /[「『“"][^」』”"]{6,}[」』”"]/ .test(text) && /(负责人|总经理|创始人|董事长|总监|CEO|创始人|总裁|院长)/.test(text);
-  const hasSrc = /(来源[::]|据[^，。\n]{2,12}(报道|披露|统计|榜单|数据)|数据截至|截至20\d\d)/.test(text);
+  /* V0.1.13：冒号类补全角「：」——原 [::] 实为两个半角冒号，规则自己的示范文案（更新时间：2026-09）都被判不达标 */
+  const hasSrc = /(来源[：:]|据[^，。\n]{2,12}(报道|披露|统计|榜单|数据)|数据截至|截至20\d\d)/.test(text);
   const hasList = /(^|\n)\s*(\d+[\.、]|[-•])\s+/.test(text);
-  const hasDate = /(更新(于|时间)[::]?\s*20\d\d|20\d\d[-年]\d{1,2}[-月]\d{1,2})/.test(text);
+  const hasDate = /(更新(于|时间)[：:]?\s*20\d\d|20\d\d[-年]\d{1,2}[-月]\d{1,2})/.test(text);
   const longParas = paras.filter(p => p.replace(/\s/g, "").length > 320).length;
   const repeat = entity && entity.length >= 3 ? (text.split(entity).length - 1) : 0;
 
@@ -1912,10 +1934,14 @@ function scoreContent(text, entity) {
     (repeat > 6 ? `『${entity}』出现${repeat}次（堆砌嫌疑）` : "") + (sup.length ? `最高级词：${sup.join("、")}` : "") || "合格",
     "删掉机械重复与无法验证的最高级；对比内容用事实说话");
   add("⑦ 口径唯一（人工）", state.caliber.length > 0, "数字须与口径表逐项核对", "发布前对照『口径表』核对每个数字（此步无法自动完成）");
-  add("⑪ 多源一致（人工）", true, "同一事实官网/公众号/知乎/百科须一致", "发布后48h内在矩阵渠道同步同口径版本");
+
+  /* V0.1.13 ⑪正确性修复（AI评测）：「多源一致」恒判通过把基础分虚高约 8 分（1/12）——
+     它是发布后的人工动作，机器无法验证，改为不计分的人工自查提醒，随结果单独展示 */
+  const manual = { name: "⑪ 多源一致（人工自查 · 不计分）", why: "同一事实官网/公众号/知乎/百科须一致",
+                   fix: "发布后48h内在矩阵渠道同步同口径版本" };
 
   const score = Math.round(checks.filter(c => c.pass).length / checks.length * 100);
-  return { checks, score };
+  return { checks, manual, score };
 }
 let SC_FILL_FOR = null;   /* V0.1.11 内容评分按项目隔离：跨项目切换清空粘贴原文与旧结果（防上个项目的文案/分数残留） */
 render.content = () => {
@@ -1935,7 +1961,7 @@ function runScorer() {
   const text = $("#scorerInput").value.trim();
   if (!text) { toast("请先粘贴内容"); return; }
   const entity = $("#scorerEntity").value;
-  const { checks, score } = scoreContent(text, entity);
+  const { checks, manual, score } = scoreContent(text, entity);
   const color = score >= 75 ? "var(--color-ok)" : score >= 50 ? "var(--color-warn)" : "var(--color-accent)";
   /* V0.1.12（AI评测P1）：标签如实——这是 12 条 GEO 写作规则的规则达标率，不是任何 AI 实测的引用概率 */
   $("#scorerScore").innerHTML = `<span style="color:${color}">${score}</span> <small style="font-size:14px;color:var(--color-ink-3)">/ 100 GEO 规则达标率</small>`;
@@ -1943,7 +1969,11 @@ function runScorer() {
     <div class="chk ${c.pass ? "pass" : "fail"}">
       <span class="ico">${c.pass ? "✓" : "✗"}</span>
       <div><b>${esc(c.name)}</b> ${c.pass ? "" : `<span class="why">${esc(c.why)} → ${esc(c.fix)}</span>`}</div>
-    </div>`).join("");
+    </div>`).join("") +
+    `<div class="chk" style="opacity:.75">
+      <span class="ico">☞</span>
+      <div><b>${esc(manual.name)}</b> <span class="why">${esc(manual.why)} → ${esc(manual.fix)}</span></div>
+    </div>`;
 }
 function gen选题单() {
   const park = $("#briefPark").value || "试点园区";
@@ -2559,11 +2589,58 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateServerBadge();         /* V4.2：页脚显示服务端版本——代码更新未重启服务器时可立刻发现 */
   window.addEventListener("hashchange", route);
   route();
-  /* V6.1 首登操作指引：账号级一次性判定后自动弹出（tour.js 已在本脚本之后装载完成） */
-  if (typeof Tour !== "undefined" && typeof Tour.autoStart === "function") {
+  /* V0.1.13 跨项目串页金标准自检通道（?spacheck=1）：在真实浏览器里执行
+     「旧项目诊断渲染 → switchProject 切新项目 → 全页扫描旧品牌词」与
+     「演示态渲染南山大厦 → tourEnd 退出 → 扫描演示品牌」，裁决写 #spacheckOut 供 e2e dump 断言。
+     e2e/无头无法复现 SPA 切换路径（0.1.11 前的串值 bug 全是刷新即消失的内存态）——本通道即为其金标准 */
+  if (new URLSearchParams(location.search).get("spacheck") === "1") {
+    await spaSelfCheck();
+  } else if (typeof Tour !== "undefined" && typeof Tour.autoStart === "function") {
+    /* V6.1 首登操作指引：账号级一次性判定后自动弹出（tour.js 已在本脚本之后装载完成） */
     setTimeout(() => Tour.autoStart(), 700);
   }
 });
+async function spaSelfCheck() {
+  const el = document.createElement("div"); el.id = "spacheckOut"; el.hidden = true; document.body.appendChild(el);
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const OLD = "金标旧项目词";
+  try {
+    /* ① 当前项目注入一次诊断结果（仅内存/本机，不写服务器），到诊断页渲染出来 */
+    state.lastDiag = { ts: "2026-09-06 00:00", url: "old.example.com", brand: OLD, mode: "entity",
+      checks: [{ id: "E2a", name: "品牌词搜索·自有渠道", status: "fail", evidence: "搜索「" + OLD + "」前10全部为第三方", score: {} }],
+      autoFilled: 1, autoKept: 0 };
+    state.diagHistory = [JSON.parse(JSON.stringify(state.lastDiag))];
+    location.hash = "#/diag/scan"; route(); await wait(150);
+    const rendered = !!$("#dgOut .dg-head") && $("#dgOut").textContent.includes(OLD);
+    /* ② 真实 switchProject 切到全新本地项目（含 #dgOut 清空→renderAllViews 全链路），再回诊断页 */
+    const np = { id: "p_spacheck", name: "切换检查项目", url: "", brand: "切换检查新词", entityMode: "none", createdAt: today() };
+    if (!PROJECTS.some(p => p.id === np.id)) PROJECTS.push(np);
+    await switchProject(np.id);            /* 末尾 go("dashboard") */
+    location.hash = "#/diag/scan"; route(); await wait(150);
+    const dgNow = $("#dgOut");
+    const dgLeak = !!(dgNow && ($("#dgOut .dg-head") || dgNow.textContent.includes(OLD)));
+    const pageLeak = (document.body.innerText || "").includes(OLD);   /* 可见文本全页扫描（innerText 不含隐藏节点） */
+    el.dataset.switch = !rendered ? "SKIP:no-prerender" : (dgLeak || pageLeak) ? "FAIL:leak" : "PASS";
+    el.dataset.switchNote = "rendered=" + rendered + " dgLeak=" + dgLeak + " pageLeak=" + pageLeak;
+    /* ③ 演示态：进引导第6步（体检示例渲染南山大厦）→ tourEnd 退出 → 诊断页/渠道图不得残留 */
+    let tourLeak = "SKIP";
+    if (typeof Tour !== "undefined") {
+      Tour.start({ step: 5 }); await wait(500);
+      const inDemo = (document.body.innerText || "").includes("南山大厦");
+      tourEnd(true, "spacheck"); await wait(250);
+      location.hash = "#/diag/scan"; route(); await wait(150);
+      const tDg = !!($("#dgOut") && $("#dgOut").textContent.includes("南山大厦"));
+      location.hash = "#/act/toolkit"; route(); await wait(150);
+      const tCh = !!($("#channelBox") && $("#channelBox").textContent.includes("南山大厦"));
+      tourLeak = !inDemo ? "SKIP:no-demo" : (tDg || tCh) ? "FAIL:leak" : "PASS";
+      el.dataset.tourNote = "inDemo=" + inDemo + " diagLeak=" + tDg + " channelLeak=" + tCh;
+    }
+    el.dataset.tour = tourLeak;
+  } catch (e) {
+    el.dataset.switch = el.dataset.switch || "ERR";
+    el.dataset.err = String(e && e.message || e).slice(0, 120);
+  }
+}
 /* V4.2：页脚服务端状态徽标（服务器模式显示版本号；本地双击打开显示本地模式） */
 async function updateServerBadge() {
   const el = $("#srvState"); if (!el) return;
@@ -2573,7 +2650,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "0.1.12";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.1.13";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }

@@ -35,7 +35,7 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "0.1.12"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（V0.1.x 序列：0.1.7=AI代问；旧 6.x 序列已封存）
+APP_VERSION = "0.1.13"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（V0.1.x 序列：0.1.7=AI代问；旧 6.x 序列已封存）
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}
@@ -219,18 +219,28 @@ def projects_get(conn):
     return kv_get(conn, "projects") or []
 
 def projects_ensure(conn):
-    """项目层幂等迁移：旧全局 doc/state → 默认项目（旧键保留不删，30 天后可清）。返回项目列表。"""
+    """项目层幂等迁移：旧全局 doc/state → 默认项目（旧键保留不删，30 天后可清）。返回项目列表。
+       V0.1.13 F2：全新空库不再凭空预置「蛇口网谷」真实园区项目——新账号首屏会误以为库里
+       躺着别人的项目（还带「当前」徽标与一条不是自己做的留痕）。空库改为显式示例项目
+       （sample 标记 → 前端卡片「示例」徽标，可改名/归档）。老库迁移路径保持原行为：
+       那是真实数据搬家，不是预置。"""
     plist = kv_get(conn, "projects")
     if plist:
         return plist
     old_doc = kv_get(conn, "doc") or {}
     old_state = old_doc.get("state") or kv_get(conn, "state") or {}
-    name = (str(old_state.get("parkUrl") or "").strip()) or "蛇口网谷"  # 系统既有口径种子与基线均为蛇口网谷
-    proj = {"id": "p_default", "name": name, "url": old_state.get("parkUrl") or "",
-            "brand": "", "ownDomains": list(OWN_DOMAINS),
-            "createdAt": time.strftime("%Y-%m-%d"), "archived": False}
+    if old_state:
+        name = (str(old_state.get("parkUrl") or "").strip()) or "蛇口网谷"  # 系统既有口径种子与基线均为蛇口网谷
+        proj = {"id": "p_default", "name": name, "url": old_state.get("parkUrl") or "",
+                "brand": "", "ownDomains": list(OWN_DOMAINS),
+                "createdAt": time.strftime("%Y-%m-%d"), "archived": False}
+        kv_put(conn, proj_doc_key(proj["id"]), {"rev": max(int(old_doc.get("rev") or 0), 0), "state": old_state})
+    else:
+        proj = {"id": "p_default", "name": "示例项目", "url": "", "brand": "示例园区",
+                "ownDomains": [], "entityMode": "none", "sample": True,
+                "createdAt": time.strftime("%Y-%m-%d"), "archived": False}
+        kv_put(conn, proj_doc_key(proj["id"]), {"rev": 0, "state": {}})
     kv_put(conn, "projects", [proj])
-    kv_put(conn, proj_doc_key(proj["id"]), {"rev": max(int(old_doc.get("rev") or 0), 0), "state": old_state})
     return [proj]
 
 def _ent_mode(p):
@@ -945,8 +955,14 @@ class Handler(BaseHTTPRequestHandler):
                 cur = kv_get(self.conn, proj_doc_key(pid)) or {"rev": 0, "state": {}}
                 newdoc = {"rev": cur.get("rev", 0) + 1, "state": data if isinstance(data, dict) else {}}
             kv_put(self.conn, proj_doc_key(pid), newdoc)
-            audit_append(self.conn, data.get("operator") if isinstance(data, dict) else None, pid,
-                         "PUT /api/data", f"rev={newdoc['rev']} ledger={len(newdoc['state'].get('ledger') or [])}条")
+            # V0.1.13 F7：留痕分级——批任务（如跑一轮30问）逐问保存可静默，收尾写一条聚合记录，
+            # 不再把留痕表刷满 30 条「保存数据」把关键里程碑顶出最近100条
+            if isinstance(data, dict) and data.get("auditSilent"):
+                pass
+            else:
+                action = (data.get("auditAction") if isinstance(data, dict) else None) or "保存数据"
+                detail = (data.get("auditDetail") if isinstance(data, dict) else None) or f"rev={newdoc['rev']} ledger={len(newdoc['state'].get('ledger') or [])}条"
+                audit_append(self.conn, data.get("operator") if isinstance(data, dict) else None, pid, action, detail)
             return self._send(200, {"ok": True, "rev": newdoc["rev"], "project": pid})
         except Exception as e:
             return self._send(400, {"error": str(e)})

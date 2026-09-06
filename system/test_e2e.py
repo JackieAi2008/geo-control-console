@@ -207,6 +207,19 @@ def main():
                 bad = re.search(r"(LAYOUT_FAIL[^<]*|LAYOUT_ERR[^<]*)", lh)
                 check(f"V6.2.1 移动端布局无溢出·{label}", ok,
                       bad.group(1)[:180] if bad else "SELF+iframe真实320/375/768三视口全 OK")
+            # V0.1.13 SPA 串页金标准：真实浏览器内执行「旧项目诊断→切新项目→全页扫描」+「演示态→退出→扫描南山大厦」
+            # （?spacheck=1 自检通道；无头 dump 无法复现 SPA 切换路径，此为该缺陷类的唯一自动化防线）
+            out2 = "/tmp/e2e_spacheck.html"
+            with open(out2, "w") as fh:
+                subprocess.run([chrome, "--headless=new", "--disable-gpu", "--virtual-time-budget=9000",
+                                "--dump-dom", f"{ROOT}/?spacheck=1"], stdout=fh, stderr=subprocess.DEVNULL, timeout=120)
+            sp = open(out2, encoding="utf-8", errors="ignore").read()
+            v1 = (re.search(r'data-switch="([^"]+)"', sp) or [None, "MISSING"])[1]
+            v2 = (re.search(r'data-tour="([^"]+)"', sp) or [None, "MISSING"])[1]
+            note1 = (re.search(r'data-switchnote="([^"]+)"', sp) or [None, ""])[1]
+            note2 = (re.search(r'data-tournote="([^"]+)"', sp) or [None, ""])[1]
+            check("V0.1.13 金标准·跨项目切换无残留", v1 == "PASS", f"switch={v1} ({note1})")
+            check("V0.1.13 金标准·演示退出无残留", v2 == "PASS", f"tour={v2} ({note2})")
             html = dump("act/agent")
             check("Agent页4张卡片", html.count("agent-card") == 4, f"agent-card×{html.count('agent-card')}")
             html = dump("monitor")
@@ -359,7 +372,7 @@ def main():
         fexists = os.path.exists(os.path.join("/tmp/backups", "geodesk-" + time.strftime("%Y%m%d") + ".json"))
         check("每日备份生成", s == 200 and d.get("ok") and fexists, f"file={d.get('file')}")
         s, d = req("GET", "/api/audit")
-        check("server侧操作留痕", s == 200 and any(str(a.get("action", "")).startswith("PUT") for a in d.get("audit", [])),
+        check("server侧操作留痕", s == 200 and any(str(a.get("action", "")).startswith(("PUT", "保存数据")) for a in d.get("audit", [])),
               f"留痕{len(d.get('audit', []))}条")
 
         print("T11 贴答案解析（V4 3.4 /api/parse · 真实本机模型）")
@@ -617,18 +630,18 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V0.1 版本号0.1.12", d.get("version") == "0.1.12", f"v={d.get('version')}")
+        check("V0.1 版本号0.1.13", d.get("version") == "0.1.13", f"v={d.get('version')}")
         for path, mark in [("/js/tour.js", "南山大厦"), ("/css/tour.css", "tour-ring")]:
             with urllib.request.urlopen(ROOT + path + "?v=6.1.0", timeout=10) as resp:
                 body = resp.read().decode("utf-8", "ignore")
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V0.1 版本戳统一0.1.12", idx_html.count("?v=0.1.12") >= 9 and "?v=0.1.11" not in idx_html
+        check("V0.1 版本戳统一0.1.13", idx_html.count("?v=0.1.13") >= 9 and "?v=0.1.12" not in idx_html
               and "?v=6.2.0" not in idx_html and "?v=6.1.2" not in idx_html and "?v=6.1.1" not in idx_html
               and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html
               and "?v=4.7.3" not in idx_html,
-              f"?v=0.1.12×{idx_html.count('?v=0.1.12')}")
+              f"?v=0.1.13×{idx_html.count('?v=0.1.13')}")
         reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
         if os.path.exists(chrome):
             def dump_tour(urlpath):

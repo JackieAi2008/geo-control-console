@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>招商产园 GEO 智控台</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
-<link rel="stylesheet" href="css/tokens.css?v=0.1.12">
-<link rel="stylesheet" href="css/app.css?v=0.1.12">
-<link rel="stylesheet" href="css/tour.css?v=0.1.12">
+<link rel="stylesheet" href="css/tokens.css?v=0.1.13">
+<link rel="stylesheet" href="css/app.css?v=0.1.13">
+<link rel="stylesheet" href="css/tour.css?v=0.1.13">
 </head>
 <body>
 
@@ -128,7 +128,7 @@
         <a class="btn btn-primary" href="#/diag/scan" style="width:100%">去一键诊断 →</a>
       </div>
       <div class="wizard-col">
-        <p style="font-size:var(--text-sm)"><b>② 生成优化文件</b>：点「一键生成」——产出 5–7 个可直接使用的文件：有官网的项目含网站 AI 可读配置、AI 说明文件、结构化数据标签（交网站管理员）；没有官网的项目则是百科词条更新稿、一园一档公众号版（品宣自己就能做）。所有项目都有：一园一档（园区标准介绍页：一段介绍+一张数据表+五个常见问题，官网/公众号通用）、选址 FAQ20 问（过评分器再发）、地图信息核对清单（高德/百度/腾讯认领核对，约30分钟）、渠道分发指南（真实入口与首发内容）。</p>
+        <p style="font-size:var(--text-sm)"><b>② 生成优化文件</b>：点「一键生成」——产出 5–7 个可直接使用的文件：有官网的项目含网站 AI 可读配置、AI 说明文件、结构化数据标签（交网站管理员）；没有官网的项目则是百科词条更新稿、一园一档公众号版（品宣自己就能做）。所有项目都有：一园一档（园区标准介绍页：一段介绍+一张数据表+五个常见问题，官网/公众号通用）、选址 FAQ20 问（发前先到「诊断→内容评分」≥75分再发）、地图信息核对清单（高德/百度/腾讯认领核对，约30分钟）、渠道分发指南（真实入口与首发内容）。</p>
         <a class="btn btn-primary" href="#/act/toolkit" style="width:100%">去拿优化文件 →</a>
       </div>
       <div class="wizard-col">
@@ -179,7 +179,7 @@
           <button class="seg-item" id="dgModeEntity" role="tab">实体体检</button>
         </div>
         <div class="dg-fields" id="dgSiteForm">
-          <label class="lb">官方承载页域名<small class="dg-lb-sub">本项目自己的官网；挂在上级单位官网下就填上级域名</small><input id="dgUrl" class="inp" placeholder="如：www.你的官网域名.com"></label>
+          <label class="lb">官网网址<small class="dg-lb-sub">本项目自己的官网；挂在上级单位官网下就填上级域名</small><input id="dgUrl" class="inp" placeholder="如：www.你的官网域名.com"></label>
         </div>
         <label class="lb dg-brand-lb">品牌词<small class="dg-lb-sub">官网体检用于搜索验证；实体体检以它为检查对象</small><input id="dgBrand" class="inp" placeholder="如：蛇口网谷"></label>
         <button class="btn btn-primary" id="dgRun">开始一键诊断</button>
@@ -288,9 +288,9 @@
     <div class="card" style="margin-top:16px">
       <h3>改写示范：营销腔 → GEO体</h3>
       <div class="rw">
-        <div class="rw-col"><span class="tag tag-bad">改写前 · 33分</span>
+        <div class="rw-col"><span class="tag tag-bad">改写前 · 27分</span>
           <p>某某园区环境优美、配套完善、区位优越，是广大企业理想的办公选择，欢迎咨询入驻！（示例：典型营销腔，预计<50分——粘贴你的真实文案试试）</p></div>
-        <div class="rw-col"><span class="tag tag-ok">改写后 · 83分</span>
+        <div class="rw-col"><span class="tag tag-ok">改写后 · 82分</span>
           <p>蛇口网谷是招商蛇口产业园区（招商产园）旗下科创园区，位于深圳南山区。截至2025年11月，园区入驻企业近460家，核心产业聚集度近70%，引入苹果、博世、雀巢等世界500强，培育上市公司及新三板挂牌企业20余家（来源：中国工业新闻网，2025）。「招商既是房东也是公司股东——我们十多年没换过地方。」（纽迪瑞科技董事长李灏）更新时间：2026-09 · 责任人：招商产园品牌部</p></div>
       </div>
     </div>
@@ -471,7 +471,7 @@
         <label class="lb">倾向<select id="mSentiment" class="sel">
           <option value="1">正面推荐</option><option value="0.5">中性</option><option value="0">负面/错误信息</option></select></label>
         <label class="full lb">被引用链接<input id="mUrl" class="inp" placeholder="选填：AI答案引用了哪个网页"></label>
-        <label class="full lb">竞品同时出现（V4）<input id="mCooccur" class="inp" placeholder="选填：答案里同时出现了哪些竞品，顿号分隔，如：深圳湾科技园、天安数码城"></label>
+        <label class="full lb">竞品同时出现<input id="mCooccur" class="inp" placeholder="选填：答案里同时出现了哪些竞品，顿号分隔，如：深圳湾科技生态园、天安数码城"></label>
         <label class="full lb">备注<input id="mNote" class="inp" placeholder="选填：排位/豆包端口(App/Web)/错误事实"></label>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -643,11 +643,11 @@
           <label class="chip" style="cursor:pointer"><input type="radio" name="npMode" value="none" style="margin-right:4px">暂时都没有（先做百科/公众号/地图）</label>
         </div>
       </div>
-      <label class="full lb" id="npUrlLb">官方承载页域名（可后补，用于一键诊断）<input id="npUrl" class="inp" placeholder="www.example.com" maxlength="120"></label>
+      <label class="full lb" id="npUrlLb">官网网址（没有独立官网就填上级单位官网；可后补，用于一键诊断）<input id="npUrl" class="inp" placeholder="www.example.com" maxlength="120"></label>
       <label class="full lb">品牌词（品牌词搜索验证用）<input id="npBrand" class="inp" placeholder="如：南京金融城" maxlength="60"></label>
       <label class="full lb">城市/片区（生成选址类问题与物料用）<input id="npCity" class="inp" placeholder="如：深圳南山 / 南京河西" maxlength="40"></label>
       <label class="full lb">主导产业（逗号分隔，最多5个——生成产业类问题与物料用）<input id="npInd" class="inp" placeholder="如：数字经济、人工智能、生命科学" maxlength="80"></label>
-      <label class="full lb">主要竞品（顿号或逗号分隔，2–5个——生成对比类问题与竞品参照线用）<input id="npComp" class="inp" placeholder="如：深圳湾科技园、天安数码城" maxlength="120"></label>
+      <label class="full lb">主要竞品（顿号或逗号分隔，2–5个——生成对比类问题与竞品参照线用）<input id="npComp" class="inp" placeholder="如：深圳湾科技生态园、天安数码城" maxlength="120"></label>
       <label class="full lb">运营主体（生成物料时的归属表述，可留空）<input id="npOperator" class="inp" placeholder="如：招商蛇口产业园区（招商产园）" maxlength="60"></label>
       <div class="full lb">问题矩阵档位（监测用；之后可改）
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px" id="npTierBox">
@@ -656,7 +656,7 @@
         </div>
       </div>
       <label class="full lb">自有域名·可控阵地（每行一个：官网/公众号——能发布内容的才算）<textarea id="npOwn" class="inp" rows="2" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号，有就填）"></textarea></label>
-      <label class="full lb">集团信源·选填（每行一个：集团官网/REIT 披露页——可信但不能在上面发布内容）<textarea id="npGroup" class="inp" rows="2" placeholder="如：cmcreit.com（集团 REIT 披露页）"></textarea></label>
+      <label class="full lb">集团信源·选填（每行一个：集团官网/REIT 披露页——可信但不能在上面发布内容）<textarea id="npGroup" class="inp" rows="2" placeholder="如：cmcreit.com（集团 REIT 披露页——REIT=以园区资产上市的基金，公告数据很权威）"></textarea></label>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
       <button class="btn btn-ghost" id="npCancel" type="button">取消</button>
@@ -680,10 +680,10 @@
           <label class="chip" style="cursor:pointer"><input type="radio" name="peMode" value="none" style="margin-right:4px">无官网（实体体检路线）</label>
         </div>
       </div>
-      <label class="full lb">官方承载页域名<input id="peUrl" class="inp" placeholder="www.example.com" maxlength="120"></label>
+      <label class="full lb">官网网址<input id="peUrl" class="inp" placeholder="www.example.com" maxlength="120"></label>
       <label class="full lb">城市/片区<input id="peCity" class="inp" placeholder="如：深圳南山" maxlength="40"></label>
       <label class="full lb">主导产业（逗号分隔）<input id="peInd" class="inp" placeholder="如：数字经济、人工智能" maxlength="80"></label>
-      <label class="full lb">主要竞品（逗号分隔，2–5个——对比类问题与竞品参照线用）<input id="peComp" class="inp" placeholder="如：深圳湾科技园、天安数码城" maxlength="120"></label>
+      <label class="full lb">主要竞品（逗号分隔，2–5个——对比类问题与竞品参照线用）<input id="peComp" class="inp" placeholder="如：深圳湾科技生态园、天安数码城" maxlength="120"></label>
       <label class="full lb">运营主体<input id="peOperator" class="inp" placeholder="如：××集团产业园区事业部" maxlength="60"></label>
       <label class="full lb">自有域名·可控阵地（每行一个）<textarea id="peOwn" class="inp" rows="2" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号，有就填）"></textarea></label>
       <label class="full lb">集团信源·选填（可信但不能发布内容的：集团官网/披露页）<textarea id="peGroup" class="inp" rows="2" placeholder="如：cmcreit.com"></textarea></label>
@@ -765,10 +765,10 @@
   </div>
 </div>
 
-<script src="js/data.js?v=0.1.12"></script>
-<script src="js/app.js?v=0.1.12"></script>
-<script src="js/ops.js?v=0.1.12"></script>
-<script src="js/tour.js?v=0.1.12"></script>
+<script src="js/data.js?v=0.1.13"></script>
+<script src="js/app.js?v=0.1.13"></script>
+<script src="js/ops.js?v=0.1.13"></script>
+<script src="js/tour.js?v=0.1.13"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -783,7 +783,7 @@
     } catch (e) {}
   })();
 </script>
-<script src="js/chat-kb.js?v=0.1.12"></script>
-<script src="js/chat.js?v=0.1.12"></script>
+<script src="js/chat-kb.js?v=0.1.13"></script>
+<script src="js/chat.js?v=0.1.13"></script>
 </body>
 </html>

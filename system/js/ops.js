@@ -570,7 +570,7 @@ async function opsBatch() {
         results.push({ id: p.id, hit: !!own, tops: tops.map(t => hostOf(t.url)) });
       }
     } catch (e) { errs++; }
-    done++; save();
+    done++; save({ silent: true });   /* V0.1.13 F7：批内静默保存，收尾聚合一条留痕（不再逐问刷屏） */
     await new Promise(r => setTimeout(r, 250));
   }
   btn.classList.remove("is-busy"); btn.textContent = "跑一轮30问（真实搜索）";
@@ -579,6 +579,7 @@ async function opsBatch() {
   $("#batchPct").textContent = "100%";
   $("#batchTxt").innerHTML = `完成 <b class="num">${done}</b>/<span class="num">${P_prompts().length}</span> 问 · 前列出现自有渠道 <b class="num" style="color:${hits ? "var(--color-ok)" : "var(--color-bad)"}">${hits}</b> 问 · 失败 <b class="num">${errs}</b> · 已自动写入下方台账（引擎=搜索通道）` +
     (errs ? ' <span class="tag tag-warn">部分失败可稍后重跑，重复记录可在台账删除</span>' : "");
+  save({ action: "跑一轮30问", detail: `${done}/${P_prompts().length} 问完成 · 前列出现自有渠道 ${hits} 问 · 失败 ${errs} · 已自动写入台账` });
   pushSnapshot("round");   /* V4 2.1：监测轮完成自动记快照 */
   render.monitor(); render.dashboard();
 }
@@ -657,7 +658,7 @@ function buildReportHtml(e) {
     <div class="muted" style="margin:4px 0 10px">检查对象 <b class="num">${isEnt ? `品牌词「${esc(e.brand || e.url)}」（无官网实体体检）` : esc(e.url)}</b>${e.brand && !isEnt ? ` · 品牌词「${esc(e.brand)}」` : ""} · ${esc(e.ts)} · 真实 联网检查与搜索取证</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:baseline">
       <span style="font-family:var(--font-mono);font-size:var(--text-xl);font-weight:600;color:${vColor}">${verdict}</span>
-      <span class="tag tag-ok">通过 ${c.pass}</span><span class="tag tag-warn">警告 ${c.warn}</span><span class="tag tag-bad">未过 ${c.fail}</span>
+      <span class="tag tag-ok">通过 ${c.pass}</span><span class="tag tag-warn">警告 ${c.warn}</span><span class="tag tag-bad">未通过 ${c.fail}</span>
     </div>
   </div>
   <table class="tbl"><thead><tr><th style="width:44px"></th><th style="width:56px">编号</th><th>检查项</th><th>证据（真实探测）</th></tr></thead>
@@ -688,7 +689,7 @@ function rptPrintDoc(e) {
   li{margin:6px 0}@media print{body{margin:0}}</style></head><body>
   <h1>园区 GEO 一键诊断报告</h1>
   <p class="m">对象 <b>${esc(e.url)}</b>${e.brand ? ` · 品牌词「${esc(e.brand)}」` : ""} · ${esc(e.ts)} · 证据均为真实探测</p>
-  <div class="b"><b>总体结论：</b>${c.fail ? "存在阻断项，需整改后再评估内容投放" : c.warn ? "基本健康，有可优化项" : "全部通过"} —— 通过 ${c.pass} / 警告 ${c.warn} / 未过 ${c.fail}</div>
+  <div class="b"><b>总体结论：</b>${c.fail ? "存在阻断项，需整改后再评估内容投放" : c.warn ? "基本健康，有可优化项" : "全部通过"} —— 通过 ${c.pass} / 警告 ${c.warn} / 未通过 ${c.fail}</div>
   <h3>逐项明细</h3><table><tr><th></th><th>编号</th><th>检查项</th><th>证据</th></tr>
   ${(e.checks || []).map(x => `<tr><td><span class="tag ${x.status === "pass" ? "ok" : x.status === "warn" ? "warn" : "bad"}">${x.status === "pass" ? "✓" : x.status === "warn" ? "⚠" : "✗"}</span></td><td>${esc(x.id)}</td><td><b>${esc(x.name)}</b></td><td style="font-size:12px;color:#41506b">${esc(x.evidence)}</td></tr>`).join("")}</table>
   ${(e.checks || []).some(x => x.status !== "pass") ? `<h3>整改建议</h3><ol>${(e.checks || []).filter(x => x.status !== "pass").map(x => `<li><b>${x.id} ${esc(x.name)}：</b>${esc(GEO.diagAdvice[x.id] || "")}</li>`).join("")}</ol>` : ""}
@@ -721,8 +722,8 @@ render.toolkit = () => {
   /* V5 双形态说明文案（V4.6.1 只改了工作台，此处曾漏改）：按项目承载形态三态渲染 */
   const tkHelp = $("#tkHelpLine");
   if (tkHelp) tkHelp.textContent = noSite()
-    ? "生成5个不依赖官网、品宣自己就能执行的文件：百科词条更新稿（数字全部取口径表）· 地图信息核对清单（约30分钟）· 一园一档公众号版 · 选址FAQ20问（过评分器再发）· 渠道分发指南。"
-    : "生成7个可直接使用的文件：网站 AI 可读配置（交网站管理员）· AI 说明文件（传官网根目录）· 结构化数据标签（贴页面）· 一园一档（内容库最小单元）· 选址FAQ20问（过评分器再发）· 渠道分发指南 · 地图信息核对清单（全项目基础层，约30分钟）。";
+    ? "生成5个不依赖官网、品宣自己就能执行的文件：百科词条更新稿（数字全部取口径表）· 地图信息核对清单（约30分钟）· 一园一档公众号版 · 选址FAQ20问（发前先到「诊断→内容评分」≥75分再发）· 渠道分发指南。"
+    : "生成7个可直接使用的文件：网站 AI 可读配置（交网站管理员）· AI 说明文件（传官网根目录）· 结构化数据标签（贴页面）· 一园一档（内容库最小单元）· 选址FAQ20问（发前先到「诊断→内容评分」≥75分再发）· 渠道分发指南 · 地图信息核对清单（全项目基础层，约30分钟）。";
   const want = ((cur.brand || cur.name || "") + "").split("（")[0].trim();
   if ($("#tkPark").dataset.proj !== CUR) {
     const calPark = [...new Set(state.caliber.map(r => r.park))]
@@ -733,7 +734,13 @@ render.toolkit = () => {
     $("#tkPark").dataset.proj = CUR;
   }
   render.content();  /* 选题单 表单选项填充（复用） */
-  if ($("#channelBox").children.length === 0) renderChannels(cur.brand || cur.name || "试点园区", ctx.industry || "");
+  /* V0.1.13 F1：渠道图渲染加项目归属章——「只在空时渲染」分不清空态与上个项目（或演示态）残留，
+     与 tkPark.dataset.proj 同一防线；换项目/退出演示后按当前项目重渲 */
+  const cbEl = $("#channelBox");
+  if (!cbEl || cbEl.dataset.proj !== CUR) {
+    if (cbEl) cbEl.dataset.proj = CUR;
+    renderChannels(cur.brand || cur.name || "试点园区", ctx.industry || "");
+  }
 };
 document.addEventListener("DOMContentLoaded", () => {
   const dg = $("#dgRun"); if (dg) dg.addEventListener("click", opsDiagnose);
