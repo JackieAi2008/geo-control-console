@@ -342,7 +342,7 @@ async function submitNewProject() {
   /* V5：新建即按元数据实例化问题矩阵（模板自带兜底问法，不再需要 V4.2 的名字替换补丁） */
   renderProjectContext(); renderAllViews();
   go("dashboard");
-  toast(`项目「${meta.name}」已创建，30问矩阵已按本项目生成。下一步：${mode === "none" ? "诊断 → 一键诊断 → 实体体检（用品牌词查网上存在感）" : "诊断 → 一键诊断；再到口径表 建立本项目唯一事实源"}`);
+  toast(`项目「${meta.name}」已创建，问题矩阵已按本项目生成（${state.prompts.length} 问）。下一步：${mode === "none" ? "诊断 → 一键诊断 → 实体体检（用品牌词查网上存在感）" : "诊断 → 一键诊断；再到口径表 建立本项目唯一事实源"}`);
 }
 let state = {};   /* 由 initProjects() → loadCurrentState() 按 CUR 填充（调用在文件末尾，save 定义之后，避免 TDZ） */
 /* save() 定义在服务器模式区块（本地即时存 + 服务器防抖同步） */
@@ -1803,6 +1803,11 @@ ${plat}
 /* ══ 5. 监测 ══ */
 const ENGINE_LIST = ["豆包","DeepSeek","腾讯元宝","通义千问","文心一言","Kimi","百度AI搜索","秘塔","ChatGPT","Perplexity"];
 render.monitor = () => {
+  /* V5.1：⑤ 区文案跟档位（轻量版 12 问，不再硬编码"30问"） */
+  const nQ = P_prompts().length;
+  const bh5 = document.querySelector("#batchH3"), bb = $("#batchRun");
+  if (bh5) bh5.textContent = `⑤ 一键跑${nQ}问（信源侧真实搜索）`;   /* 只改 span（V5.1 误用 h3.textContent 抹掉过按钮，已隔离） */
+  if (bb) bb.textContent = `跑一轮${nQ}问（真实搜索）`;
   const st = ledgerStats();
   $("#monStats").innerHTML = `
     <div class="card kpi"><div class="kpi-num">${st.mention === null ? "—" : Math.round(st.mention * 100) + "<small>%</small>"}</div><p>平均提及率（答案侧 · 提及=1 / 相似=0.5）<br><span class="muted" style="font-size:11px">n=${st.ansN} 条人工实测</span></p></div>

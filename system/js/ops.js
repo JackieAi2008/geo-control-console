@@ -6,6 +6,12 @@
 
 const hostOf = u => { try { return new URL(u).hostname; } catch (e) { return u; } };
 
+/* V5.1 档位感知的载体名词：轻量版（单楼宇/单体）用楼宇语境，其余用园区语境 */
+function venueNoun() {
+  try { return ((curProject() || {}).matrixTier === "lite") ? "商务楼宇" : "产业园区"; }
+  catch (e) { return "产业园区"; }
+}
+
 /* ══════ ① 一键诊断（V4.5 双模式：官网体检 / 实体体检·无官网可做）══════ */
 let DG_MODE = null;   /* null=跟随项目承载形态：无官网项目默认实体体检 */
 function dgMode() { return DG_MODE || (noSite() ? "entity" : "site"); }
@@ -135,15 +141,16 @@ function genLlmsTxt(park, url) {
 }
 function genSchema(park, url, city, industry) {
   const op = (typeof projCtx === "function" ? projCtx().operator : "") || "【待补：运营主体】";
-  return `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "description": "${park}是${city}${industry}产业园区。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", "产业园区", "企业选址"]\n}\n</script>`;
+  return `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "description": "${park}是${city}${industry}${venueNoun()}。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", venueNoun(), "企业选址"]\n}\n</script>`;
 }
 /* V4.5 无官网实体物料（不依赖官网承载页，品宣自己可执行）*/
 function genBaikeDraft(park, F, op) {
   const g = (k, d) => F[k] || d;
-  return `# 百科词条更新稿：${park}\n> 生成 ${today()} · 百度百科是各 AI 引擎交叉对照的基础层。每个数字必须与口径表一致并附权威来源链接，无来源的数字百科审核不过、AI 也不敢引用。\n\n## 词条正文（按百科惯例结构，逐段替换）\n\n${park}是${op}运营的产业园区，位于【待填：城市+片区】，主导${g("主导产业", "【待填】")}产业。\n\n【基本信息】\n- 运营面积：${g("面积", "【待填：见口径表】")}\n- 入驻企业：${g("入驻企业数", "【待填：见口径表】")}\n- 产业聚集度：${g("产业聚集度", "【待填：见口径表】")}\n- 权威背书：${g("行业排名", "【待填：榜单名+年份，必须写明榜单名】")}\n\n【区位交通】\n【待填：地址/地铁线站/主干道/距离机场高铁站】\n\n【产业定位】\n【待填：主导产业+代表企业，数据取口径表】\n\n## 参考资料清单（百科正文每个关键数字都要能对到一条）\n1. 【政府网站/权威媒体名】报道标题，日期，链接\n2. 【REIT公告/榜单发布方】文件名，日期，链接\n3. 【待补：逐条补齐后才能提交】\n\n## 提交方法\n1. 打开 baike.baidu.com 搜「${park}」：有词条→「编辑」逐项更新；无词条→「创建词条」\n2. 正文按上述结构粘贴，【待填】全部补齐\n3. 参考资料逐条添加来源链接（政府网站、权威媒体、REIT 公告优先）\n\n*更新时间：${today()} · 责任人：__*`;
+  const VN = venueNoun();
+  return `# 百科词条更新稿：${park}\n> 生成 ${today()} · 百度百科是各 AI 引擎交叉对照的基础层。每个数字必须与口径表一致并附权威来源链接，无来源的数字百科审核不过、AI 也不敢引用。\n\n## 词条正文（按百科惯例结构，逐段替换）\n\n${park}是${op}运营的${VN}，位于【待填：城市+片区】，主导${g("主导产业", "【待填】")}产业。\n\n【基本信息】\n- 运营面积：${g("面积", "【待填：见口径表】")}\n- 入驻企业：${g("入驻企业数", "【待填：见口径表】")}\n- 产业聚集度：${g("产业聚集度", "【待填：见口径表】")}\n- 权威背书：${g("行业排名", "【待填：榜单名+年份，必须写明榜单名】")}\n\n【区位交通】\n【待填：地址/地铁线站/主干道/距离机场高铁站】\n\n【产业定位】\n【待填：主导产业+代表企业，数据取口径表】\n\n## 参考资料清单（百科正文每个关键数字都要能对到一条）\n1. 【政府网站/权威媒体名】报道标题，日期，链接\n2. 【REIT公告/榜单发布方】文件名，日期，链接\n3. 【待补：逐条补齐后才能提交】\n\n## 提交方法\n1. 打开 baike.baidu.com 搜「${park}」：有词条→「编辑」逐项更新；无词条→「创建词条」\n2. 正文按上述结构粘贴，【待填】全部补齐\n3. 参考资料逐条添加来源链接（政府网站、权威媒体、REIT 公告优先）\n\n*更新时间：${today()} · 责任人：__*`;
 }
 function genMapChecklist(park) {
-  return `# 地图信息核对清单：${park}\n> AI 与搜索引擎回答「在哪儿 / 怎么去 / 周边有什么」类问题时高度依赖地图数据。三个平台逐项核对，约 30 分钟，不需要任何技术。\n\n## 三个平台逐项核对\n\n| 平台 | 入口 | 动作 |\n|---|---|---|\n| 高德地图 | https://ditu.amap.com 搜「${park}」 | 认领主体 → 核对名称/地址/电话 → 补实景照片 → 类目选「产业园区」 |\n| 百度地图 | https://map.baidu.com 搜「${park}」 | 同上（百度系数据同时喂给文心一言） |\n| 腾讯地图 | https://map.qq.com 搜「${park}」 | 同上 |\n\n## 核对项（三平台必须完全一致）\n- 名称：与品牌词一字不差（无错别字/无旧名）\n- 地址：与官方口径一致\n- 电话：招商热线（与口径表同一号码）\n- 类目：产业园区/产业园（勿选「写字楼出租」等杂类）\n- 照片：≥3 张实景（园区门头/办公场景/区位交通）\n- 营业状态：正常营业\n\n## 常见问题\n- 搜不到 → 先创建地点并认领（需营业执照）\n- 名称对但信息是旧的 → 平台内「报错/反馈」提交更正\n- 三平台信息互相矛盾 → 以口径表为准逐个改齐（AI 交叉验证不一致会降权）\n\n*核对完成 ${today()} · 责任人：__*`;
+  return `# 地图信息核对清单：${park}\n> AI 与搜索引擎回答「在哪儿 / 怎么去 / 周边有什么」类问题时高度依赖地图数据。三个平台逐项核对，约 30 分钟，不需要任何技术。\n\n## 三个平台逐项核对\n\n| 平台 | 入口 | 动作 |\n|---|---|---|\n| 高德地图 | https://ditu.amap.com 搜「${park}」 | 认领主体 → 核对名称/地址/电话 → 补实景照片 → 类目选「${venueNoun() === "商务楼宇" ? "商务写字楼/商业楼宇" : "产业园区"}」 |\n| 百度地图 | https://map.baidu.com 搜「${park}」 | 同上（百度系数据同时喂给文心一言） |\n| 腾讯地图 | https://map.qq.com 搜「${park}」 | 同上 |\n\n## 核对项（三平台必须完全一致）\n- 名称：与品牌词一字不差（无错别字/无旧名）\n- 地址：与官方口径一致\n- 电话：招商热线（与口径表同一号码）\n- 类目：${venueNoun() === "商务楼宇" ? "商务写字楼/商业楼宇（勿选「写字楼出租」等杂类）" : "产业园区/产业园（勿选「写字楼出租」等杂类）"}\n- 照片：≥3 张实景（${venueNoun() === "商务楼宇" ? "楼栋外立面/大堂/办公场景" : "园区门头/办公场景/区位交通"}）\n- 营业状态：正常营业\n\n## 常见问题\n- 搜不到 → 先创建地点并认领（需营业执照）\n- 名称对但信息是旧的 → 平台内「报错/反馈」提交更正\n- 三平台信息互相矛盾 → 以口径表为准逐个改齐（AI 交叉验证不一致会降权）\n\n*核对完成 ${today()} · 责任人：__*`;
 }
 
 /* ══════ 整改工单（人话行动卡版：五要素+按业务价值排序+可直贴微信的转发消息）════════ */
@@ -283,7 +290,7 @@ function opsBuildToolkit() {
   saveProjMeta({ city: city.slice(0, 40), industries: industry.split(/[,，、;；\s]+/).filter(Boolean).slice(0, 5) });
   const url = (state.parkUrl || curProject().url || "").trim();
   const hasSite = !!url;   /* V4.5：无官网项目不再回退假域名——官网三件物料不生成，改出百科/地图/公众号实体物料 */
-  const op = ctx.operator, opShort = ctx.operatorShort;
+  const op = ctx.operator || "【待补：运营主体全称（项目设置里填）】", opShort = ctx.operatorShort || "";
   const rows = state.caliber.filter(r => r.park && (r.park.includes(park.slice(0, 2)) || park.includes(r.park.slice(0, 2))));
   const F = {}; rows.forEach(r => { F[r.field] = r.official; });
   const g = (k, d) => F[k] || d;
@@ -296,7 +303,7 @@ function opsBuildToolkit() {
 
   const llms = `# ${park}\n\n> ${city}${industry}产业园区 · 运营方：${op} · 官网 https://${url}\n\n## 核心事实（数据时点见口径表）\n\n- 入驻企业：${g("入驻企业数", "【待填：见口径表】")}\n- 产业聚集度：${g("产业聚集度", "【待填】")}\n- 运营面积：${g("面积", "【待填】")}㎡\n- 主导产业：${industry}\n- 权威背书：${g("行业排名", "【待填：榜单名+年份，引用须写明榜单名】")}\n\n## 页面导航\n\n- [园区官网](https://${url}/)\n- [一园一档页]（部署后把链接更新到这里）\n- [选址FAQ]（部署后把链接更新到这里）\n\n<!-- 更新时间 ${today()} · 责任人：__ -->`;
 
-  const jsonld = `<!-- 结构化数据：贴到园区页面 </head> 前（部署前把【待填】补齐，并对照口径表逐项核对） -->\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "alternateName": "${park}（${opShort}）",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "areaServed": "${city}",\n  "description": "${park}是${city}${industry}产业园区，入驻企业${g("入驻企业数", "【待填】")}，产业聚集度${g("产业聚集度", "【待填】")}。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", "产业园区", "企业选址"]\n}\n</script>`;
+  const jsonld = `<!-- 结构化数据：贴到园区页面 </head> 前（部署前把【待填】补齐，并对照口径表逐项核对） -->\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "alternateName": "${park}（${opShort}）",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "areaServed": "${city}",\n  "description": "${park}是${city}${industry}${venueNoun()}，入驻企业${g("入驻企业数", "【待填】")}，产业聚集度${g("产业聚集度", "【待填】")}。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", venueNoun(), "企业选址"]\n}\n</script>`;
 
   const profile = `# ${park}（一园一档）\n> 数据截至 ${today()} · 责任人：__ · 数字均取自口径表，发布前逐项核对\n\n## 一句话\n${park}是${op}旗下园区，位于${city}，主导${industry}产业。\n\n## 基本信息表\n| 项目 | 数据 | 时点 |\n|---|---|---|\n| 运营主体 | ${op} | — |\n| 区位交通 | 【待填：地址/地铁线站/距离】 | — |\n| 运营面积 | ${g("面积", "【待填】")} | 【待填】 |\n| 入驻企业 | ${g("入驻企业数", "【待填】")} | 【待填】 |\n| 产业聚集度 | ${g("产业聚集度", "【待填】")} | 【待填】 |\n| 租金区间 | 【待填：元/㎡/月】 | 【待填】 |\n| 龙头企业 | 【待填：500强/上市公司名单】 | — |\n| 权威背书 | ${g("行业排名", "【待填：榜单名+年份】")} | — |\n\n## 选址者最关心的5个问题（FAQ骨架，逐问补答≤300字）\n${P_prompts().filter(p => p.cat === "选址决策").slice(0, 5).map(p => `### ${p.q}\n【答案前置：先给结论+2个硬数据，再展开】`).join("\n\n")}\n\n## 企业说\n${(() => { const qs = (typeof evidenceQuotes === "function") ? evidenceQuotes(park) : [];
   return qs.length ? qs.map(q => `> 「${q.content}」\n> —— ${q.person}${q.title ? "·" + q.title : ""}${q.source ? `（${q.source}）` : ""}`).join("\n\n") : "> 【待采集：入驻企业负责人原话，带姓名职务（在「诊断→证据库」录入已核验引言后，此处自动填充）】"; })()}\n\n*更新时间：${today()} · 责任人：__*`;
