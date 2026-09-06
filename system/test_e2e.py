@@ -43,7 +43,7 @@ def main():
         check("ping", s == 200 and d.get("ok") is True, f"status={s} body={d}")
 
         print("T2 状态持久化往返（含乐观锁）")
-        sample = {"audit": {"T1": 2, "T2": 1}, "ledger": [
+        sample = {"audit": {"T1": 2, "T2": 1}, "parkUrl": "www.cmsk1979.com", "statsV2": True, "ledger": [
             {"date": "2026-09-04", "engine": "豆包", "promptId": "P2", "mention": 1, "sentiment": 1, "url": "", "note": "App端"},
             {"date": "2026-08-21", "engine": "DeepSeek", "promptId": "P20", "mention": 0, "sentiment": 0.5, "url": "", "note": "", "cooccur": ["张江高科"]}],
             "caliber": [{"park": "蛇口网谷", "field": "入驻企业数", "official": "近460家", "asOf": "2025-11", "source": "测试", "conflicts": []}],
@@ -83,7 +83,9 @@ def main():
             check("probe 真实搜索", False, f"异常: {e}", skippable=True)
 
         print("T4 静态资源")
-        for path, mark in [("/", "GEO 智控台"), ("/js/app.js", "scoreContent"), ("/css/tokens.css", "招商蓝")]:
+        for path, mark in [("/", "GEO 智控台"), ("/js/app.js", "scoreContent"), ("/css/tokens.css", "招商蓝"),
+                           ("/js/data.js?v=4.6", "entityChecklist"), ("/js/ops.js?v=4.6", "实体体检"),
+                           ("/js/app.js?v=4.6", "项目库")]:
             with urllib.request.urlopen(ROOT + path, timeout=10) as resp:
                 body = resp.read().decode("utf-8", "ignore")
                 check(f"GET {path}", resp.status == 200 and mark in body, f"含「{mark}」")
@@ -98,6 +100,11 @@ def main():
                 return open(out, encoding="utf-8", errors="ignore").read()
             html = dump("diag/scan")
             check("一键诊断页渲染", "dgRun" in html and "开始一键诊断" in html, f"诊断表单与按钮存在")
+            check("V4.5诊断双入口", "实体体检" in html and "dgModeEntity" in html and "dgModeSite" in html,
+                  "官网体检/实体体检双入口chip渲染")
+            html = dump("projects")
+            check("V4.5新建弹窗承载形态", "网上哪里能找到这个项目" in html and "暂时都没有" in html and 'value="none"' in html,
+                  "三选一承载形态单选（own/parent/none）")
             html = dump("diag/report")
             check("诊断报告查阅页", "reportList" in html and ("诊断报告" in html) and ("打印" in html),
                   f"档案列表+报告视图+打印按钮存在（含历史数据或空态）")
@@ -109,7 +116,7 @@ def main():
             html = dump("act/toolkit")
             check("提升包页渲染", "tkBuild" in html and "渠道分发图" in html and html.count("agent-card") >= 8,
                   f"生成按钮+渠道卡×{html.count('agent-card')}")
-            check("V4资产追踪卡", "watchBox" in html and "查进榜" in html, "Watched Pages管理区")
+            check("V4资产追踪卡", "watchBox" in html and "查排名" in html, "资产追踪管理区（空态引导文案含查排名）")
             html = dump("act/agent")
             check("Agent页4张卡片", html.count("agent-card") == 4, f"agent-card×{html.count('agent-card')}")
             html = dump("monitor")
@@ -129,12 +136,19 @@ def main():
             check("V4共现字段", "mCooccur" in html and "竞品同时出现" in html, "录入表单含竞品同时出现")
             html = dump("dashboard")
             check("工作台三步向导", "三步上手向导" in html and "去一键诊断" in html, "向导卡片渲染")
+            check("V4.6报头两态(项目内返回)", "‹ 项目库" in html and "projChip" in html, "项目内chip=一步返回项目库")
             check("V4基线对比卡", ("vs 起始数据" in html or "首测即起始数据" in html) and ("答案侧" in html or "信源侧" in html or "平均提及率" in html), "KPI含起始数据Δ与通道标注")
             check("V4项目身份块(报头)", "projChip" in html and "pcName" in html and "projSel" not in html,
                   "报头项目身份块渲染、原生下拉已移除")
             html = dump("projects")
-            check("项目总览启动页", html.count("proj-card") >= 2 and "新建项目" in html and "体检分" in html,
-                  f"项目卡片+新建卡×{html.count('proj-card')}（含真实快照数据）")
+            check("V4.6项目库工具栏", "pjQ" in html and "pjChips" in html and "pjSort" in html and "pjArch" in html
+                  and "pjNew" in html and "新建项目" in html, "搜索/形态状态chips/排序/含归档/新建按钮")
+            check("V4.6项目库页头与形态筛选", "项目库" in html and "无官网" in html and "挂上级官网" in html
+                  and "未诊断" in html and "pjStat" in html, "h2项目库+形态大白话chips+统计条")
+            check("V4.6报头两态(库内高亮)", "pj-on" in html and "☰" in html, "项目库态chip高亮（同步渲染）")
+            check("V4.6上次处理条", "上次处理" in html or "pjRecent" in html, "上次处理直达条（服务器汇总到位后显示项目名）")
+            check("V4.6卡片形态徽标", "pc-badges" in html and ("挂上级官网" in html or "无官网" in html), "卡片含承载形态徽标")
+            check("V4.6体检分口径标注", "24项" in html or "30项" in html or "体检分" in html, "分数口径随形态标注")
             check("V4留痕与恢复卡", "auditBox" in html and "restoreFile" in html and "操作留痕" in html, "项目总览页留痕+备份恢复")
             check("V4组合视图(趋势/预警/归档)", "vs起始数据" in html and "归档" in html, "项目卡含趋势箭头位+归档入口")
         else:
@@ -149,8 +163,26 @@ def main():
                   f"checks={len(checks)} 项: {ids}")
             ev = next((c["evidence"] for c in checks if c["id"] == "T1a"), "")
             check("diagnose 带证据", "GET" in ev and "→" in ev, f"证据示例: {ev[:60]}")
+            check("site模式返回mode标记", d.get("mode") == "site", f"mode={d.get('mode')}")
         except Exception as e:
             check("diagnose 端点", False, f"异常: {e}")
+
+        print("T7b 实体体检端点（V4.5 无官网项目入口 · 真实搜索）")
+        try:
+            s, d = req("POST", "/api/diagnose", {"url": "", "brand": "", "mode": "entity"})
+            check("entity 无品牌词被拒", "品牌词" in str(d.get("error", "")), f"error={str(d.get('error'))[:50]}")
+            s, d = req("POST", "/api/diagnose", {"url": "", "brand": "蛇口网谷", "mode": "entity"})
+            if d.get("error"):
+                check("entity 实体体检", False, d["error"], skippable=True)
+            else:
+                eids = [c["id"] for c in d.get("checks", [])]
+                check("entity 实体体检", s == 200 and d.get("mode") == "entity" and "E2a" in eids and "E1" in eids and "E6" in eids and "E4" in eids,
+                      f"mode={d.get('mode')} checks={eids}（无官网四项实体证据）", skippable=True)
+                check("entity 判定保守（E1/E6 未确认时 warn 而非 fail）",
+                      all(c["status"] in ("pass", "warn") for c in d.get("checks", []) if c["id"] in ("E1", "E6")),
+                      "百科/企业信息只 warn，证据里给人工核实方法", skippable=True)
+        except Exception as e:
+            check("entity 端点", False, f"异常: {e}", skippable=True)
 
         print("T8 内置对话助手（真实本地模型）")
         try:
@@ -174,6 +206,14 @@ def main():
         s, d = req("POST", "/api/projects", {"id": "p_testb", "name": "测试园区B", "url": "www.bpark-test.com",
                                              "brand": "B园", "ownDomains": ["bpark-test.com"]})
         check("新建项目B", s == 200 and d.get("id") == "p_testb", f"id={d.get('id')}")
+        s, d = req("POST", "/api/projects", {"id": "p_nosite", "name": "万海大厦", "url": "",
+                                             "brand": "万海大厦", "entityMode": "none", "ownDomains": ["mp.weixin.qq.com"]})
+        check("V4.5新建无官网项目", s == 200, f"status={s}")
+        _, dpl = req("GET", "/api/projects")
+        pn = next((p for p in dpl.get("projects", []) if p["id"] == "p_nosite"), {})
+        check("V4.5 entityMode 往返+推导", pn.get("entityMode") == "none"
+              and next((p.get("entityMode") for p in dpl.get("projects", []) if p["id"] == "p_testb"), "?") == "parent",
+              f"显式none={pn.get('entityMode')} 有url推导parent")
         sampleB = {"audit": {"T1": 2}, "ledger": [
             {"date": "2026-09-04", "engine": "豆包", "promptId": "P9", "mention": 1, "sentiment": 1, "url": "", "note": "B专属标记"}],
             "snapshots": [{"ts": 5, "date": "2026-08-21", "type": "round", "auditPct": 5, "mentionAns": 40, "mentionAnsN": 1, "baseline": True},
@@ -197,8 +237,20 @@ def main():
               f"trend={sb.get('trend')} lastRound={sb.get('lastRound')} warn={sb.get('warn')}")
         s, d = req("POST", "/api/projects/archive", {"id": "p_testb", "archived": True})
         _, d2 = req("GET", "/api/projects")
-        check("V4项目归档", s == 200 and d.get("archived") is True and not any(p["id"] == "p_testb" for p in d2.get("projects", [])),
-              "归档后不出现在列表（数据保留）")
+        arch_b = next((p for p in d2.get("projects", []) if p["id"] == "p_testb"), {})
+        check("V4.6归档返回带标记", s == 200 and d.get("archived") is True and arch_b.get("archived") is True,
+              "归档项目仍返回（archived=True，项目库「含已归档」开关下展示/恢复）")
+        sb0 = next((p.get("summary") for p in d2.get("projects", []) if p["id"] == "p_nosite"), {})
+        check("V4.6 summary新字段", "woPending" in sb0 and "lastDiag" in sb0 and sb0.get("entMode") == "none",
+              f"woPending={sb0.get('woPending')} lastDiag={sb0.get('lastDiag')} entMode={sb0.get('entMode')}")
+        check("V4.6 none分母对齐(server)", sb0.get("auditPct") == 0,
+              f"无官网项目服务端分母排除T1-T6（空audit=0分，非NaN）·实测{sb0.get('auditPct')}")
+        s, d = req("POST", "/api/projects/archive", {"id": "p_testb", "archived": False})
+        _, d3 = req("GET", "/api/projects")
+        back_b = next((p for p in d3.get("projects", []) if p["id"] == "p_testb"), {})
+        check("V4.6归档恢复往返", s == 200 and d.get("ok") and back_b and not back_b.get("archived"),
+              "恢复后回到活跃列表（数据未动）")
+        req("POST", "/api/projects/archive", {"id": "p_testb", "archived": True})   # 测完再归档，保持原测试状态
         try:
             req("PUT", "/api/data", {"project": "p_testb", "base_rev": 0, "state": sampleB})  # 过期 rev 重放
             check("项目级乐观锁409", False, "未拒绝")
@@ -274,9 +326,11 @@ const snap = vm.runInContext(`computeSnapshot("round", {audit: {T1: 2, T2: 1, T3
   {date: "2026-09-04", engine: "搜索通道", promptId: "P4", mention: 0},
   {date: "2026-09-04", engine: "豆包", promptId: "P1", mention: 1},
   {date: "2026-09-04", engine: "Kimi", promptId: "P2", mention: 0}]})`, ctx);
+const snapNone = vm.runInContext('computeSnapshot("diag", {entityMode: "none", audit: {T1: 2, T2: 2, T3: 2, E1: 2, E2: 1}, lastDiag: {checks: []}, ledger: []})', ctx);
 console.log(JSON.stringify({bad: r1.score, good: r2.score,
   fp: {hi: fp1, mid: fp2, d: [dt1, dt2, dt3]},
   snap: {pct: snap.auditPct, fails: snap.diagFails, ans: snap.mentionAns, ansN: snap.mentionAnsN, src: snap.mentionSrc, srcN: snap.mentionSrcN, own: snap.ownHitN, ownT: snap.ownHitTotal, ownD: snap.ownHitDate},
+  snapNone: {pct: snapNone.auditPct},
   bp: {n: bp.rows.length, badn: bp.bad.length, co: (bp.rows[0] && bp.rows[0].cooccur || []).length},
   samp: {n: samp.qs.length, sev: samp.qs[0] ? samp.qs[0].severity : 0, noDoubao: !samp.engs.includes("豆包")}}));
 '''
@@ -301,6 +355,8 @@ console.log(JSON.stringify({bad: r1.score, good: r2.score,
             check("V4快照计算器(通道分层)", sn["pct"] == 50 and sn["fails"] == 1 and sn["ans"] == 50 and sn["ansN"] == 2
                   and sn["src"] == 50 and sn["srcN"] == 4 and sn["own"] == 1 and sn["ownT"] == 2 and sn["ownD"] == "2026-09-04",
                   f"体检{sn['pct']}·未过{sn['fails']}·答案侧{sn['ans']}(n={sn['ansN']})·信源侧{sn['src']}(n={sn['srcN']})·当日自有{sn['own']}/{sn['ownT']}")
+            check("V4.5无官网分母排除", r.get("snapNone", {}).get("pct") == 75,
+                  f"none模式 T1–T3(满分6)不进分母，E1+E2=3/4=75%·实测{r.get('snapNone', {}).get('pct')}%")
         else:
             check("评分器单元", False, p.stderr[:200] or "node 输出为空", skippable=True)
     finally:

@@ -444,6 +444,33 @@ pre.prompt-view {
   color: #fff; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .proj-chip .pc-caret { color: var(--color-gold-bright); flex-shrink: 0; }
+/* V4.6 报头 chip 两态：项目库页高亮 / 项目内一步返回 */
+.proj-chip .pc-ico { font-size: 13px; line-height: 1; }
+.proj-chip .pc-back { color: var(--color-gold-bright); font-size: var(--text-xs); letter-spacing: .02em; flex-shrink: 0; }
+.proj-chip .pc-back + .pc-name::before { content: ""; display: inline-block; width: 1px; height: 12px; background: rgba(255,255,255,.35); margin: 0 8px; vertical-align: -1px; }
+.proj-chip.pj-on { border-color: var(--color-gold-bright); background: rgba(255,255,255,.12); }
+
+/* V4.6 项目库工具栏与统计 */
+.pj-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.pj-chips .chip { min-height: 36px; }
+.pj-lb { font-size: var(--text-xs); color: var(--color-ink-3); letter-spacing: .06em; flex-shrink: 0; }
+.pj-stat { font-size: var(--text-sm); color: var(--color-ink-2); }
+.pj-recent {
+  appearance: none; cursor: pointer; font-family: var(--font-body);
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  background: var(--color-paper); border: var(--rule-hair) solid var(--color-line-2);
+  border-left: 3px solid var(--color-gold); border-radius: var(--radius-m);
+  padding: 10px 14px; margin-bottom: var(--space-md); min-height: 44px;
+}
+.pj-recent:hover { border-color: var(--color-accent); background: var(--color-paper-2); }
+.pj-rec-lb { font-size: var(--text-xs); color: var(--color-ink-3); letter-spacing: .06em; flex-shrink: 0; }
+.pj-recent b { font-family: var(--font-display); font-size: var(--text-md); }
+.pj-recent .pc-go { margin-top: 0; padding-top: 0; }
+
+/* V4.6 项目卡徽标行 / 待办红标 / 归档灰显 */
+.proj-card .pc-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.proj-card .pc-todo { font-size: var(--text-xs); color: var(--color-bad); font-weight: 600; margin-top: 6px; }
+.proj-card.archived { opacity: .62; border-left-color: var(--color-line-2); }
 
 /* 项目总览：卡片墙（真实数据，无数据显 —） */
 .proj-grid {
@@ -494,6 +521,12 @@ pre.prompt-view {
   .proj-chip .pc-name { max-width: none; }
   .proj-grid { grid-template-columns: 1fr; }
   .proj-card .pc-stats { display: grid; grid-template-columns: repeat(3, auto); gap: var(--space-sm) var(--space-lg); justify-content: start; }  /* 5 列挤压 → 3+2 两行 */
+  /* V4.6 项目库工具栏：搜索全宽；chips 换行铺开（375宽不依赖横滑发现筛选）；统计独立成行 */
+  #pjQ { flex: 1 1 100%; }
+  .pj-chips { row-gap: 8px; }
+  .pj-chips .chip { min-height: 44px; }
+  .pj-stat { flex: 1 1 100%; }
+  .pj-recent { flex-wrap: wrap; }
 }
 
 /* ── V4 1b：采样卡 / 矩阵管理 / 批量粘贴 ── */

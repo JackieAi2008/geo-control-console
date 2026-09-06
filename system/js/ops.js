@@ -6,24 +6,40 @@
 
 const hostOf = u => { try { return new URL(u).hostname; } catch (e) { return u; } };
 
-/* ══════ ① 一键诊断 ══════ */
+/* ══════ ① 一键诊断（V4.5 双模式：官网体检 / 实体体检·无官网可做）══════ */
+let DG_MODE = null;   /* null=跟随项目承载形态：无官网项目默认实体体检 */
+function dgMode() { return DG_MODE || (noSite() ? "entity" : "site"); }
+function setDgMode(m) {
+  DG_MODE = m;
+  const isSite = m === "site";
+  const bS = $("#dgModeSite"), bE = $("#dgModeEntity"), f = $("#dgSiteForm");
+  if (!bS || !bE || !f) return;
+  bS.classList.toggle("on", isSite); bE.classList.toggle("on", !isSite);
+  f.hidden = !isSite;
+  $("#dgHelp").hidden = !isSite; $("#dgHelpEntity").hidden = isSite;
+  $("#dgRun").textContent = isSite ? "开始一键诊断" : "开始实体体检";
+}
 async function opsDiagnose() {
   if (!SERVER_MODE) {
     toast("一键诊断需要后台：终端执行 python3 server.py 后刷新本页");
     $("#dgOut").innerHTML = '<p style="color:var(--color-bad)">当前为本地模式，无法发起真实探测。请在本文件夹终端运行 <b class="num">python3 server.py</b>，然后浏览器打开 <b class="num">http://localhost:8340</b>。</p>';
     return;
   }
+  const mode = dgMode();
   const url = $("#dgUrl").value.trim(), brand = $("#dgBrand").value.trim();
-  if (!url) { toast("请先填写官方承载页域名（如 www.cmsk1979.com）"); return; }
+  if (mode === "site" && !url) { toast("请先填写官方承载页域名（如 www.cmsk1979.com）；确实没有官网就切「实体体检」"); return; }
+  if (mode === "entity" && !brand) { toast("实体体检以品牌词为检查对象，请先填写品牌词（如：万海大厦）"); return; }
   const btn = $("#dgRun");
-  btn.classList.add("is-busy"); btn.textContent = "真实探测中（约10–30秒）…";
-  $("#dgOut").innerHTML = `<p class="muted">正在对 <b class="num">${esc(url)}</b> 发起真实联网检查：网站可达性 → AI 爬取许可 → AI 说明文件 → 首页源码分析（内容可读性/结构化数据/标题/图片说明）${brand ? " → 品牌词真实搜索" : ""}。每项结果都附证据，可点开复核。</p>`;
+  btn.classList.add("is-busy"); btn.textContent = mode === "site" ? "真实探测中（约10–30秒）…" : "真实搜索中（约5–15秒）…";
+  $("#dgOut").innerHTML = mode === "site"
+    ? `<p class="muted">正在对 <b class="num">${esc(url)}</b> 发起真实联网检查：网站可达性 → AI 爬取许可 → AI 说明文件 → 首页源码分析（内容可读性/结构化数据/标题/图片说明）${brand ? " → 品牌词真实搜索" : ""}。每项结果都附证据，可点开复核。</p>`
+    : `<p class="muted">正在以品牌词「<b class="num">${esc(brand)}</b>」做真实搜索，检查本项目在网上的存在感：自有渠道是否进前 10 → 百科词条 → 企业信息平台 → 权威信源覆盖。每项结果都附证据与人工核实方法。</p>`;
   let res;
   try {
-    const r = await fetch("/api/diagnose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, brand, ownDomains: curOwn() }) });
+    const r = await fetch("/api/diagnose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, brand, ownDomains: curOwn(), mode }) });
     res = await r.json();
   } catch (e) { res = { error: String(e) }; }
-  btn.classList.remove("is-busy"); btn.textContent = "开始一键诊断";
+  btn.classList.remove("is-busy"); btn.textContent = mode === "site" ? "开始一键诊断" : "开始实体体检";
   if (res.error) { $("#dgOut").innerHTML = `<p style="color:var(--color-bad)">诊断失败：${esc(res.error)}</p>`; return; }
 
   let filled = 0, kept = 0;
@@ -33,29 +49,59 @@ async function opsDiagnose() {
       else kept++;                                                          // 已有手动评分不覆盖
     }
   });
-  state.lastDiag = { ts: res.ts, url: res.url, brand, checks: res.checks };
+  res.brand = brand;   /* V4.5：实体体检报告/历史记录展示用 */
+  state.lastDiag = { ts: res.ts, url: res.url, brand, checks: res.checks, mode: res.mode || "site" };
   state.diagHistory = [JSON.parse(JSON.stringify(state.lastDiag)), ...(state.diagHistory || [])].slice(0, 20);
-  state.parkUrl = url; save();
+  if ((res.mode || "site") === "site") state.parkUrl = url;   /* 实体体检不动承载页地址 */
+  save();
   pushSnapshot("diag");   /* V4 2.1：诊断完成自动记快照（发展曲线数据点） */
   renderDiagResult(res, filled, kept);
   render.dashboard();
 }
 
+/* V4.5 实体资产核对清单（无官网项目主战场）：核对后打分直接计入体检表同编号项 */
+function entityChecklistHtml() {
+  return GEO.entityChecklist.map(g => `
+    <p class="kicker" style="margin:12px 0 2px">${esc(g.dim)}</p>
+    ${g.items.map(i => `
+      <div class="audit-item">
+        <div class="q"><span class="code">${i.id}</span><span class="t">${esc(i.t)}</span></div>
+        <div class="std"><b>核对什么：</b>${esc(i.what)}　<b>怎么核对：</b>${esc(i.how)}</div>
+        <div class="score-seg" role="radiogroup" aria-label="${esc(i.id)}打分">
+          ${[0, 1, 2].map(v => `<button data-echk="${i.id}" data-v="${v}" class="${state.audit[i.id] === v ? "on-" + v : ""}" aria-pressed="${state.audit[i.id] === v}">${v}</button>`).join("")}
+        </div>
+      </div>`).join("")}`).join("");
+}
+function bindEntityChecklist() {
+  $$("#dgChk [data-echk]").forEach(b => b.addEventListener("click", () => {
+    state.audit[b.dataset.echk] = +b.dataset.v;
+    save();
+    $("#dgChk").innerHTML = entityChecklistHtml();
+    bindEntityChecklist();
+    render.dashboard();
+  }));
+}
 function renderDiagResult(res, filled, kept) {
   const LV = { pass: "pass", warn: "warn", fail: "fail" }, IC = { pass: "✓", warn: "⚠", fail: "✗" };
+  const isEnt = res.mode === "entity";
   $("#dgOut").innerHTML =
-    `<p class="muted">诊断时间 <b class="num">${res.ts}</b> · 对象 <b class="num">${esc(res.url)}</b> · 已自动填入体检表 <b>${filled}</b> 项${kept ? `（${kept} 项已有手动评分，未被覆盖，请在「诊断→30项体检」人工复核）` : ""}</p>` +
+    `<p class="muted">${isEnt ? "实体体检" : "诊断"}时间 <b class="num">${res.ts}</b> · 检查对象 <b class="num">${isEnt ? "品牌词「" + esc(res.brand || res.url) + "」" : esc(res.url)}</b> · 已自动填入体检表 <b>${filled}</b> 项${kept ? `（${kept} 项已有手动评分，未被覆盖，请在「诊断→30项体检」人工复核）` : ""}</p>` +
     res.checks.map(c => `<div class="chk ${LV[c.status]}"><span class="ico">${IC[c.status]}</span>
       <div><b>${c.id} ${esc(c.name)}</b><span class="why" style="color:var(--color-ink-2)">${esc(c.evidence)}</span></div></div>`).join("") +
+    (isEnt ? `<div class="card" style="margin-top:12px;border-color:var(--color-accent)">
+      <h3 style="border:none;margin:0 0 4px">实体资产核对清单（12 项 · 无官网项目的主战场）</h3>
+      <p class="muted" style="font-size:var(--text-sm);margin:0 0 4px">上面是系统自动查的；下面 12 项需要你按提示人工核对后打分（0=没做，1=做了一半，2=做到了），分数直接计入体检表与发展曲线。</p>
+      <div id="dgChk">${entityChecklistHtml()}</div></div>` : "") +
     `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-primary" id="dgDl">下载诊断报告(.md)</button>
+      <button class="btn btn-primary" id="dgDl">下载${isEnt ? "实体体检" : "诊断"}报告(.md)</button>
       <button class="btn btn-ghost" id="dgCopy">复制报告内容</button>
       <a class="btn btn-primary" href="#/diag/report" onclick="RPT_MODE='wo'">生成整改工单 →</a>
       <a class="btn btn-ghost" href="#/diag/report">查阅完整报告 →</a>
       <a class="btn btn-ghost" href="#/diag/audit">去体检表看填入 →</a></div>`;
+  if (isEnt) bindEntityChecklist();
   $("#dgDl").addEventListener("click", () => {
     const md = diagReportMd(res);
-    download(`GEO诊断报告-${res.url}-${today()}.md`, md, "text/markdown");
+    download(`${isEnt ? "GEO实体体检报告" : "GEO诊断报告"}-${(res.brand || res.url)}-${today()}.md`, md, "text/markdown");
   });
   $("#dgCopy").addEventListener("click", () => {
     copyText(diagReportMd(res));
@@ -68,9 +114,12 @@ function diagReportMd(res) {
     (res.checks || []).forEach(c => Object.entries(c.score || {}).forEach(([k, v]) => { m[k] = Math.max(m[k] || 0, v); }));
     return m;
   })();
-  return `# 园区GEO一键诊断报告\n> ${res.ts} · 对象 ${res.url} · 证据均来自真实探测\n\n` +
+  const isEnt = res.mode === "entity";
+  return `# 园区GEO${isEnt ? "实体体检" : "一键诊断"}报告\n> ${res.ts} · 检查对象 ${isEnt ? `品牌词「${res.brand || res.url}」（无官网实体体检）` : res.url} · 证据均来自真实探测\n\n` +
     res.checks.map(c => `- [${c.status.toUpperCase()}] ${c.id} ${c.name}：${c.evidence}`).join("\n") +
-    `\n\n> 自动填入体检项：${JSON.stringify(auto)}\n> 下一步：诊断→报告→生成整改工单 派发执行；行动→优化文件 生成部署物料。`;
+    (isEnt ? `\n\n## 实体资产核对清单（12 项人工核对，分数见体检表）\n` +
+      GEO.entityChecklist.map(g => `### ${g.dim}\n` + g.items.map(i => `- ${i.id} ${i.t}：${i.what}（核对方法：${i.how}）`).join("\n")).join("\n") : "") +
+    `\n\n> 自动填入体检项：${JSON.stringify(auto)}\n> 下一步：诊断→报告→生成整改工单 派发执行；行动→优化文件 生成${isEnt ? "百科/公众号/地图" : "部署"}物料。`;
 }
 
 /* ══════ 物料生成器（优化文件与整改工单共用）════════ */
@@ -87,6 +136,14 @@ function genLlmsTxt(park, url) {
 function genSchema(park, url, city, industry) {
   const op = (typeof projCtx === "function") ? projCtx().operator : "招商蛇口产业园区（招商产园）";
   return `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "${park}",\n  "url": "https://${url}/",\n  "parentOrganization": { "@type": "Organization", "name": "${op}" },\n  "address": { "@type": "PostalAddress", "addressLocality": "${city}", "addressCountry": "CN" },\n  "description": "${park}是${city}${industry}产业园区。",\n  "telephone": "【待填：招商热线】",\n  "knowsAbout": ["${industry}", "产业园区", "企业选址"]\n}\n</script>`;
+}
+/* V4.5 无官网实体物料（不依赖官网承载页，品宣自己可执行）*/
+function genBaikeDraft(park, F, op) {
+  const g = (k, d) => F[k] || d;
+  return `# 百科词条更新稿：${park}\n> 生成 ${today()} · 百度百科是各 AI 引擎交叉对照的基础层。每个数字必须与口径表一致并附权威来源链接，无来源的数字百科审核不过、AI 也不敢引用。\n\n## 词条正文（按百科惯例结构，逐段替换）\n\n${park}是${op}运营的产业园区，位于【待填：城市+片区】，主导${g("主导产业", "【待填】")}产业。\n\n【基本信息】\n- 运营面积：${g("面积", "【待填：见口径表】")}\n- 入驻企业：${g("入驻企业数", "【待填：见口径表】")}\n- 产业聚集度：${g("产业聚集度", "【待填：见口径表】")}\n- 权威背书：${g("行业排名", "【待填：榜单名+年份，必须写明榜单名】")}\n\n【区位交通】\n【待填：地址/地铁线站/主干道/距离机场高铁站】\n\n【产业定位】\n【待填：主导产业+代表企业，数据取口径表】\n\n## 参考资料清单（百科正文每个关键数字都要能对到一条）\n1. 【政府网站/权威媒体名】报道标题，日期，链接\n2. 【REIT公告/榜单发布方】文件名，日期，链接\n3. 【待补：逐条补齐后才能提交】\n\n## 提交方法\n1. 打开 baike.baidu.com 搜「${park}」：有词条→「编辑」逐项更新；无词条→「创建词条」\n2. 正文按上述结构粘贴，【待填】全部补齐\n3. 参考资料逐条添加来源链接（政府网站、权威媒体、REIT 公告优先）\n\n*更新时间：${today()} · 责任人：__*`;
+}
+function genMapChecklist(park) {
+  return `# 地图信息核对清单：${park}\n> AI 与搜索引擎回答「在哪儿 / 怎么去 / 周边有什么」类问题时高度依赖地图数据。三个平台逐项核对，约 30 分钟，不需要任何技术。\n\n## 三个平台逐项核对\n\n| 平台 | 入口 | 动作 |\n|---|---|---|\n| 高德地图 | https://ditu.amap.com 搜「${park}」 | 认领主体 → 核对名称/地址/电话 → 补实景照片 → 类目选「产业园区」 |\n| 百度地图 | https://map.baidu.com 搜「${park}」 | 同上（百度系数据同时喂给文心一言） |\n| 腾讯地图 | https://map.qq.com 搜「${park}」 | 同上 |\n\n## 核对项（三平台必须完全一致）\n- 名称：与品牌词一字不差（无错别字/无旧名）\n- 地址：与官方口径一致\n- 电话：招商热线（与口径表同一号码）\n- 类目：产业园区/产业园（勿选「写字楼出租」等杂类）\n- 照片：≥3 张实景（园区门头/办公场景/区位交通）\n- 营业状态：正常营业\n\n## 常见问题\n- 搜不到 → 先创建地点并认领（需营业执照）\n- 名称对但信息是旧的 → 平台内「报错/反馈」提交更正\n- 三平台信息互相矛盾 → 以口径表为准逐个改齐（AI 交叉验证不一致会降权）\n\n*核对完成 ${today()} · 责任人：__*`;
 }
 
 /* ══════ 整改工单（人话行动卡版：五要素+按业务价值排序+可直贴微信的转发消息）════════ */
@@ -108,15 +165,20 @@ function woParts(e) {
   const issues = (e.checks || []).filter(c => c.status !== "pass");
   const byOrder = GEO.woOrder.map(id => issues.find(c => c.id === id)).filter(Boolean)
     .concat(issues.filter(c => !GEO.woOrder.includes(c.id)));
-  const SELF = byOrder.filter(c => c.id === "E2a");
-  const IT = byOrder.filter(c => c.id !== "E2a");
-  return { park, city, industry, issues, SELF, IT };
+  const isEnt = e.mode === "entity";   /* V4.5：实体体检的整改全部品宣自己能做，无「找官网管理员」组 */
+  const SELF = isEnt ? byOrder : byOrder.filter(c => c.id === "E2a");
+  const IT = isEnt ? [] : byOrder.filter(c => c.id !== "E2a");
+  return { park, city, industry, issues, SELF, IT, isEnt };
 }
 function woCard(c, e, idx) {
-  const p = GEO.woPlain[c.id] || {};
-  const isSelf = c.id === "E2a";
-  const mat = c.id === "T4" ? genSchema(woParts(e).park, e.url, woParts(e).city, woParts(e).industry)
-    : c.id === "T5" ? genLlmsTxt(woParts(e).park, e.url)
+  const raw = GEO.woPlain[c.id] || {};
+  const parkNow = woParts(e).park;
+  /* V4.6.1 行动卡项目化：种子卡文案里的「蛇口网谷」替换为本项目名（与生成器模板参数化同一红线） */
+  const sub = s => String(s).split("蛇口网谷").join(parkNow);
+  const p = { title: sub(raw.title), what: sub(raw.what), why: sub(raw.why), who: raw.who, steps: (raw.steps || []).map(sub) };
+  const isSelf = (e.mode === "entity") || c.id === "E2a";
+  const mat = c.id === "T4" ? genSchema(parkNow, e.url, woParts(e).city, woParts(e).industry)
+    : c.id === "T5" ? genLlmsTxt(parkNow, e.url)
     : c.id === "T1" ? genRobotsTxt() : "";
   return `<div class="card" style="margin-bottom:12px;${isSelf ? "border-color:var(--color-accent)" : ""}">
     <h3 style="border:none;margin:0 0 4px">第${idx}件事 · ${esc(p.title || c.name)}
@@ -129,11 +191,25 @@ function woCard(c, e, idx) {
       ${mat ? `<pre class="prompt-view" style="max-height:180px;margin-top:6px">${esc(mat)}</pre>
         <button class="btn btn-sm btn-ghost" data-wocp="${c.id}">复制这段材料</button>` : ""}
     </div>
-    <p class="muted" style="font-size:12px"><b>怎么算做完了：</b>${isSelf ? "两周后在本系统重跑「一键诊断」和「跑一轮30问」，看品牌词前10与命中率变化" : `回本系统重跑「一键诊断」，${c.id} 从 ✗/⚠ 变 ✓`} · <span class="num">系统编号 ${c.id}</span> · 诊断证据：${esc(c.evidence).slice(0, 60)}…</p>
+    <p class="muted" style="font-size:12px"><b>怎么算做完了：</b>${isSelf
+      ? `两周后在本系统重跑「${e.mode === "entity" ? "实体体检" : "一键诊断"}」和「跑一轮30问」，看品牌词前10与命中率变化`
+      : `回本系统重跑「${e.mode === "entity" ? "实体体检" : "一键诊断"}」，${c.id} 从 ✗/⚠ 变 ✓`} · <span class="num">系统编号 ${c.id}</span> · 诊断证据：${esc(c.evidence).slice(0, 60)}…</p>
   </div>`;
 }
 function buildItMessage(e) {
-  const { park, city, industry, IT } = woParts(e);
+  const { park, city, industry, IT, isEnt } = woParts(e);
+  if (isEnt) {
+    /* V4.5 无官网实体体检：整改=品宣自查清单，可整段贴进工作群 */
+    const seg = id => (e.checks || []).find(c => c.id === id && c.status !== "pass");
+    let n = 0, msg = `【${park} 网上存在感执行清单 · 品宣自己就能做，不依赖官网/技术】\n\n背景：实体体检（用品牌词真实搜索）发现本项目在网上可被 AI 引用的官方信息不足。以下事项按优先级执行：\n`;
+    if (seg("E2a")) { n++; msg += `\n${n}) 品牌词搜索前 10 没有我们的官方内容——开通官方公众号并把《一园一档（公众号版）》作为首篇发布（物料在系统「执行→优化文件」已是终稿）；\n`; }
+    if (seg("E1")) { n++; msg += `\n${n}) 百度百科词条：按口径表更新/创建，每个数字附权威来源链接（用《百科词条更新稿》）；\n`; }
+    if (seg("E6")) { n++; msg += `\n${n}) 企业信息平台：企查查/天眼查核对运营主体名称、法人、地址并更正不一致；\n`; }
+    if (seg("E4")) { n++; msg += `\n${n}) 权威背书：把榜单/资质整理成带年份出处的文字，公众号发布并进百科参考资料；\n`; }
+    if (!n) msg += `\n本轮自动检查全部通过——重点做实体资产核对清单的 12 项人工打分（诊断页）。`;
+    msg += `\n做完每件事，回系统「诊断 → 实体体检」重跑验收（对应项变✓）。三平台地图信息认领也别忘了（清单在优化文件里）。\n`;
+    return msg;
+  }
   const seg = id => IT.find(c => c.id === id);
   let msg = `【请官网管理员（信息部/网站供应商）协助 · 约1小时内的三件小事，材料已是终稿，只需上传/粘贴】\n\n背景：我们做了一次AI搜索提及诊断（系统自动探测），官网以下几处需要技术侧处理：\n`;
   if (seg("T4")) msg += `\n1) 在官网公共模板（或园区介绍页）</head> 前加一段结构化数据，代码在文末①；\n`;
@@ -145,30 +221,35 @@ function buildItMessage(e) {
   return msg;
 }
 function buildWorkOrderHtml(e) {
-  const { issues, SELF, IT } = woParts(e);
+  const { issues, SELF, IT, isEnt, park } = woParts(e);
   if (!issues.length) return '<div class="card"><p style="color:var(--color-ok);font-weight:600">✓ 本报告全部通过，无需整改。</p></div>';
   return `
   <div style="border:2px solid var(--color-accent-navy);border-radius:8px;padding:14px 16px;margin-bottom:12px;background:var(--color-paper-2)">
     <div style="font-family:var(--font-display);font-weight:700;font-size:var(--text-md)">整改行动清单（共 ${issues.length} 件事，已按重要程度排序）</div>
-    <p class="muted" style="margin-top:6px;font-size:13px">你的三步：<b>① 今天</b>做下面「不用等 IT」的第一件事 → <b>② 本周</b>把「转发消息」发给能登录官网后台的人（信息部/网站供应商）——材料系统已出终稿，对方只需上传/粘贴 → <b>③ 下周</b>回「一键诊断」重跑验收。每件事右上的状态标签点击可切换。</p>
+    <p class="muted" style="margin-top:6px;font-size:13px">${isEnt
+      ? `你的三步：<b>① 今天</b>做下面第一件事（都是品宣自己能做的，不需要任何技术） → <b>② 本周</b>把「执行清单」贴进工作群分工执行——物料在「执行→优化文件」已是终稿 → <b>③ 下周</b>回「诊断→实体体检」重跑验收。每件事右上的状态标签点击可切换。`
+      : `你的三步：<b>① 今天</b>做下面「不用等 IT」的第一件事 → <b>② 本周</b>把「转发消息」发给能登录官网后台的人（信息部/网站供应商）——材料系统已出终稿，对方只需上传/粘贴 → <b>③ 下周</b>回「一键诊断」重跑验收。每件事右上的状态标签点击可切换。`}</p>
   </div>
   <div class="card" style="margin-bottom:12px;border-color:var(--color-accent)">
-    <h3>📤 给官网管理员的转发消息（贵司信息部/网站供应商，微信直接粘贴这段）</h3>
+    <h3>${isEnt ? `📤 ${esc(park)} 执行清单（整段复制，贴进工作群即可分工）` : "📤 给官网管理员的转发消息（贵司信息部/网站供应商，微信直接粘贴这段）"}</h3>
     <pre class="prompt-view" style="max-height:260px;white-space:pre-wrap">${esc(buildItMessage(e))}</pre>
-    <button class="btn btn-primary btn-sm" id="woCopyMsg">复制整段转发消息</button>
+    <button class="btn btn-primary btn-sm" id="woCopyMsg">${isEnt ? "复制整段执行清单" : "复制整段转发消息"}</button>
   </div>
   ${SELF.length ? `<p class="kicker">第一部分 · 不用等技术，你自己今天就能做</p>` : ""}
   ${SELF.map((c, i) => woCard(c, e, i + 1)).join("")}
   ${IT.length ? `<p class="kicker" style="margin-top:12px">第二部分 · 需要能登录官网的人处理（终稿物料由本系统「一键优化文件」生成，转发消息里也含代码）</p>` : ""}
   ${IT.map((c, i) => woCard(c, e, (SELF.length ? SELF.length : 0) + i + 1)).join("")}
-  <p class="muted" style="font-size:12px">生成 ${today()} · 基于 ${esc(e.ts)} 诊断 · 状态存在本系统 · 全部做完后重跑「跑一轮30问」看素材池变化</p>`;
+  <p class="muted" style="font-size:12px">生成 ${today()} · 基于 ${esc(e.ts)} ${isEnt ? "实体体检" : "诊断"} · 状态存在本系统 · 全部做完后重跑「跑一轮30问」看素材池变化</p>`;
 }
 function workOrderMd(e) {
-  const { issues, SELF, IT } = woParts(e);
-  let md = `# 整改行动清单（共${issues.length}件事，按重要程度排序）\n> 基于 ${e.ts} 诊断 · ${e.url}\n\n## 给网站管理员的转发消息（直接粘贴）\n\n${buildItMessage(e)}\n`;
+  const { issues, SELF, IT, isEnt, park: parkNow } = woParts(e);
+  /* V4.6.1 行动卡项目化（与 woCard 同规则）：种子文案「蛇口网谷」→本项目名 */
+  const card = c => { const r = GEO.woPlain[c.id] || {}; const sub = s => String(s).split("蛇口网谷").join(parkNow);
+    return { title: sub(r.title) || c.name, what: sub(r.what), steps: (r.steps || []).map(sub) }; };
+  let md = `# 整改行动清单（共${issues.length}件事，按重要程度排序）\n> 基于 ${e.ts} ${isEnt ? "实体体检" : "诊断"} · ${e.mode === "entity" ? `品牌词「${e.brand || e.url}」` : e.url}\n\n${isEnt ? "## 执行清单（贴进工作群）" : "## 给网站管理员的转发消息（直接粘贴）"}\n\n${buildItMessage(e)}\n`;
   let n = 0;
-  SELF.forEach(c => { n++; const p = GEO.woPlain[c.id] || {}; md += `\n## 第${n}件事（自己做）· ${p.title || c.name}\n${p.what || ""}\n怎么做：\n${(p.steps || []).map(s => "- " + s).join("\n")}\n验收：重跑诊断/30问\n`; });
-  IT.forEach(c => { n++; const p = GEO.woPlain[c.id] || {}; md += `\n## 第${n}件事（IT）· ${p.title || c.name}\n${p.what || ""}\n怎么做：\n${(p.steps || []).map(s => "- " + s).join("\n")}\n验收：重跑一键诊断 ${c.id} 变✓\n`; });
+  SELF.forEach(c => { n++; const p = card(c); md += `\n## 第${n}件事（自己做）· ${p.title}\n${p.what || ""}\n怎么做：\n${p.steps.map(s => "- " + s).join("\n")}\n验收：重跑${e.mode === "entity" ? "实体体检" : "诊断"}/30问\n`; });
+  IT.forEach(c => { n++; const p = card(c); md += `\n## 第${n}件事（IT）· ${p.title}\n${p.what || ""}\n怎么做：\n${p.steps.map(s => "- " + s).join("\n")}\n验收：重跑${e.mode === "entity" ? "实体体检" : "一键诊断"} ${c.id} 变✓\n`; });
   return md;
 }
 function woPrintDoc(e) {
@@ -188,7 +269,8 @@ function opsBuildToolkit() {
   const park = $("#tkPark").value.trim() || ctx.park || "试点园区";
   const city = $("#tkCity").value.trim() || ctx.city || "深圳";
   const industry = $("#tkIndustry").value.trim() || ctx.industry || "数智科技";
-  const url = (state.parkUrl || curProject().url || "").trim() || "www.example.com";
+  const url = (state.parkUrl || curProject().url || "").trim();
+  const hasSite = !!url;   /* V4.5：无官网项目不再回退假域名——官网三件物料不生成，改出百科/地图/公众号实体物料 */
   const op = ctx.operator, opShort = ctx.operatorShort;
   const rows = state.caliber.filter(r => r.park && (r.park.includes(park.slice(0, 2)) || park.includes(r.park.slice(0, 2))));
   const F = {}; rows.forEach(r => { F[r.field] = r.official; });
@@ -209,15 +291,23 @@ function opsBuildToolkit() {
 
   const faqMd = `# ${park} 选址FAQ（20问）\n> 每问一答、答案前置、≤300字、数据取自口径表；答完贴入「诊断→内容评分」≥75分再发布\n\n${[...P_prompts().filter(p => p.cat === "选址决策"), ...P_prompts().filter(p => p.cat === "品牌认知")].slice(0, 20).map((p, i) => `## ${i + 1}. ${p.q}\n【结论句式：${park}……（首个数字：${g("入驻企业数", "企业数【待填】")}；第二个数字：${g("产业聚集度", "聚集度【待填】")}）】\n【展开：区位/载体/政策/服务各一句，数字优先】\n【出处：（来源：口径表/权威榜单，年份）】`).join("\n\n")}`;
 
-  const channelPack = `# ${park} 渠道分发指南\n> 生成 ${today()} · 每个渠道都是真实入口，按顺序执行；先发布、后监测（监测页一键跑30问）\n\n## 第一周（基础层+自有渠道）\n1. 官网：部署 robots 片段 + 结构化数据 + 一园一档页 + FAQ页（文件在左侧已生成）\n2. 百度百科：按口径表更新词条，每个数字附权威来源\n3. 企查查/天眼查：核验运营主体信息\n\n## 第二周起（内容矩阵，按引擎偏好排序）\n${GEO.channels.map((c, i) => `${i + 1}. **${c.name}** — ${c.engine}\n   入口：${c.entry}\n   动作：${c.action}\n   首发：${c.first.replace("{园区}", park).replace("{产业}", industry).replace("{city}", city)}`).join("\n\n")}\n\n## 节奏与红线\n- 节奏：公众号双周 / 知乎月2 / 头条百家随发 / 抖音周1\n- 红线：同一事实多渠道口径必须一致（DeepSeek 对不一致品牌首选率暴跌82%）；禁堆砌夸饰；效果预期 10–15天首批引用、8–12周稳定（行业参考值，以监测台账为准）`;
+  const channelPack = `# ${park} 渠道分发指南\n> 生成 ${today()} · 每个渠道都是真实入口，按顺序执行；先发布、后监测（监测页一键跑30问）\n\n## 第一周（基础层+自有渠道）\n${hasSite
+      ? "1. 官网：部署 robots 片段 + 结构化数据 + 一园一档页 + FAQ页（文件在左侧已生成）\n2. 百度百科：按口径表更新词条，每个数字附权威来源\n3. 企查查/天眼查：核验运营主体信息"
+      : `1. 官方承载：按《百科词条更新稿》更新/创建百度百科词条（本项目暂无官网，百科就是第一官方门面）\n2. 三大地图：按《地图信息核对清单》在高德/百度/腾讯认领并核对信息\n3. 公众号：注册认证官方号，把《一园一档（公众号版）》作为首篇发布`}\n\n## 第二周起（内容矩阵，按引擎偏好排序）\n${GEO.channels.map((c, i) => `${i + 1}. **${c.name}** — ${c.engine}\n   入口：${c.entry}\n   动作：${c.action}\n   首发：${c.first.replace("{园区}", park).replace("{产业}", industry).replace("{city}", city)}`).join("\n\n")}\n\n## 节奏与红线\n- 节奏：公众号双周 / 知乎月2 / 头条百家随发 / 抖音周1\n- 红线：同一事实多渠道口径必须一致（DeepSeek 对不一致品牌首选率暴跌82%）；禁堆砌夸饰；效果预期 10–15天首批引用、8–12周稳定（行业参考值，以监测台账为准）`;
 
-  const files = [
+  const files = hasSite ? [
     { name: "robots-AI放行片段.txt", desc: "追加到官网 robots.txt；若用 CDN/WAF 还需控制台白名单", content: robots },
     { name: "llms.txt", desc: "传到官网根目录（可选项，5分钟成本；Google声明不使用，勿指望它替代内容）", content: llms },
     { name: "schema-结构化数据.html", desc: "贴到园区页 </head> 前，补齐【待填】", content: jsonld },
     { name: "一园一档.md", desc: "官网/公众号/知乎通用的园区标准档案（GEO内容库最小单元）", content: profile },
     { name: "选址FAQ-20问.md", desc: "答案前置的FAQ页源稿，逐问补答后过评分器≥75再发", content: faqMd },
     { name: "渠道分发指南.md", desc: "8个渠道的真实入口、动作与首发内容，按周执行", content: channelPack },
+  ] : [
+    { name: "百科词条更新稿.md", desc: "百度百科词条的创建/更新终稿——无官网项目的第一官方门面，数字全部取口径表", content: genBaikeDraft(park, F, op) },
+    { name: "地图信息核对清单.md", desc: "高德/百度/腾讯三平台认领与核对（约30分钟，不需要技术）", content: genMapChecklist(park) },
+    { name: "一园一档（公众号版）.md", desc: "公众号/知乎通用的园区标准档案——作为官方公众号首篇发布", content: profile },
+    { name: "选址FAQ-20问.md", desc: "答案前置的FAQ源稿，逐问补答后过评分器≥75再发（公众号/知乎均适用）", content: faqMd },
+    { name: "渠道分发指南.md", desc: "无官网路线：百科+地图+公众号起步，再按引擎偏好铺内容", content: channelPack },
   ];
   window.__tkFiles = files;
   $("#tkOut").innerHTML = files.map((f, i) => `
@@ -231,8 +321,8 @@ function opsBuildToolkit() {
       <pre class="prompt-view" style="max-height:180px">${esc(f.content)}</pre>
     </div>`).join("") +
     `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-primary" id="tkDlAll">打包下载全部（6个文件清单）</button>
-      <span class="muted" style="font-size:12px">若浏览器询问保存位置或未开始下载，用各文件「复制内容」即可</span></div>`;
+      <button class="btn btn-primary" id="tkDlAll">打包下载全部（${files.length}个文件清单）</button>
+      <span class="muted" style="font-size:12px">${hasSite ? "若浏览器询问保存位置或未开始下载，用各文件「复制内容」即可" : "本项目暂无官网——已跳过官网部署三件（robots/说明文件/结构化数据），有官网后回来重新生成为 6 件"}</span></div>`;
   $$("#tkOut [data-tkdl]").forEach(b => b.addEventListener("click", () => {
     const f = files[+b.dataset.tkdl];
     download(`${park}-${f.name}`, f.content, "text/plain;charset=utf-8");
@@ -244,7 +334,7 @@ function opsBuildToolkit() {
     files.forEach((f, i) => setTimeout(() => download(`${park}-${f.name}`, f.content, "text/plain;charset=utf-8"), i * 350));
     files.forEach(f => registerWatch(`${park}-${f.name}`));   /* V4 2.4 */
     renderWatch();
-    toast("已按顺序下载6个文件并登记资产追踪（浏览器多文件下载需允许）");
+    toast(`已按顺序下载${files.length}个文件并登记资产追踪（浏览器多文件下载需允许）`);
   });
   renderChannels(park, industry);
 }
@@ -336,7 +426,7 @@ render.report = () => {
     const c = rptCounts(e);
     return `<div class="prompt-li" data-rp="${i}" style="cursor:pointer;${i === RPT_IDX ? "background:var(--color-accent-soft);border-radius:6px" : ""}">
       <span class="code num">${esc(e.ts)}</span>
-      <span style="flex:1;min-width:0">${esc(e.url)}${e.brand ? ` ·「${esc(e.brand)}」` : ""}</span>
+      <span style="flex:1;min-width:0">${e.mode === "entity" ? `<span class="tag tag-accent" style="margin-right:4px">实体体检</span>` : ""}${esc(e.url)}${e.brand ? ` ·「${esc(e.brand)}」` : ""}</span>
       <span class="tag ${c.fail ? "tag-bad" : c.warn ? "tag-warn" : "tag-ok"}">${c.fail ? `未过${c.fail}` : c.warn ? `警${c.warn}` : "全过"}</span></div>`;
   }).join("") : '<p class="muted" style="padding:16px 0;text-align:center">还没有诊断记录——先到「一键诊断」跑一次。</p>';
   $$("#reportList [data-rp]").forEach(el => el.addEventListener("click", () => { RPT_IDX = +el.dataset.rp; render.report(); }));
@@ -379,14 +469,15 @@ render.report = () => {
 };
 function buildReportHtml(e) {
   const c = rptCounts(e);
+  const isEnt = e.mode === "entity";
   const verdict = c.fail ? "存在阻断项，需整改后再评估内容投放" : (c.warn ? "基本健康，有可优化项" : "全部通过，技术面优秀");
   const vColor = c.fail ? "var(--color-bad)" : c.warn ? "var(--color-warn)" : "var(--color-ok)";
   const LV = { pass: "tag-ok", warn: "tag-warn", fail: "tag-bad" }, IC = { pass: "✓", warn: "⚠", fail: "✗" };
   const advices = (e.checks || []).filter(x => x.status !== "pass");
   return `
   <div style="border:2px solid var(--color-accent-navy);border-radius:8px;padding:14px 16px;margin-bottom:12px;background:var(--color-paper-2)">
-    <div style="font-family:var(--font-display);font-weight:700;font-size:var(--text-md)">园区 GEO 一键诊断报告</div>
-    <div class="muted" style="margin:4px 0 10px">对象 <b class="num">${esc(e.url)}</b>${e.brand ? ` · 品牌词「${esc(e.brand)}」` : ""} · ${esc(e.ts)} · 真实 联网检查与搜索取证</div>
+    <div style="font-family:var(--font-display);font-weight:700;font-size:var(--text-md)">园区 GEO ${isEnt ? "实体体检" : "一键诊断"}报告</div>
+    <div class="muted" style="margin:4px 0 10px">检查对象 <b class="num">${isEnt ? `品牌词「${esc(e.brand || e.url)}」（无官网实体体检）` : esc(e.url)}</b>${e.brand && !isEnt ? ` · 品牌词「${esc(e.brand)}」` : ""} · ${esc(e.ts)} · 真实 联网检查与搜索取证</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:baseline">
       <span style="font-family:var(--font-mono);font-size:var(--text-xl);font-weight:600;color:${vColor}">${verdict}</span>
       <span class="tag tag-ok">通过 ${c.pass}</span><span class="tag tag-warn">警告 ${c.warn}</span><span class="tag tag-bad">未过 ${c.fail}</span>
@@ -430,6 +521,7 @@ function rptPrintDoc(e) {
 /* ══════ 渲染钩子 & 绑定（脚本置于 body 末尾，DOM 已就绪）═══════ */
 render.scan = () => {
   if (state.parkUrl) $("#dgUrl").value = state.parkUrl;
+  setDgMode(dgMode());   /* V4.5：双入口默认跟随项目承载形态（无官网项目直接落在实体体检） */
   if (state.lastDiag) renderDiagResult(state.lastDiag, 0);
 };
 render.toolkit = () => {
@@ -447,6 +539,16 @@ render.toolkit = () => {
 };
 document.addEventListener("DOMContentLoaded", () => {
   const dg = $("#dgRun"); if (dg) dg.addEventListener("click", opsDiagnose);
+  const dgS = $("#dgModeSite"); if (dgS) dgS.addEventListener("click", () => setDgMode("site"));
+  const dgE = $("#dgModeEntity"); if (dgE) dgE.addEventListener("click", () => setDgMode("entity"));
+  const npM = $("#npMode");   /* V4.5：新建弹窗承载形态联动官网域名输入提示 */
+  if (npM) npM.addEventListener("change", () => {
+    const m = document.querySelector('input[name="npMode"]:checked');
+    const lb = $("#npUrlLb");
+    if (m && lb) lb.firstChild.textContent = m.value === "none"
+      ? "官方承载页域名（暂时没有可留空——先做实体体检与百科/公众号/地图；有了官网再补）"
+      : "官方承载页域名（可后补，用于一键诊断）";
+  });
   const tk = $("#tkBuild"); if (tk) tk.addEventListener("click", opsBuildToolkit);
   const br = $("#batchRun"); if (br) br.addEventListener("click", opsBatch);
   const bs = $("#batchStop"); if (bs) bs.addEventListener("click", () => { OPS_STOP = true; bs.hidden = true; });

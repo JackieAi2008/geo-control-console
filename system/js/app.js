@@ -21,12 +21,25 @@ const defaultState = (fresh) => ({
 });
 
 /* ── V4 项目层（多园区隔离）────────────────── */
-let PROJECTS = [];   // [{id,name,url,brand,ownDomains,createdAt}]
+let PROJECTS = [];   // [{id,name,url,brand,entityMode,ownDomains,createdAt,lastOpen}]
+let ARCHIVED_PROJS = [];   // V4.6 归档项目（服务器返回，项目库「含已归档」开关下展示/恢复）
 let CUR = null;      // 当前项目 id
+/* V4.6 项目库工具栏状态：搜索/形态/状态/排序/含归档（大白话标签，形态=承载形态） */
+const ENT_LABEL = { own: "有官网", parent: "挂上级官网", none: "无官网" };
+const PJ_FILTERS = { q: "", mode: "all", status: "all", sort: "recent", archived: false };
+const PJ_SORTS = [["recent", "最近活动"], ["stale", "最久未测"], ["score", "体检分"], ["created", "创建时间"], ["name", "名称"]];
 const projKey = id => STORE_KEY + "." + id;
 function curProjectId() { return CUR; }
 function curProject() { return PROJECTS.find(p => p.id === CUR) || { id: CUR, name: "当前项目", url: "", brand: "", ownDomains: DEFAULT_OWN }; }
 function curOwn() { const d = curProject().ownDomains; return (d && d.length) ? d : DEFAULT_OWN; }
+/* V4.5 承载形态：own=有独立官网 / parent=上级官网承载页 / none=暂无官网（实体体检路线，官网专属项不进分母）
+   老项目无此字段时按 url 推导，蛇口网谷（填了上级官网）→parent */
+function entMode() {
+  const p = curProject();
+  if (p.entityMode && ["own", "parent", "none"].includes(p.entityMode)) return p.entityMode;
+  return (p.url || "").trim() ? "parent" : "none";
+}
+function noSite() { return entMode() === "none"; }
 /* V4.2 模板参数化：所有生成器/文案的园区·城市·产业·运营主体统一从这里取值，禁止再硬编码具体园区名 */
 function projCtx() {
   const p = curProject();
@@ -43,6 +56,7 @@ function saveProjectsMeta() { try { localStorage.setItem(PKEY, JSON.stringify({ 
 function loadCurrentState() {
   try { state = Object.assign(defaultState(), JSON.parse(localStorage.getItem(projKey(CUR)) || "{}")); }
   catch (e) { state = defaultState(); }
+  if (!state.entityMode) state.entityMode = entMode();   /* V4.5：老项目按项目形态推导（有url→parent，无url→none） */
   migrateProbes();
   migrateStatsV2();
 }
@@ -131,7 +145,9 @@ function computeSnapshot(type, st, asOf) {
   /* 纯函数（node 可测）：通道分层口径——答案侧（六引擎人工）与信源（搜索通道）分开，禁止混均。
      asOf：迁移历史快照时传入原日期，保证快照日期不漂移。 */
   const audit = st.audit || {};
-  const ids = Object.keys(audit);
+  /* V4.5：无官网项目官网专属项（T1–T6）不进分母——30项里其余24项照常计分 */
+  const siteIds = GEO.SITE_IDS || [];
+  const ids = Object.keys(audit).filter(k => !(st.entityMode === "none" && siteIds.includes(k)));
   const auditPct = ids.length ? Math.round(ids.reduce((a, k) => a + (audit[k] || 0), 0) / (ids.length * 2) * 100) : 0;
   const ld = (st.ledger || []).filter(r => r.channel !== "src" && r.engine !== "搜索通道");
   const sd = (st.ledger || []).filter(r => r.channel === "src" || r.engine === "搜索通道");
@@ -205,7 +221,10 @@ function normalizeProjects() {
 async function switchProject(pid) {
   if (!pid) return;
   if (pid !== CUR) {
-    CUR = pid; saveProjectsMeta();
+    CUR = pid;
+    const pm = PROJECTS.find(p => p.id === pid);
+    if (pm) pm.lastOpen = Date.now();   /* V4.6 项目库「上次处理」置顶数据（本机个人视角） */
+    saveProjectsMeta();
     loadCurrentState();
     renderProjectContext(); renderAllViews();
     if (SERVER_MODE) { await loadProjectFromServer(); renderProjectContext(); renderAllViews(); }
@@ -217,33 +236,45 @@ function renderAllViews() {
   route();
 }
 function renderProjectContext() {
-  const el = $("#pcName"); if (!el) return;
-  const cur = curProject();
-  el.textContent = cur.name || "未命名项目";
-  document.title = "GEO 智控台 · " + (cur.name || "");
+  document.title = "GEO 智控台 · " + (curProject().name || "");
+  updateProjChip(CUR_VIEW);
 }
 /* 项目总览卡片的数据快照：读各项目本机缓存（进入项目后与系统同步为最新），无数据返回 null */
 function projectSnapshot(p) {
   let st = null;
   try { st = JSON.parse(localStorage.getItem(projKey(p.id)) || "null"); } catch (e) {}
   if (!st) return null;
-  const ids = Object.keys(st.audit || {});
+  /* V4.5：none 项目官网专属项不进分母（与主体检表同口径） */
+  const siteIds = GEO.SITE_IDS || [];
+  const mode = st.entityMode || ((p.url || "").trim() ? "parent" : "none");
+  const ids = Object.keys(st.audit || {}).filter(k => !(mode === "none" && siteIds.includes(k)));
   const got = ids.reduce((a, k) => a + (st.audit[k] || 0), 0);
   const led = st.ledger || [];
   const dates = led.map(r => r && r.date).filter(Boolean);
-  (st.diagHistory || []).forEach(d => { if (d && d.date) dates.push(d.date); });
+  (st.diagHistory || []).forEach(d => { if (d && d.date) dates.push(d.date); if (d && d.ts) dates.push(String(d.ts).slice(0, 10)); });
   dates.sort();
+  /* V4.6 待办（与 server proj_summary 同口径）：整改工单未验收 + 修复队列未验证 */
+  let wo = 0;
+  Object.values(st.remediation || {}).forEach(per => { Object.values(per || {}).forEach(s => { if (s !== "已验收") wo++; }); });
+  (st.fixQueue || []).forEach(o => { if ((o || {}).status !== "已验证") wo++; });
+  const dh = st.diagHistory || [];
   return { pct: ids.length ? Math.round(got / (ids.length * 2) * 100) : null, n: led.length,
-           last: dates.length ? dates[dates.length - 1] : null };
+           last: dates.length ? dates[dates.length - 1] : null,
+           woPending: wo, lastDiag: dh.length ? String(dh[0].ts || "").slice(0, 10) : "", entMode: mode };
 }
 async function submitNewProject() {
   const name = $("#npName").value.trim();
   if (!name) { toast("请填写项目名称"); return; }
+  const modeEl = document.querySelector('input[name="npMode"]:checked');
+  const mode = modeEl ? modeEl.value : "parent";
+  const urlRaw = $("#npUrl").value.trim().slice(0, 120);
+  if (mode !== "none" && !urlRaw) { toast("请填官方承载页域名；确实没有就选「暂时都没有」"); return; }
   const meta = {
     name: name.slice(0, 60),
-    url: $("#npUrl").value.trim().slice(0, 120),
+    url: mode === "none" ? "" : urlRaw,
     brand: $("#npBrand").value.trim().slice(0, 60),
     operator: ($("#npOperator") ? $("#npOperator").value.trim() : "").slice(0, 60),
+    entityMode: mode,
     ownDomains: $("#npOwn").value.split(/[\n,，;；]+/).map(s => s.trim()).filter(Boolean).slice(0, 20),
     createdAt: today(),
   };
@@ -259,6 +290,7 @@ async function submitNewProject() {
   CUR = meta.id; saveProjectsMeta();
   REV_BASE = 0; SERVER_BASE = null;   /* V4修复①：新项目系统 rev 从 0 起，必须重置乐观锁起始数据（否则沿用上一项目 REV_BASE → 永久 409） */
   state = defaultState(true);
+  state.entityMode = mode;            /* V4.5：快照分母感知承载形态（none 时 T1–T6 不计分） */
   state.probesBackfilled = true;   /* V4修复③（正确层级）：新建项目无 V3 历史note，免填入；老项目state无此键→正常填入 */
   save();
   $("#projModal").hidden = true;
@@ -271,7 +303,7 @@ async function submitNewProject() {
   }
   renderProjectContext(); renderAllViews();
   go("dashboard");
-  toast(`项目「${meta.name}」已创建${parkName && parkName !== "蛇口网谷" ? "，30问已替换为本园区口径" : ""}。下一步：诊断→口径表 建立本项目唯一事实源`);
+  toast(`项目「${meta.name}」已创建${parkName && parkName !== "蛇口网谷" ? "，30问已替换为本园区口径" : ""}。下一步：${mode === "none" ? "诊断 → 一键诊断 → 实体体检（用品牌词查网上存在感）" : "诊断 → 一键诊断；再到口径表 建立本项目唯一事实源"}`);
 }
 let state = {};   /* 由 initProjects() → loadCurrentState() 按 CUR 填充（调用在文件末尾，save 定义之后，避免 TDZ） */
 /* save() 定义在服务器模式区块（本地即时存 + 服务器防抖同步） */
@@ -406,14 +438,21 @@ async function initServerMode() {
       const lm = localMeta[sp.id];
       if (!lm) continue;
       const diff = (lm.name && lm.name !== sp.name) || ((lm.brand || "") !== (sp.brand || "")) ||
-        ((lm.operator || "") !== (sp.operator || "")) ||
+        ((lm.operator || "") !== (sp.operator || "")) || ((lm.entityMode || "") !== (sp.entityMode || "")) ||
         JSON.stringify(lm.ownDomains || []) !== JSON.stringify(sp.ownDomains || []);
-      if (diff) await API.updateProject({ id: sp.id, name: lm.name, brand: lm.brand || "", operator: lm.operator || "", ownDomains: lm.ownDomains || sp.ownDomains || [] });
+      if (diff) await API.updateProject({ id: sp.id, name: lm.name, brand: lm.brand || "", operator: lm.operator || "", entityMode: lm.entityMode || "", ownDomains: lm.ownDomains || sp.ownDomains || [] });
     }
     const fresh = await API.projects();
-    PROJECTS = fresh.projects.map(p => ({ id: p.id, name: p.name, url: p.url || "", brand: p.brand || "",
-                                          operator: p.operator || "", ownDomains: p.ownDomains || [], createdAt: p.createdAt }));
-    if (!PROJECTS.some(p => p.id === CUR)) CUR = PROJECTS[0] && PROJECTS[0].id;
+    /* V4.6 活跃/归档分离：PROJECTS=可进入项目；ARCHIVED_PROJS=项目库「含已归档」开关下灰显+可恢复 */
+    const mapP = p => ({ id: p.id, name: p.name, url: p.url || "", brand: p.brand || "",
+                         operator: p.operator || "", entityMode: p.entityMode || "", archived: !!p.archived,
+                         ownDomains: p.ownDomains || [], createdAt: p.createdAt });
+    ARCHIVED_PROJS = fresh.projects.filter(p => p.archived).map(mapP);
+    PROJECTS = fresh.projects.filter(p => !p.archived).map(p => {
+      const local = PROJECTS.find(x => x.id === p.id);
+      return Object.assign(mapP(p), local && local.lastOpen ? { lastOpen: local.lastOpen } : {});
+    });
+    if (!PROJECTS.some(p => p.id === CUR) && PROJECTS.length) CUR = PROJECTS[0].id;
     saveProjectsMeta();
   }
   await loadProjectFromServer();
@@ -450,7 +489,10 @@ function route() {
   let path = (location.hash || "").replace(/^#\/?/, "");
   if (LEGACY[path]) { location.hash = "#/" + LEGACY[path]; return; }
   const [view, subRaw] = path.split("/");
-  const v = VIEWS.includes(view) ? view : "dashboard";
+  /* V4.6：默认落地=项目库（几十个诊断对象的入口先于上一次的项目） */
+  const v = VIEWS.includes(view) ? view : "projects";
+  CUR_VIEW = v;
+  updateProjChip(v);
   const subs = SUBS[v] || null;
   let sub = null;
   if (subs) {
@@ -493,14 +535,17 @@ function route() {
 
 /* ── 计算 ─────────────────────────────────── */
 function auditScore() {
-  const ids = Object.keys(state.audit);
+  /* V4.5：无官网项目官网专属项不进分母（与 computeSnapshot 同口径）；分母为空时按 0 分防 NaN */
+  const ids = Object.keys(state.audit).filter(k => !(noSite() && (GEO.SITE_IDS || []).includes(k)));
   const got = ids.reduce((a, k) => a + (state.audit[k] || 0), 0);
-  return { got, full: ids.length * 2, pct: Math.round(got / (ids.length * 2) * 100) };
+  return { got, full: ids.length * 2, pct: ids.length ? Math.round(got / (ids.length * 2) * 100) : 0 };
 }
 function auditDims() {
+  const skip = noSite() ? (GEO.SITE_IDS || []) : [];
   return GEO.audit.map(d => {
-    const got = d.items.reduce((a, i) => a + (state.audit[i.id] || 0), 0);
-    return { dim: d.dim, got, full: d.items.length * 2, pct: Math.round(got / (d.items.length * 2) * 100) };
+    const items = d.items.filter(i => !skip.includes(i.id));
+    const got = items.reduce((a, i) => a + (state.audit[i.id] || 0), 0);
+    return { dim: d.dim, got, full: items.length * 2, pct: items.length ? Math.round(got / (items.length * 2) * 100) : 0, skipped: d.items.length - items.length };
   });
 }
 function ledgerStats() {
@@ -1248,39 +1293,121 @@ function trendArrow(t) {
 }
 function renderProjectCards(useServer) {
   const sums = (useServer && SERVER_SUM) ? Object.fromEntries(SERVER_SUM.map(x => [x.id, x.summary || {}])) : {};
-  const list = PROJECTS.map(p => {
+  /* 数据装配：服务器 summary 优先，本机缓存兜底；卡片只答三个问题——这是谁/健康吗/有事等我吗 */
+  let list = PROJECTS.map(p => {
     const snap = projectSnapshot(p);
     const sm = sums[p.id] || {};
-    return { p,
-      pct: useServer ? sm.auditPct ?? snap?.pct : snap?.pct,
-      n: useServer ? sm.ledgerN ?? snap?.n : snap?.n,
-      last: useServer ? sm.lastRound ?? snap?.last : snap?.last,
-      ans: sm.mentionAns ?? null, trend: sm.trend ?? null, warn: sm.warn || [] };
-  }).sort((a, b) => (b.trend ?? -999) - (a.trend ?? -999) || (b.ans ?? -1) - (a.ans ?? -1));
-  const cards = list.map(({ p, pct, n, last, ans, trend, warn }) => {
+    const entMode = sm.entMode || (snap && snap.entMode) || ((p.url || "").trim() ? "parent" : "none");
+    const pct = useServer ? sm.auditPct ?? (snap ? snap.pct : null) : (snap ? snap.pct : null);
+    const lastDiag = ((useServer ? sm.lastDiag : null) ?? (snap ? snap.lastDiag : "") ?? "") || "";
+    const lastRound = useServer ? sm.lastRound ?? (snap ? snap.last : null) : (snap ? snap.last : null);
+    const trend = sm.trend ?? null;
+    const woPending = (useServer ? sm.woPending : null) ?? (snap ? snap.woPending : 0) ?? 0;
+    return { p, entMode, pct, trend, warn: useServer ? (sm.warn || []) : localWarn(p, snap), woPending: woPending || 0,
+             lastDiag, lastRound, lastOpen: p.lastOpen || 0, createdAt: p.createdAt || "" };
+  });
+  /* 过滤：搜索（名/品牌词/域名）+ 形态 + 状态（未诊断/有预警） */
+  const q = PJ_FILTERS.q.trim().toLowerCase();
+  if (q) list = list.filter(x => [x.p.name, x.p.brand, x.p.url].some(v => String(v || "").toLowerCase().includes(q)));
+  if (PJ_FILTERS.mode !== "all") list = list.filter(x => x.entMode === PJ_FILTERS.mode);
+  if (PJ_FILTERS.status === "undiagnosed") list = list.filter(x => !x.lastDiag);
+  if (PJ_FILTERS.status === "warn") list = list.filter(x => x.warn.length > 0);
+  /* 排序：recent=最近活动(打开/监测取新) · stale=最久未测(未测最前) · score · created · name */
+  const dayOf = x => { const a = [x.lastOpen ? new Date(x.lastOpen).toISOString().slice(0, 10) : "", x.lastRound || ""].filter(Boolean); return a.length ? a.sort().reverse()[0] : ""; };
+  const sorters = {
+    recent: (a, b) => dayOf(b).localeCompare(dayOf(a)),
+    stale: (a, b) => String(a.lastRound || a.lastDiag || "").localeCompare(String(b.lastRound || b.lastDiag || "")),
+    score: (a, b) => ((b.pct ?? -1) - (a.pct ?? -1)),
+    created: (a, b) => String(b.createdAt).localeCompare(String(a.createdAt)),
+    name: (a, b) => String(a.p.name).localeCompare(String(b.p.name), "zh"),
+  };
+  list.sort(sorters[PJ_FILTERS.sort] || sorters.recent);
+  /* 统计条（按当前筛选动态） */
+  const undN = list.filter(x => !x.lastDiag).length, warnN = list.filter(x => x.warn.length > 0).length, woN = list.filter(x => x.woPending > 0).length;
+  const stat = $("#pjStat");
+  if (stat) stat.innerHTML = `共 <b class="num">${list.length}</b> 个项目 · <b class="num"${undN ? ' style="color:var(--color-warn)"' : ""}>${undN}</b> 个未诊断 · <b class="num"${warnN ? ' style="color:var(--color-warn)"' : ""}>${warnN}</b> 个有预警 · <b class="num"${woN ? ' style="color:var(--color-bad)"' : ""}>${woN}</b> 个有工单待验收`;
+  /* 上次处理条：最近打开优先，无记录时取最近活动，与筛选无关、一步直达 */
+  const rec = $("#pjRecent");
+  if (rec) {
+    const cand = [...PROJECTS.map(p => {
+      const snap = projectSnapshot(p);
+      const sm = sums[p.id] || {};
+      return { p, day: [p.lastOpen ? new Date(p.lastOpen).toISOString().slice(0, 10) : "", sm.lastRound || (snap ? snap.last : "") || ""].filter(Boolean).sort().reverse()[0] || "" };
+    })].filter(x => x.day).sort((a, b) => b.day.localeCompare(a.day))[0];
+    rec.innerHTML = cand ? `<button class="pj-recent" type="button" data-pid="${esc(cand.p.id)}">
+      <span class="pj-rec-lb">上次处理</span><b>${esc(cand.p.name)}</b><span class="muted" style="font-size:var(--text-xs)">${esc(String(cand.day).slice(5))}</span><span class="pc-go">继续 →</span></button>` : "";
+    $$("#pjRecent [data-pid]").forEach(b => b.addEventListener("click", () => switchProject(b.dataset.pid)));
+  }
+  const cards = list.map(({ p, entMode, pct, trend, warn, woPending, lastDiag }) => {
     const scoreColor = pct !== null && pct !== undefined
       ? (pct >= 70 ? "var(--color-ok)" : pct >= 40 ? "var(--color-warn)" : "var(--color-accent)")
       : "var(--color-ink-3)";
-    const meta = [p.url, p.brand ? "品牌词 " + p.brand : ""].filter(Boolean).join(" · ");
-    return `<button class="proj-card${p.id === CUR ? " cur" : ""}" type="button" data-pid="${esc(p.id)}" aria-label="进入项目 ${esc(p.name)}">
+    return `<button class="proj-card${p.id === CUR ? " cur" : ""}" type="button" data-pid="${esc(p.id)}" aria-label="进入项目 ${esc(p.name)}"${(p.entityMode === "none" || entMode === "none") && pct !== null && pct !== undefined ? ` title="体检分为${entMode === "none" ? 24 : 30}项口径；跨项目请比趋势，不建议比绝对分"` : ""}>
       <span class="pc-top"><b class="pc-title">${esc(p.name)}</b>${p.id === CUR ? '<span class="tag tag-gold">当前</span>' : ""}</span>
-      <span class="pc-meta">${meta ? esc(meta) : "域名与品牌词待补（进入后在「一键诊断」页填写）"}</span>
+      <span class="pc-badges"><span class="tag ${entMode === "none" ? "tag-warn" : entMode === "own" ? "tag-info" : "tag-gold"}">${ENT_LABEL[entMode] || "挂上级官网"}</span>
+        ${!lastDiag ? '<span class="tag tag-bad">● 未诊断</span>' : ""}</span>
       <span class="pc-stats">
-        <span><i>体检分</i><b style="color:${scoreColor}">${pct ?? "—"}</b></span>
-        <span><i>提及率</i><b>${ans !== null && ans !== undefined ? ans + "%" : "—"}</b></span>
+        <span><i>体检分${entMode === "none" ? "（24项）" : ""}</i><b style="color:${scoreColor}">${pct ?? "—"}</b></span>
         <span><i>vs起始数据</i>${trendArrow(trend)}</span>
-        <span><i>台账</i><b>${n ?? "—"}</b></span>
-        <span><i>最近轮</i><b>${last ? esc(String(last).slice(5)) : "—"}</b></span>
       </span>
-      ${warn.length ? `<span class="pc-warn">${warn.map(w => `<span class="tag tag-warn">⚠ ${esc(w)}</span>`).join("")}</span>` : ""}
+      ${woPending ? `<span class="pc-todo">⚠ ${woPending} 件工单待验收</span>` : ""}
+      ${warn.length ? `<span class="pc-warn">${warn.slice(0, 2).map(w => `<span class="tag tag-warn">⚠ ${esc(w)}</span>`).join("")}</span>` : ""}
       <span class="pc-go">进入工作台 →</span>
       <span class="pc-arch" data-arch="${esc(p.id)}" title="归档（数据保留，可恢复）" role="button" tabindex="0">归档</span>
     </button>`;
   }).join("");
-  $("#projGrid").innerHTML = cards +
+  /* 空态才显示虚线新建卡（平时新建走工具栏按钮，单一入口） */
+  $("#projGrid").innerHTML = cards ||
     `<button class="proj-card proj-add" type="button" aria-label="新建项目">
-      <span class="pa-plus">＋</span><b>新建项目</b><span style="font-size:var(--text-xs);color:var(--color-ink-3)">每个园区/客户独立建档，数据完全隔离</span>
+      <span class="pa-plus">＋</span><b>新建第一个项目</b><span style="font-size:var(--text-xs);color:var(--color-ink-3)">园区、楼宇、任何要诊断的对象都可以</span>
     </button>`;
+  bindProjCardEvents(useServer);
+  renderArchived();
+}
+/* V4.6 本机缓存的预警近似（服务器 summary 未到位时的兜底口径，与 server warn 同源逻辑） */
+function localWarn(p, snap) {
+  const w = [];
+  if (!snap || !snap.n) w.push("无监测");
+  return w;
+}
+async function restoreProject(pid) {
+  if (!SERVER_MODE) { toast("归档恢复需要后台运行"); return; }
+  try {
+    const r = await fetch("/api/projects/archive", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: pid, archived: false, operator: localStorage.getItem("geodesk.operator") || "" }) });
+    const d = await r.json();
+    if (!r.ok || !d.ok) { toast("恢复失败：" + (d.error || r.status)); return; }
+  } catch (e) { toast("恢复失败：" + e); return; }
+  toast("已恢复到项目库");
+  await refreshProjectsFromServer();
+}
+async function refreshProjectsFromServer() {
+  if (!SERVER_MODE) return;
+  const d = await API.projects();
+  if (d && Array.isArray(d.projects)) {
+    SERVER_SUM = d.projects;
+    const mapP = p => ({ id: p.id, name: p.name, url: p.url || "", brand: p.brand || "",
+                         operator: p.operator || "", entityMode: p.entityMode || "", archived: !!p.archived,
+                         ownDomains: p.ownDomains || [], createdAt: p.createdAt });
+    const oldOpen = Object.fromEntries(PROJECTS.map(p => [p.id, p.lastOpen]));
+    ARCHIVED_PROJS = d.projects.filter(p => p.archived).map(mapP);
+    PROJECTS = d.projects.filter(p => !p.archived).map(p => Object.assign(mapP(p), oldOpen[p.id] ? { lastOpen: oldOpen[p.id] } : {}));
+    saveProjectsMeta();
+  }
+  renderProjectCards(true);
+}
+function renderArchived() {
+  const box = $("#pjArchBox"); if (!box) return;
+  if (!PJ_FILTERS.archived || !ARCHIVED_PROJS.length) { box.innerHTML = ""; return; }
+  box.innerHTML = `<p class="kicker" style="margin:14px 0 6px">已归档（${ARCHIVED_PROJS.length}）· 数据完整保留</p>` +
+    ARCHIVED_PROJS.map(p => `<div class="proj-card archived" style="display:flex;align-items:center;gap:10px;cursor:default">
+      <b class="pc-title" style="flex:1;min-width:0">${esc(p.name)}</b>
+      <span class="tag">${ENT_LABEL[p.entityMode] || ""}</span>
+      <button class="btn btn-sm btn-ghost" data-restore="${esc(p.id)}">恢复到项目库</button>
+    </div>`).join("");
+  $$("#pjArchBox [data-restore]").forEach(b => b.addEventListener("click", () => restoreProject(b.dataset.restore)));
+}
+function bindProjCardEvents(useServer) {
   $$("#projGrid [data-arch]").forEach(el => el.addEventListener("click", async e => {
     e.stopPropagation();
     const pid = el.dataset.arch;
@@ -1293,25 +1420,51 @@ function renderProjectCards(useServer) {
         if (!r.ok || !d.ok) { toast("归档失败：" + (d.error || r.status)); return; }
       } catch (e) { toast("归档失败：" + e); return; }
     }
+    const removed = PROJECTS.find(x => x.id === pid);
     PROJECTS = PROJECTS.filter(x => x.id !== pid);
+    if (removed) ARCHIVED_PROJS.unshift(removed);
     if (CUR === pid && PROJECTS.length) { CUR = PROJECTS[0].id; loadCurrentState(); renderProjectContext(); renderAllViews(); }
     saveProjectsMeta();
-    renderProjectCards(SERVER_MODE && !!SERVER_SUM);
-    toast("已归档（数据保留；服务器端可从备份恢复）");
+    renderProjectCards(useServer && !!SERVER_SUM);
+    toast("已归档（在「含已归档」开关下可随时恢复）");
   }));
 }
 render.projects = () => {
   renderProjectCards(false);   /* 先用本机缓存即时渲染 */
+  renderProjToolbar();         /* V4.6 工具栏（chips 按当前筛选态高亮） */
   if (SERVER_MODE) {
     API.projects().then(d => {
       if (d && Array.isArray(d.projects)) {
         SERVER_SUM = d.projects;
-        renderProjectCards(true);   /* 服务器汇总到位后刷新（含趋势/预警，跨机器一致） */
+        renderProjectCards(true);   /* 服务器汇总到位后刷新（含趋势/预警/待办，跨机器一致） */
       }
     });
   }
   renderAuditBox();
 };
+/* V4.6 项目库工具栏：形态/状态 chips 动态渲染（搜索/排序/归档开关为静态控件，事件在 bind() 一次性委托） */
+function renderProjToolbar() {
+  const box = $("#pjChips"); if (!box) return;
+  const modes = [["all", "全部"], ["own", "有官网"], ["parent", "挂上级官网"], ["none", "无官网"]];
+  const statuses = [["all", "全部"], ["undiagnosed", "未诊断"], ["warn", "有预警"]];
+  box.innerHTML = `<span class="pj-lb">形态</span>` +
+    modes.map(([v, t]) => `<button class="chip${PJ_FILTERS.mode === v ? " on" : ""}" data-fm="${v}">${t}</button>`).join("") +
+    `<span class="pj-lb" style="margin-left:12px">状态</span>` +
+    statuses.map(([v, t]) => `<button class="chip${PJ_FILTERS.status === v ? " on" : ""}" data-fs="${v}">${t}</button>`).join("");
+}
+/* V4.6 报头两态：项目库页=「☰ 项目库」高亮；项目内=「‹ 项目库 | 项目名」一步返回 */
+let CUR_VIEW = "projects";
+function updateProjChip(view) {
+  const chip = $("#projChip"); if (!chip) return;
+  if (view === "projects") {
+    chip.innerHTML = `<span class="pc-ico" aria-hidden="true">☰</span><span class="pc-name" id="pcName">项目库</span>`;
+    chip.classList.add("pj-on"); chip.setAttribute("aria-current", "page"); chip.title = "当前在项目库";
+  } else {
+    chip.classList.remove("pj-on"); chip.removeAttribute("aria-current");
+    chip.innerHTML = `<span class="pc-back">‹ 项目库</span><span class="pc-name" id="pcName">${esc(curProject().name || "—")}</span>`;
+    chip.title = "返回项目库";
+  }
+}
 
 /* ══ 2. 口径表 ══ */
 function caliberRow(r, i) {
@@ -1356,18 +1509,21 @@ render.caliber = () => {
 
 /* ══ 3. 体检 ══ */
 render.audit = () => {
-  $("#auditChecklist").innerHTML = GEO.audit.map(d => `
-    <div class="card" style="margin-bottom:var(--space-md)">
+  $("#auditChecklist").innerHTML = GEO.audit.map(d => {
+    const dimSkip = noSite() && d.dim === "技术可达";   /* V4.5：无官网项目这6项不适用，灰显不计分 */
+    return `
+    <div class="card" style="margin-bottom:var(--space-md)${dimSkip ? ";opacity:.55" : ""}">
       <h3>${esc(d.dim)} <span class="hint" id="dim-${esc(d.dim)}"></span></h3>
+      ${dimSkip ? '<p class="muted" style="font-size:var(--text-sm);margin:0 0 8px">本项目暂无官网承载页——这 6 项不适用、不进总分。先做下面「实体与权威」「渠道铺设」两组；有了官网回来补测。</p>' : ""}
       ${d.items.map(i => `
-        <div class="audit-item">
+        <div class="audit-item"${dimSkip ? ' title="无官网项目不适用"' : ""}>
           <div class="q"><span class="code">${i.id}</span><span class="t">${esc(i.t)}</span></div>
           <div class="std">${esc(i.std)}</div>
           <div class="score-seg" role="radiogroup" aria-label="${esc(i.id)}打分">
-            ${[0,1,2].map(v => `<button data-audit="${i.id}" data-v="${v}" class="${state.audit[i.id] === v ? "on-" + v : ""}" aria-pressed="${state.audit[i.id] === v}">${v}</button>`).join("")}
+            ${[0,1,2].map(v => `<button data-audit="${i.id}" data-v="${v}" class="${state.audit[i.id] === v ? "on-" + v : ""}" aria-pressed="${state.audit[i.id] === v}"${dimSkip ? " disabled" : ""}>${v}</button>`).join("")}
           </div>
         </div>`).join("")}
-    </div>`).join("");
+    </div>`; }).join("");
   $$("#auditChecklist [data-audit]").forEach(b => b.addEventListener("click", () => {
     state.audit[b.dataset.audit] = +b.dataset.v; save(); render.audit();
   }));
@@ -1882,11 +2038,27 @@ function bind() {
   $("#projGrid").addEventListener("click", e => {
     if (e.target.closest(".proj-add")) { $("#projModal").hidden = false; $("#npName").focus(); return; }
     const card = e.target.closest(".proj-card");
-    if (card) switchProject(card.dataset.pid);
+    if (card && card.dataset.pid) switchProject(card.dataset.pid);
   });
   $("#npCancel").addEventListener("click", () => { $("#projModal").hidden = true; });
   $("#npSubmit").addEventListener("click", submitNewProject);
   $("#npName").addEventListener("keydown", e => { if (e.key === "Enter") submitNewProject(); });
+
+  /* V4.6 项目库工具栏：新建按钮 / 搜索（防抖）/ 形态与状态 chips（委托）/ 排序 / 含归档开关 */
+  const pjNew = $("#pjNew"); if (pjNew) pjNew.addEventListener("click", () => { $("#projModal").hidden = false; $("#npName").focus(); });
+  const pjQ = $("#pjQ");
+  if (pjQ) { let pjT; pjQ.addEventListener("input", () => { clearTimeout(pjT); pjT = setTimeout(() => { PJ_FILTERS.q = pjQ.value; renderProjectCards(SERVER_MODE && !!SERVER_SUM); }, 180); }); }
+  const pjChips = $("#pjChips");
+  if (pjChips) pjChips.addEventListener("click", e => {
+    const fm = e.target.closest("[data-fm]"), fs = e.target.closest("[data-fs]");
+    if (fm) PJ_FILTERS.mode = fm.dataset.fm;
+    else if (fs) PJ_FILTERS.status = fs.dataset.fs;
+    else return;
+    renderProjToolbar();
+    renderProjectCards(SERVER_MODE && !!SERVER_SUM);
+  });
+  const pjSort = $("#pjSort"); if (pjSort) pjSort.addEventListener("change", () => { PJ_FILTERS.sort = pjSort.value; renderProjectCards(SERVER_MODE && !!SERVER_SUM); });
+  const pjArch = $("#pjArch"); if (pjArch) pjArch.addEventListener("change", () => { PJ_FILTERS.archived = pjArch.checked; renderArchived(); });
 
   /* V4 1b：矩阵管理 / 批量粘贴 / 采样 */
   $("#paToggle").addEventListener("click", () => {

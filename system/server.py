@@ -140,8 +140,12 @@ def state_summary(conn, pid=None):
     try:
         plist = projects_ensure(conn)
         pid = pid if pid and any(p["id"] == pid for p in plist) else (plist[0]["id"] if plist else None)
+        proj = next((p for p in plist if p["id"] == pid), {}) if pid else {}
         st = (kv_get(conn, proj_doc_key(pid)) or {}).get("state") or {} if pid else {}
-        audit = st.get("audit", {}); got = sum(audit.values()); full = len(audit) * 2 or 60
+        mode = _ent_mode(proj)
+        audit_all = st.get("audit", {})
+        audit = {k: v for k, v in audit_all.items() if not (mode == "none" and k in SITE_AUDIT_IDS)}   # V4.5 分母同口径
+        got = sum(audit.values()); full = len(audit) * 2 or (48 if mode == "none" else 60)
         ledger = st.get("ledger", [])
         mention = round(sum(float(r.get("mention", 0)) for r in ledger) / len(ledger) * 100) if ledger else None
         cal = st.get("caliber", []); conf = sum(1 for r in cal if r.get("conflicts"))
@@ -150,17 +154,19 @@ def state_summary(conn, pid=None):
         if ld.get("checks"):
             fails = [c["id"] + c["name"] for c in ld["checks"] if c["status"] == "fail"]
             warns = [c["id"] for c in ld["checks"] if c["status"] == "warn"]
-            diag = f"；最近一次一键诊断({ld.get('url','')})：未过项={('、'.join(fails) if fails else '无')}，警告项={('、'.join(warns) if warns else '无')}"
-        return (f"体检成熟度{got}/{full}分；监测台账{len(ledger)}条，平均提及率{('%d%%' % mention) if mention is not None else '无数据'}；"
+            dmode = "实体体检" if ld.get("mode") == "entity" else "一键诊断"
+            diag = f"；最近一次{dmode}({ld.get('url','')})：未过项={('、'.join(fails) if fails else '无')}，警告项={('、'.join(warns) if warns else '无')}"
+        em = f"；项目承载形态={ {'own':'有官网','parent':'挂上级官网','none':'暂无官网(走实体体检路线)'}[mode] }"
+        return (f"体检成熟度{got}/{full}分{em}；监测台账{len(ledger)}条，平均提及率{('%d%%' % mention) if mention is not None else '无数据'}；"
                 f"口径表{len(cal)}字段其中{conf}个有外部冲突{diag}；官方承载页={st.get('parkUrl','未填')}")
     except Exception as e:
         return f"（状态读取失败：{e}）"
 
 CHAT_SYSTEM = """你是「招商产园GEO智控台」内置助手，教用户用系统并解答园区GEO问题。简体中文，先结论后展开，默认≤120字（用户要求展开才加长），提操作要给页面/按钮名，不编造数据（状态没有就说明先跑哪个功能）。
 
-【系统地图】工作台=三步向导(①一键诊断→②一键提升包→③跑一轮30问)+状态。诊断：一键诊断(填官方承载页域名+品牌词,真实探测HTTPS/robots/WAF/llms.txt/渲染/Schema/alt,自动回填体检表)·30项体检(补人工项)·口径表(唯一事实源,冲突先定稿)·内容评分(≥75分才发布)。行动：一键提升包(生成6个可部署文件:robots片段/llms.txt/Schema/一园一档/FAQ20问/渠道作战包)·90天方案·Agent团(4个提示词复制到豆包/Kimi用)。监测：跑一轮30问(批量真实搜索自动入台账,约3分钟,双周一次)·人工台账(30问复制到各AI引擎提问后录入)·热力/趋势自动。知识库=方法论。启动:python3 server.py 后开 localhost:8340。
-【真实控件名·只可引用这些，不确定就只说页面位置，严禁编造按钮】开始一键诊断/下载诊断报告/30项体检/口径表/添加字段/导出JSON/内容评分/开始体检/一键生成提升包/打包下载全部/生成方案/生成内容Brief/跑一轮30问（真实搜索）/停止/导出CSV/清空/导出全量数据/打开助手对话窗。若用户提到的功能或按钮不在名单与系统地图中，直接回答「本系统没有这个功能」并给出最接近的正确入口；不得发明任何按钮、页面或流程。
-【GEO速查】五步链路:爬取→索引→检索→重排→生成引用;四条件:可达可读可信可验证;有效策略:引用来源/真实引言/统计数字/流畅/权威语气(最高+40%),堆砌注水无效;见效:3-5天可检索,10-15天首批引用,8-12周稳定(参考值)。引擎偏好:豆包→抖音97.7%+头条CSDN;DeepSeek→权威媒体,孤证不立,口径不一致首选率暴跌82%;元宝→公众号;文心→百度系81.7%;千问→头条;Kimi→知乎长文。"""
+【系统地图】入口=项目库（打开系统第一页：搜索项目名/品牌词/域名、按形态筛选[有官网/挂上级官网/无官网]、按状态筛选[未诊断/有预警]、排序、含已归档开关可恢复归档项目；「上次处理」条一步回到最近项目）。每个园区/楼宇/要诊断的实体一个项目，新建时选「网上哪里能找到这个项目」。项目内：工作台=三步向导+状态。诊断：双入口——官网体检（填官方承载页域名+品牌词,真实探测HTTPS/robots/WAF/llms.txt/渲染/Schema/alt,自动回填体检表）或实体体检（无官网项目专用：只填品牌词,真实搜索查自有渠道/百科词条/企业信息平台/权威信源,附12项实体资产核对清单打分）·30项体检（无官网项目技术可达6项不适用不计分）·口径表·内容评分(≥75分才发布)·证据库。执行：一键生成优化文件——有官网项目6件(robots片段/llms.txt/Schema/一园一档/FAQ20问/渠道分发指南)，无官网项目5件(百科词条更新稿/地图信息核对清单/一园一档公众号版/FAQ/渠道指南,不需要任何技术)·90天方案·AI助手提示词。监测：跑一轮30问(批量真实搜索自动入台账,双周一次)·人工台账·引用诊断(谁在赢我们的问题)·发展曲线。知识库=方法论。
+【真实控件名·只可引用这些，不确定就只说页面位置，严禁编造按钮】项目库/＋新建项目/开始一键诊断/开始实体体检/官网体检/实体体检/下载诊断报告/30项体检/口径表/添加字段/导出JSON/内容评分/开始体检/一键生成优化文件/打包下载全部/生成方案/跑一轮30问（真实搜索）/停止/导出CSV/含已归档/恢复到项目库/查排名/打开助手对话窗。若用户提到的功能或按钮不在名单与系统地图中，直接回答「本系统没有这个功能」并给出最接近的正确入口；不得发明任何按钮、页面或流程。
+【GEO速查】五步链路:爬取→索引→检索→重排→生成引用;四条件:可达可读可信可验证;有效策略:引用来源/真实引言/统计数字/流畅/权威语气(最高+40%),堆砌注水无效;见效:3-5天可检索,10-15天首批引用,8-12周稳定(参考值)。引擎偏好:豆包→抖音97.7%+头条CSDN;DeepSeek→权威媒体,孤证不立,口径不一致首选率暴跌82%;元宝→公众号;文心→百度系81.7%;千问→头条;Kimi→知乎长文。无官网项目路线:官网不是GEO必要条件——先做实体体检建基线,再依次①百度百科词条(数字附权威来源)②三大地图认领核对③官方公众号首发一园一档,工单全是品宣自己能做的事,不需要官网管理员。"""
 
 _db_lock = threading.Lock()
 
@@ -217,12 +223,26 @@ def projects_ensure(conn):
     kv_put(conn, proj_doc_key(proj["id"]), {"rev": max(int(old_doc.get("rev") or 0), 0), "state": old_state})
     return [proj]
 
+def _ent_mode(p):
+    """V4.6 承载形态（与前端 entMode() 同口径）：显式字段优先，老项目按 url 推导"""
+    m = str(p.get("entityMode") or "").strip()
+    if m in ("own", "parent", "none"):
+        return m
+    return "parent" if str(p.get("url") or "").strip() else "none"
+
+
+SITE_AUDIT_IDS = {"T1", "T2", "T3", "T4", "T5", "T6"}   # 与前端 GEO.SITE_IDS 同步：无官网项目不进体检分母
+
+
 def proj_summary(conn, p):
-    """项目列表附带的汇总指标（V4 四期组合视图：体检/提及/趋势/最近轮/落后预警）"""
+    """项目库卡片汇总（V4.6：体检分按承载形态分母 + 待办工单数 + 最近诊断；项目库即组合视图数据源）"""
     doc = kv_get(conn, proj_doc_key(p["id"])) or {}
     st = doc.get("state") or {}
     audit = st.get("audit") or {}
-    got = sum(audit.values()); full = len(audit) * 2 or 60
+    mode = _ent_mode(p)
+    keys = [k for k in audit if not (mode == "none" and k in SITE_AUDIT_IDS)]
+    got = sum(audit[k] for k in keys)
+    full = len(keys) * 2 or (48 if mode == "none" else 60)
     ledger = st.get("ledger") or []
     mention = round(sum(float(r.get("mention", 0)) for r in ledger) / len(ledger) * 100) if ledger else None
     snaps = st.get("snapshots") or []
@@ -242,9 +262,16 @@ def proj_summary(conn, p):
         last = [x for x in probes if x.get("date") == ld]
         ratio = sum(1 for x in last if x.get("ownHit")) / len(last)
         if ratio < 0.2: warn.append("信源缺席")
-    return {"auditPct": round(got / full * 100), "ledgerN": len(ledger), "mentionPct": mention,
+    # V4.6 待办：整改工单未验收数 + 修复队列未验证数（「有事等我」红标数据源）
+    wo = 0
+    for per in (st.get("remediation") or {}).values():
+        wo += sum(1 for s in (per or {}).values() if s != "已验收")
+    wo += sum(1 for o in (st.get("fixQueue") or []) if (o or {}).get("status") != "已验证")
+    dh = st.get("diagHistory") or []
+    last_diag = (str(dh[0].get("ts", "") if dh else "") or str((st.get("lastDiag") or {}).get("ts", "") or ""))[:10]
+    return {"auditPct": round(got / full * 100) if full else 0, "ledgerN": len(ledger), "mentionPct": mention,
             "mentionAns": ans, "trend": trend, "lastRound": (cur or {}).get("date") if snaps else None,
-            "warn": warn}
+            "warn": warn, "woPending": wo, "lastDiag": last_diag or None, "entMode": mode}
 
 def backup_now(conn):
     """全量备份：projects + 各项目 doc + audit → <db目录>/backups/geodesk-YYYYMMDD.json（保留30份）"""
@@ -293,8 +320,11 @@ def _robots_blocks(txt):
     if agent and rules: blocks.setdefault(agent, rules)
     return blocks
 
-def diagnose(url, brand="", own_domains=None):
-    """一键诊断：对园区官网做真实技术体检（与GEO体检表T/C项映射），全部带证据。"""
+def diagnose(url, brand="", own_domains=None, mode="site"):
+    """一键诊断。mode="site"：对园区官网做真实技术体检；mode="entity"（V4.5）：无官网实体体检——
+    品牌词真实搜索推导实体资产证据（自有渠道/百科/企业信息/权威信源），不依赖官网。全部带证据。"""
+    if mode == "entity":
+        return _diagnose_entity(brand, own_domains)
     host = re.sub(r"^https?://", "", (url or "").strip().rstrip("/"))
     if not host or "/" in host: host = (host or "").split("/")[0]
     if not host:
@@ -401,7 +431,54 @@ def diagnose(url, brand="", own_domains=None):
         for k, v in c.get("score", {}).items():
             score_map[k] = max(score_map.get(k, 0), v)
     return {"url": host, "https_url": https_url, "checks": checks,
-            "auto_scores": score_map, "ts": __import__("time").strftime("%Y-%m-%d %H:%M")}
+            "auto_scores": score_map, "ts": __import__("time").strftime("%Y-%m-%d %H:%M"), "mode": "site"}
+
+
+def _diagnose_entity(brand, own_domains):
+    """V4.5 实体体检：无官网项目的诊断入口。一次品牌词真实搜索推导四类实体证据——
+    E2a 自有渠道是否进前10 / E1 百科词条 / E6 企业信息平台 / E4 权威信源。
+    判定保守（warn 为主），证据里写明人工核实方法，不编造。"""
+    brand = (brand or "").strip()
+    if not brand:
+        return {"error": "实体体检需要品牌词（如：万海大厦）——它替代官网成为检查对象"}
+    checks = []
+    pr = run_probe(brand, own_domains)
+    if pr.get("error"):
+        return {"error": "搜索通道暂不可用：" + str(pr["error"])}
+    tops = pr.get("results", [])[:10]
+    doms = [urlparse(t["url"]).netloc for t in tops]
+    # ── E2a 自有渠道：品牌词前10 有无官方承载阵地（承载页/公众号域名）──
+    own = [t for t in tops if t["own"]]
+    checks.append({"id": "E2a", "name": "品牌词搜索·自有渠道", "status": "pass" if own else "fail",
+                   "evidence": ("前10含自有渠道：" + "、".join(urlparse(t["url"]).netloc for t in own)) if own else
+                               (f"搜索「{brand}」前10全部为第三方：" + "、".join(doms[:5]) + "…"),
+                   "score": {"E2": 1 if own else 0}, "top_domains": doms})
+    # ── E1 百科词条：前10 是否出现百度百科（AI 交叉对照的基础层）──
+    baike = [d for d in doms if d.endswith("baike.baidu.com")]
+    checks.append({"id": "E1", "name": "百科词条", "status": "pass" if baike else "warn",
+                   "evidence": (f"搜索「{brand}」前10 出现百度百科（排名第{doms.index(baike[0]) + 1}位）——词条存在且可见，请人工核对数据是否与口径表一致") if baike else
+                               (f"搜索「{brand}」前10 未见百度百科：" + ("、".join(doms[:5]) or "无结果") + "… 词条可能不存在或权重弱——去 baike.baidu.com 搜品牌词人工确认，无词条则按口径表创建"),
+                   "score": {"E1": 2 if baike else 0}})
+    # ── E6 企业信息：前10 是否出现企业信息平台（AI 核验运营主体的底层源）──
+    ent_doms = [d for d in doms if any(k in d for k in ("qcc.com", "tianyancha.com", "aiqicha.baidu.com", "qixin.com"))]
+    checks.append({"id": "E6", "name": "企业信息平台", "status": "pass" if ent_doms else "warn",
+                   "evidence": (f"前10 含企业信息平台：" + "、".join(ent_doms) + "——请人工进平台核对运营主体名称/法人/地址与官方一致") if ent_doms else
+                               "前10 未见企查查/天眼查/爱企查——AI 查「谁在运营」时缺底层数据，请人工到两平台核对并补全信息",
+                   "score": {"E6": 2 if ent_doms else 0}})
+    # ── E4 权威信源：前10 有无政府/权威媒体（gov.cn、央媒、主流新闻站）──
+    AUTH = ("gov.cn", "people.com.cn", "xinhuanet.com", "news.cn", "cctv.com", "chinanews.com", "ce.cn",
+            "eeo.com.cn", "caixin.com", "21jingji.com", "thepaper.cn", "cs.com.cn", "cinn.cn")
+    auth_doms = [d for d in doms if any(d == a or d.endswith("." + a) or a in d for a in AUTH)]
+    checks.append({"id": "E4", "name": "权威信源覆盖", "status": "pass" if auth_doms else "warn",
+                   "evidence": (f"前10 含权威信源：" + "、".join(auth_doms[:4]) + "——把其中提及本项目的报道整理成带年份出处的可引用素材") if auth_doms else
+                               "前10 未见政府/权威媒体——权威背书尚未被检索到，把榜单/资质/披露整理成文字并发布（见工单 E4）",
+                   "score": {"E4": 1 if auth_doms else 0}})
+    score_map = {}
+    for c in checks:
+        for k, v in c.get("score", {}).items():
+            score_map[k] = max(score_map.get(k, 0), v)
+    return {"url": brand, "https_url": "", "checks": checks,
+            "auto_scores": score_map, "ts": __import__("time").strftime("%Y-%m-%d %H:%M"), "mode": "entity"}
 
 
 def parse_answer(text, brand, competitors):
@@ -554,7 +631,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"active": {"source": src, "model": model}, "user": user_out})
         if path == "/api/projects":
             plist = projects_ensure(self.conn)
-            out = [dict(p, summary=proj_summary(self.conn, p)) for p in plist if not p.get("archived")]
+            # V4.6 归档项目也返回（带 archived 标记），前端项目库按「含已归档」开关过滤展示/恢复
+            out = [dict(p, summary=proj_summary(self.conn, p)) for p in plist]
             return self._send(200, {"projects": out})
         if path == "/api/audit":
             return self._send(200, {"audit": (kv_get(self.conn, "audit") or [])[-100:]})
@@ -632,6 +710,7 @@ class Handler(BaseHTTPRequestHandler):
                         "url": str(body.get("url") or "").strip()[:120],
                         "brand": str(body.get("brand") or "").strip()[:60],
                         "operator": str(body.get("operator") or "").strip()[:60],
+                        "entityMode": str(body.get("entityMode") or "").strip()[:10] or ("none" if not str(body.get("url") or "").strip() else "parent"),
                         "ownDomains": [str(d).strip()[:80] for d in (body.get("ownDomains") or []) if str(d).strip()][:20],
                         "createdAt": time.strftime("%Y-%m-%d"), "archived": False}
                 kv_put(self.conn, "projects", plist + [proj])
@@ -654,6 +733,7 @@ class Handler(BaseHTTPRequestHandler):
                 if "url" in body: p["url"] = str(body.get("url") or "").strip()[:120]
                 if "brand" in body: p["brand"] = str(body.get("brand") or "").strip()[:60]
                 if "operator" in body: p["operator"] = str(body.get("operator") or "").strip()[:60]
+                if "entityMode" in body: p["entityMode"] = str(body.get("entityMode") or "").strip()[:10]
                 if "ownDomains" in body:
                     p["ownDomains"] = [str(d).strip()[:80] for d in (body.get("ownDomains") or []) if str(d).strip()][:20]
                 kv_put(self.conn, "projects", plist)
@@ -709,7 +789,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/diagnose":
             try:
                 body = self._body() or {}
-                return self._send(200, diagnose(str(body.get("url", "")), str(body.get("brand", "")), body.get("ownDomains")))
+                mode = "entity" if str(body.get("mode", "")) == "entity" else "site"
+                return self._send(200, diagnose(str(body.get("url", "")), str(body.get("brand", "")), body.get("ownDomains"), mode))
             except Exception as e:
                 return self._send(500, {"error": str(e)})
         if path == "/api/parse":

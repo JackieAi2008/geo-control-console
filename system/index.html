@@ -34,13 +34,38 @@
 
 <main>
 
-<!-- ═══ 项目总览（多项目启动页：切换 / 新建 / 一屏看清所有园区）═══ -->
+<!-- ═══ 项目库（多诊断对象工作台：搜索 / 筛选 / 排序 / 进入）═══ -->
 <section class="view" id="view-projects" hidden>
   <div class="page-head">
-    <h2>项目列表</h2>
-    <p>每个园区/客户一个独立项目，数据完全隔离。</p>
+    <h2>项目库</h2>
+    <p>全部诊断对象的入口：搜索、筛选、进入。</p>
   </div>
+  <div class="card pj-toolbar" style="margin-bottom:14px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="pjQ" class="inp" placeholder="搜索项目名 / 品牌词 / 域名" style="flex:1;min-width:220px" aria-label="搜索项目">
+      <button class="btn btn-primary" id="pjNew">＋ 新建项目</button>
+    </div>
+    <div id="pjChips" class="pj-chips" aria-label="筛选"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px">
+      <label class="lb" style="display:flex;align-items:center;gap:6px;margin:0">排序
+        <select id="pjSort" class="sel">
+          <option value="recent">最近活动</option>
+          <option value="stale">最久未测</option>
+          <option value="score">体检分</option>
+          <option value="created">创建时间</option>
+          <option value="name">名称</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:var(--text-sm);min-height:44px">
+        <input type="checkbox" id="pjArch" style="width:16px;height:16px"> 含已归档
+      </label>
+      <span style="flex:1"></span>
+      <span id="pjStat" class="pj-stat" aria-live="polite"></span>
+    </div>
+  </div>
+  <div id="pjRecent"></div>
   <div class="proj-grid" id="projGrid"></div>
+  <div id="pjArchBox"></div>
   <div class="grid grid-2" style="margin-top:16px">
     <div class="card">
       <h3>操作留痕 <span class="hint">系统自动记录 · 最近100条</span></h3>
@@ -66,11 +91,11 @@
     <h3>三步上手向导 <span class="hint">每步都是真实动作：点按钮 → 真实探测/生成/搜索，不是演示</span></h3>
     <div class="grid grid-3">
       <div class="wizard-col">
-        <p style="font-size:var(--text-sm)"><b>① 诊断园区</b>：填官方承载页域名（园区多无独立官网，填上级官网即可），点「一键诊断」——系统联网检查网站能否被 AI 读取、是否允许 AI 爬取、是否有 AI 说明文件、网页内容是否在源码里、是否有结构化数据标签、图片是否有说明文字、品牌词搜索排第几，每项附证据，自动填入体检表。</p>
+        <p style="font-size:var(--text-sm)"><b>① 诊断园区</b>：有官网或上级官网的项目，填域名点「一键诊断」——系统联网检查网站能否被 AI 读取、是否允许 AI 爬取、品牌词搜索排第几，每项附证据。<b>暂时没有官网的项目</b>（如单楼宇、新园区）直接点「实体体检」，用品牌词查它在网上的存在感，一样出报告。</p>
         <a class="btn btn-primary" href="#/diag/scan" style="width:100%">去一键诊断 →</a>
       </div>
       <div class="wizard-col">
-        <p style="font-size:var(--text-sm)"><b>② 生成优化文件</b>：点「一键生成」——产出 6 个可直接使用的文件：网站 AI 可读配置（交网站管理员）、AI 说明文件（传官网根目录）、结构化数据标签（贴页面）、一园一档内容页、选址 FAQ20 问（过评分器再发）、渠道分发指南（8 个渠道真实入口与首发内容）。</p>
+        <p style="font-size:var(--text-sm)"><b>② 生成优化文件</b>：点「一键生成」——产出 5–6 个可直接使用的文件：有官网的项目含网站 AI 可读配置、AI 说明文件、结构化数据标签（交网站管理员）；没有官网的项目则是百科词条更新稿、地图信息核对清单、一园一档公众号版（品宣自己就能做）。所有项目都有：一园一档、选址 FAQ20 问（过评分器再发）、渠道分发指南（真实入口与首发内容）。</p>
         <a class="btn btn-primary" href="#/act/toolkit" style="width:100%">去拿优化文件 →</a>
       </div>
       <div class="wizard-col">
@@ -116,12 +141,19 @@
     <div class="grid grid-2">
       <div class="card">
         <h3>发起诊断 <span class="hint">真实联网检查 + 真实搜索，约10–30秒</span></h3>
-        <div class="form-grid">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="dgModeBar">
+          <button class="chip on" id="dgModeSite">官网体检（查网站）</button>
+          <button class="chip" id="dgModeEntity">实体体检（查品牌，没有官网也能做）</button>
+        </div>
+        <div class="form-grid" id="dgSiteForm">
           <label class="full lb">官方承载页域名（园区若无独立官网，填上级官网——蛇口网谷填招商蛇口官网 www.cmsk1979.com）<input id="dgUrl" class="inp" placeholder="www.cmsk1979.com"></label>
-          <label class="full lb">品牌词（用于真实搜索验证官网/公众号等自有渠道）<input id="dgBrand" class="inp" placeholder="如：蛇口网谷"></label>
+        </div>
+        <div class="form-grid">
+          <label class="full lb">品牌词（官网体检用于搜索验证；实体体检以它为检查对象）<input id="dgBrand" class="inp" placeholder="如：蛇口网谷"></label>
         </div>
         <button class="btn btn-primary" id="dgRun" style="margin-top:12px">开始一键诊断</button>
-        <p class="muted" style="margin-top:8px">检查项：网站能否被 AI 读取 · 网站响应 · 是否允许 AI 爬取 · AI 说明文件 · 网页内容是否在源码里 · 结构化数据标签 · 标题描述 · 图片说明文字 · 品牌词搜索前 10。结果自动填入 30 项体检表。</p>
+        <p class="muted" style="margin-top:8px" id="dgHelp">官网体检：网站能否被 AI 读取 · 是否允许 AI 爬取 · AI 说明文件 · 内容是否在源码里 · 结构化数据标签 · 图片说明文字 · 品牌词搜索前 10。结果自动填入 30 项体检表。</p>
+        <p class="muted" style="margin-top:8px" id="dgHelpEntity" hidden>实体体检：用品牌词做真实搜索，查我们的信息在网上的存在感——自有渠道是否进前 10、百科词条、企业信息平台、权威信源覆盖。没有官网的项目（如单楼宇/新园区）从这里开始，结果自动填入体检表，并附 12 项实体资产核对清单。</p>
       </div>
       <div class="card">
         <h3>诊断结果（附证据）</h3>
@@ -564,7 +596,14 @@
     <p class="muted" style="font-size:var(--text-sm);margin-top:-6px">每个园区/客户一个项目：体检、口径表、台账、诊断历史完全隔离，互不污染。</p>
     <div class="form-grid">
       <label class="full lb">项目名称（如：南京金融城）<input id="npName" class="inp" placeholder="园区或客户名" maxlength="60"></label>
-      <label class="full lb">官方承载页域名（可后补，用于一键诊断）<input id="npUrl" class="inp" placeholder="www.example.com" maxlength="120"></label>
+      <div class="full lb">网上哪里能找到这个项目？（决定先做哪套体检，之后可以改）
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px" id="npMode">
+          <label class="chip" style="cursor:pointer"><input type="radio" name="npMode" value="own" style="margin-right:4px">有自己的官网</label>
+          <label class="chip" style="cursor:pointer"><input type="radio" name="npMode" value="parent" checked style="margin-right:4px">挂在上级单位官网（多数园区，如蛇口网谷挂招商蛇口官网）</label>
+          <label class="chip" style="cursor:pointer"><input type="radio" name="npMode" value="none" style="margin-right:4px">暂时都没有（先做百科/公众号/地图）</label>
+        </div>
+      </div>
+      <label class="full lb" id="npUrlLb">官方承载页域名（可后补，用于一键诊断）<input id="npUrl" class="inp" placeholder="www.example.com" maxlength="120"></label>
       <label class="full lb">品牌词（品牌词搜索验证用）<input id="npBrand" class="inp" placeholder="如：南京金融城" maxlength="60"></label>
       <label class="full lb">运营主体（生成物料时的归属表述，可改）<input id="npOperator" class="inp" value="招商蛇口产业园区（招商产园）" maxlength="60"></label>
       <label class="full lb">自有域名（每行一个——用于自有渠道判定、AI 引用中来自自有渠道的比例与品牌词搜索）<textarea id="npOwn" class="inp" rows="3" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号）"></textarea></label>
@@ -637,9 +676,9 @@
   </div>
 </div>
 
-<script src="js/data.js"></script>
-<script src="js/app.js"></script>
-<script src="js/ops.js"></script>
+<script src="js/data.js?v=4.6"></script>
+<script src="js/app.js?v=4.6"></script>
+<script src="js/ops.js?v=4.6.1"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
