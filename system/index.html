@@ -97,11 +97,11 @@
       <div id="auditBox"><p class="muted">加载中…</p></div>
     </div>
     <div class="card">
-      <h3>备份与恢复 <span class="hint">每日自动备份 backups/ · 保留30份</span></h3>
-      <p class="muted" style="font-size:var(--text-sm)">服务器每日自动导出全量备份到 <span class="num">system/backups/geodesk-日期.json</span>。数据恢复：选择备份文件 → 确认覆盖。</p>
+      <h3>备份与恢复 <span class="hint">每天自动存档 · 保留最近 30 份</span></h3>
+      <p class="muted" style="font-size:var(--text-sm)">系统每天自动把全部数据存一份档（带日期的备份文件）。数据出问题时：选一份当天的备份 → 确认恢复。</p>
       <label class="btn btn-ghost" style="cursor:pointer;margin-top:8px">选择备份文件恢复…
         <input type="file" id="restoreFile" accept=".json" style="display:none"></label>
-      <p class="muted" style="font-size:11px;margin-top:6px">恢复会覆盖服务器全部项目数据（本机 电脑保存的数据 不受影响，重新进入项目时以服务器为准）。</p>
+      <p class="muted" style="font-size:11px;margin-top:6px">恢复会用这份备份替换系统里的全部项目数据，恢复后请刷新页面。日常不需要动这里——由系统管理员使用。</p>
     </div>
   </div>
 </section>
@@ -237,7 +237,7 @@
     <div class="card">
       <h3>口径总览 <span class="hint" id="caliberSummary"></span>
         <span style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-sm btn-ghost" id="calExport">导出JSON</button>
+          <button class="btn btn-sm btn-ghost" id="calExport">导出数据文件</button>
           <button class="btn btn-sm btn-primary" id="calAdd">+ 添加字段</button>
         </span>
       </h3>
@@ -510,7 +510,7 @@
   </div>
   <div class="card" style="margin-top:16px">
     <h3>⑦ 人工实测台账（六引擎AI问答）
-      <span style="display:flex;gap:8px"><button class="btn btn-sm btn-ghost" id="mExport">导出CSV</button><button class="btn btn-sm btn-danger" id="mClear">清空</button></span>
+      <span style="display:flex;gap:8px"><button class="btn btn-sm btn-ghost" id="mExport">导出表格</button><button class="btn btn-sm btn-danger" id="mClear">清空</button></span>
     </h3>
     <div class="tbl-wrap tbl-cards" id="mTable"></div>
   </div>
@@ -663,7 +663,7 @@
     <p class="muted" style="font-size:var(--text-sm);margin-top:-6px">供右下角「问」对话助手使用。<b>选服务商后地址/模型已自动填好</b>，通常只需填 API 密钥即可；选「自定义」才需手动填地址与模型。密钥只保存在服务器上、按你的登录账号隔离，任何界面都不会完整显示。</p>
     <div class="form-grid">
       <label class="full lb">服务商<select id="llmProvider" class="sel"></select></label>
-      <label class="full lb">API 地址（仅 https；选「自定义」才需手动填）<input id="llmBase" class="inp" placeholder="https://api.deepseek.com/v1"></label>
+      <label class="full lb">接口地址（选「自定义」才需手动填）<input id="llmBase" class="inp" placeholder="https://api.deepseek.com/v1"></label>
       <label class="full lb">API 密钥
         <span style="display:flex;gap:6px;align-items:center">
           <input id="llmKey" class="inp" type="password" autocomplete="off" placeholder="sk-…（以服务商控制台为准）" style="flex:1">
@@ -701,9 +701,9 @@
   </div>
 </div>
 
-<script src="js/data.js?v=4.7"></script>
-<script src="js/app.js?v=4.7"></script>
-<script src="js/ops.js?v=4.7"></script>
+<script src="js/data.js?v=4.7.2"></script>
+<script src="js/app.js?v=4.7.2"></script>
+<script src="js/ops.js?v=4.7.2"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -718,7 +718,7 @@
     } catch (e) {}
   })();
 </script>
-<script src="js/chat-kb.js?v=4.4"></script>
+<script src="js/chat-kb.js?v=4.7.2"></script>
 <script src="js/chat.js?v=4.4"></script>
 </body>
 </html>

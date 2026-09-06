@@ -845,6 +845,23 @@ function renderWatch() {
 }
 
 /* ══ V4 2.5 操作留痕 + 备份恢复（项目总览页）══ */
+/* V4.7.1 留痕大白话化：技术操作串→人话（显示侧翻译，不动存储；原始值放悬浮提示供排查） */
+function auditActionText(a) {
+  const m = {
+    "POST /api/projects": "新建项目",
+    "POST /api/projects/update": "更新项目信息",
+    "POST /api/projects/archive": "归档 / 恢复项目",
+    "POST /api/restore": "恢复备份",
+    "PUT /api/data": "保存数据",
+    "LLM配置": "AI 模型设置",
+  };
+  return m[a] || a;
+}
+function auditProjectName(pid) {
+  const all = PROJECTS.concat(ARCHIVED_PROJS || []);
+  const p = all.find(x => x.id === pid);
+  return p ? p.name : (pid || "—");
+}
 async function renderAuditBox() {
   const box = $("#auditBox"); if (!box) return;
   if (!SERVER_MODE) { box.innerHTML = '<p class="muted">团队共享模式下自动记录每次数据保存。</p>'; return; }
@@ -858,8 +875,8 @@ async function renderAuditBox() {
       <input id="opName" class="inp" style="max-width:140px" placeholder="你的名字" value="${esc(op)}">
       <span class="muted" style="font-size:11px">写入每次保存的留痕（本机记忆）</span>
     </div>
-    ${list.length ? `<div class="tbl-wrap" style="max-height:260px;overflow:auto"><table class="tbl"><thead><tr><th>时间</th><th>项目</th><th>操作</th><th>详情</th></tr></thead>
-      <tbody>${list.slice().reverse().map(a => `<tr><td class="num" style="white-space:nowrap">${esc(a.ts)}</td><td class="num">${esc(String(a.project || "").slice(0, 14))}</td><td>${esc(a.action)}</td><td style="max-width:220px;font-size:12px">${esc(a.detail || "")}</td></tr>`).join("")}</tbody></table></div>`
+    ${list.length ? `<div class="tbl-wrap" style="max-height:260px;overflow:auto"><table class="tbl"><thead><tr><th>时间</th><th>项目</th><th>做了什么</th><th>详情</th></tr></thead>
+      <tbody>${list.slice().reverse().map(a => `<tr><td class="num" style="white-space:nowrap">${esc(a.ts)}</td><td>${esc(auditProjectName(a.project))}</td><td title="系统记录值：${esc(a.action)}">${esc(auditActionText(a.action))}</td><td style="max-width:220px;font-size:12px">${esc(a.detail || "")}</td></tr>`).join("")}</tbody></table></div>`
       : '<p class="muted">暂无留痕（数据保存后自动记录）。</p>'}`;
   const opn = $("#opName");
   if (opn) opn.addEventListener("change", () => { try { localStorage.setItem("geodesk.operator", opn.value.trim()); } catch (e) {} toast("署名已保存"); });
@@ -1131,7 +1148,7 @@ function renderBusiness() {
     </div>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
       <button class="btn btn-primary" id="bizSave">保存月度数据</button>
-      ${rows.length ? '<button class="btn btn-ghost" id="bizCsv">导出CSV</button>' : ""}
+      ${rows.length ? '<button class="btn btn-ghost" id="bizCsv">导出表格</button>' : ""}
       <button class="btn btn-ghost" id="bizIt">复制IT字段建议文案</button>
     </div>
     ${rows.length ? `<div class="tbl-wrap" style="max-height:220px;overflow:auto;margin-top:10px"><table class="tbl"><thead><tr><th>月份</th><th>AI引荐流量</th><th>AI线索</th><th>备注</th><th></th></tr></thead><tbody>
