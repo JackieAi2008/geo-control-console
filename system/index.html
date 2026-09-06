@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>招商产园 GEO 智控台 V4.2</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
-<link rel="stylesheet" href="css/tokens.css?v=4.7.5">
-<link rel="stylesheet" href="css/app.css?v=4.7.5">
+<link rel="stylesheet" href="css/tokens.css?v=4.7.6">
+<link rel="stylesheet" href="css/app.css?v=4.7.6">
 </head>
 <body>
 
@@ -55,7 +55,7 @@
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-primary" id="pjWelcomeNew" style="min-height:44px;padding:0 22px">＋ 新建项目</button>
+      <button class="btn btn-primary" id="pjWelcomeNew" style="padding:0 18px">＋ 新建项目</button>
       <span class="muted" style="font-size:var(--text-sm)">园区、楼宇、任何要宣传的实体，2 分钟建好</span>
       <span style="flex:1"></span>
       <button class="btn btn-ghost" id="pjWelcomeClose">知道了，不再显示</button>
@@ -81,7 +81,7 @@
           <option value="name">名称</option>
         </select>
       </label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:var(--text-sm);min-height:44px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:var(--text-sm)">
         <input type="checkbox" id="pjArch" style="width:16px;height:16px"> 含已归档
       </label>
       <span style="flex:1"></span>
@@ -703,7 +703,7 @@
 
 <script src="js/data.js?v=4.7.3"></script>
 <script src="js/app.js?v=4.7.3"></script>
-<script src="js/ops.js?v=4.7.5"></script>
+<script src="js/ops.js?v=4.7.6"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
