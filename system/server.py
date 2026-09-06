@@ -34,7 +34,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}
-ANYSEARCH = os.path.expanduser("~/.openclaw/skills/anysearch/scripts/anysearch_cli.py")
+ANYSEARCH = os.environ.get("ANYSEARCH_CLI", os.path.expanduser("~/.openclaw/skills/anysearch/scripts/anysearch_cli.py"))   # 生产可用 env 指向独立部署的搜索脚本
 OWN_DOMAINS = ["cmsk1979.com", "cmhk.com", "mp.weixin.qq.com", "weixin.qq.com"]
 MAX_BODY = 5 * 1024 * 1024
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
