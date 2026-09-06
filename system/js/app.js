@@ -47,6 +47,14 @@ function entMode() {
 function noSite() { return entMode() === "none"; }
 /* V6.0.1：体检文案分母跟承载形态（与计分口径一致：none=24，其余=30） */
 function auditN() { return noSite() ? 24 : 30; }
+/* V0.1.11 诊断表单预填（纯函数，e2e 可测）：值只来自当前项目——state.parkUrl 优先（本项目上次诊断保存的），
+   其次项目元数据 url；品牌词=项目 brand||name。跨项目切换时调用方必须先清空表单再取本函数结果。 */
+function diagPrefill(stateObj, proj) {
+  return {
+    url: String(((stateObj && stateObj.parkUrl) || (proj && proj.url) || "")).trim(),
+    brand: String(((proj && (proj.brand || proj.name)) || "")).trim(),
+  };
+}
 function projCtx() {
   const p = curProject() || {};
   const op = (p.operator || "").trim();
@@ -1866,7 +1874,14 @@ function scoreContent(text, entity) {
   const score = Math.round(checks.filter(c => c.pass).length / checks.length * 100);
   return { checks, score };
 }
+let SC_FILL_FOR = null;   /* V0.1.11 内容评分按项目隔离：跨项目切换清空粘贴原文与旧结果（防上个项目的文案/分数残留） */
 render.content = () => {
+  if (SC_FILL_FOR !== curProjectId()) {
+    SC_FILL_FOR = curProjectId();
+    const si = $("#scorerInput"); if (si) si.value = "";
+    const ss = $("#scorerScore"); if (ss) ss.textContent = "—";
+    const sc = $("#scorerChecks"); if (sc) sc.innerHTML = '<p class="muted">等待评分…</p>';
+  }
   $("#scorerEntity").innerHTML = `<option value="">园区名（可选，用于堆砌检测）</option>` +
     [...new Set(state.caliber.map(r => r.park))].map(p => `<option>${esc(p)}</option>`).join("");
   $("#briefPark").innerHTML = [...new Set(state.caliber.map(r => r.park))].map(p => `<option>${esc(p)}</option>`).join("") || '<option>（请先在口径表添加园区）</option>';
@@ -2513,7 +2528,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "0.1.10";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.1.11";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }

@@ -14,6 +14,9 @@ function venueNoun() {
 
 /* ══════ ① 一键诊断（V4.5 双模式：官网体检 / 实体体检·无官网可做）══════ */
 let DG_MODE = null;   /* null=跟随项目承载形态：无官网项目默认实体体检 */
+let DG_FILL_FOR = null;   /* V0.1.11 诊断表单按项目隔离：SPA 切换不刷新页面，常驻 DOM 输入框会残留上个项目的值
+                             （线上实例：进蛇口网谷，品牌词却显示新时代广场的「深圳新时代广场」）；
+                             项目 id 变了→清空表单+模式回默认，再按当前项目重填 */
 function dgMode() { return DG_MODE || (noSite() ? "entity" : "site"); }
 function setDgMode(m) {
   DG_MODE = m;
@@ -554,7 +557,9 @@ function rptCounts(e) {
   return c;
 }
 let RPT_IDX = 0, RPT_MODE = "report";
+let RPT_FILL_FOR = null;   /* V0.1.11 报告索引按项目隔离：跨项目切换回到最新一条，不指向别项目的历史序号 */
 render.report = () => {
+  if (RPT_FILL_FOR !== curProjectId()) { RPT_FILL_FOR = curProjectId(); RPT_IDX = 0; }
   let H = state.diagHistory || [];
   if (!H.length && state.lastDiag) {   /* 兼容旧数据：把 lastDiag 升级为历史首条 */
     H = [state.lastDiag]; state.diagHistory = H; save();
@@ -659,10 +664,17 @@ function rptPrintDoc(e) {
 }
 /* ══════ 渲染钩子 & 绑定（脚本置于 body 末尾，DOM 已就绪）═══════ */
 render.scan = () => {
-  if (state.parkUrl) $("#dgUrl").value = state.parkUrl;
-  else { const u = (curProject().url || "").trim(); if (u) $("#dgUrl").value = u; }   /* V5：项目元数据域名兜底预填 */
+  /* V0.1.11 跨项目守卫：换了项目先清空（旧值=别的项目的残留，非用户输入），模式回项目默认 */
+  if (DG_FILL_FOR !== curProjectId()) {
+    DG_FILL_FOR = curProjectId();
+    DG_MODE = null;
+    const uEl = $("#dgUrl"); if (uEl) uEl.value = "";
+    const bEl = $("#dgBrand"); if (bEl) bEl.value = "";
+  }
+  const pf = diagPrefill(state, curProject());
+  if (pf.url) $("#dgUrl").value = pf.url;   /* state.parkUrl 优先（本项目上次诊断保存的），项目 url 兜底 */
   const brandInp = $("#dgBrand");
-  if (brandInp && !brandInp.value.trim()) brandInp.value = projCtx().park;   /* V5：品牌词预填（不覆盖已输入） */
+  if (brandInp && !brandInp.value.trim() && pf.brand) brandInp.value = pf.brand;   /* 同项目内不覆盖已输入 */
   setDgMode(dgMode());   /* V4.5：双入口默认跟随项目承载形态（无官网项目直接落在实体体检） */
   /* V0.1.8：有结果重演结果区（原行为）；无结果时按当前模式重建空态预检清单 */
   if (state.lastDiag && state.lastDiag.checks) renderDiagResult(state.lastDiag, 0);

@@ -427,6 +427,8 @@ const af = vm.runInContext(`(() => {
   const r2 = applyAutoScores({T2:2, T5:2});        /* T2 已有 2 分=保持；T5 稀疏键缺失=可填 */
   return {f1: r1.filled, k1: r1.kept, marked, f2: r2.filled, k2: r2.kept, scoreT2: state.audit.T2};
 })()`, ctx);
+const pf1 = vm.runInContext(`diagPrefill({parkUrl:"www.cmsk1979.com"}, {brand:"蛇口网谷", name:"蛇口网谷", url:"www.cmsk1979.com"})`, ctx);
+const pf2 = vm.runInContext(`diagPrefill({}, {brand:"深圳新时代广场", name:"新时代广场", url:""})`, ctx);
 const landing = vm.runInContext('landingView()', ctx);
 console.log(JSON.stringify({bad: r1.score, good: r2.score,
   fp: {hi: fp1, mid: fp2, d: [dt1, dt2, dt3]},
@@ -435,7 +437,8 @@ console.log(JSON.stringify({bad: r1.score, good: r2.score,
   landing,
   bp: {n: bp.rows.length, badn: bp.bad.length, co: (bp.rows[0] && bp.rows[0].cooccur || []).length},
   samp: {n: samp.qs.length, sev: samp.qs[0] ? samp.qs[0].severity : 0, noDoubao: !samp.engs.includes("豆包")},
-  af}));
+  af,
+  pf: {u1: pf1.url, b1: pf1.brand, u2: pf2.url, b2: pf2.brand}}));
 '''
         open("/tmp/e2e_harness.js", "w").write(harness)
         subprocess.run(["cp", "/tmp/bad.md", "/tmp/e2e_bad.md"], check=True)
@@ -462,6 +465,10 @@ console.log(JSON.stringify({bad: r1.score, good: r2.score,
                   f"none模式 T1–T3(满分6)不进分母，E1+E2=3/4=75%·实测{r.get('snapNone', {}).get('pct')}%")
             check("V4.7落地分流(无上次记录→项目库)", r.get("landing") == "projects",
                   f"node环境无lastOpen→projects（有项目卡片+全貌导航）·实测{r.get('landing')}")
+            pf = r.get("pf", {})
+            check("V0.1.11 诊断预填按项目隔离", pf.get("u1") == "www.cmsk1979.com" and pf.get("b1") == "蛇口网谷"
+                  and pf.get("u2") == "" and pf.get("b2") == "深圳新时代广场",
+                  f"蛇口→{pf.get('b1')}/{pf.get('u1') or '—'}·新时代→{pf.get('b2')}/{pf.get('u2') or '—'}（各取各的，杜绝串值）")
             af = r.get("af", {})
             check("V0.1.10 诊断自动填入(稀疏audit闭环)", af.get("f1") == 4 and af.get("k1") == 0 and af.get("marked")
                   and af.get("f2") == 1 and af.get("k2") == 1 and af.get("scoreT2") == 2,
@@ -610,18 +617,18 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V0.1 版本号0.1.10", d.get("version") == "0.1.10", f"v={d.get('version')}")
+        check("V0.1 版本号0.1.11", d.get("version") == "0.1.11", f"v={d.get('version')}")
         for path, mark in [("/js/tour.js", "南山大厦"), ("/css/tour.css", "tour-ring")]:
             with urllib.request.urlopen(ROOT + path + "?v=6.1.0", timeout=10) as resp:
                 body = resp.read().decode("utf-8", "ignore")
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V0.1 版本戳统一0.1.10", idx_html.count("?v=0.1.10") >= 9 and "?v=0.1.9" not in idx_html
+        check("V0.1 版本戳统一0.1.11", idx_html.count("?v=0.1.11") >= 9 and "?v=0.1.10" not in idx_html
               and "?v=6.2.0" not in idx_html and "?v=6.1.2" not in idx_html and "?v=6.1.1" not in idx_html
               and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html
               and "?v=4.7.3" not in idx_html,
-              f"?v=0.1.10×{idx_html.count('?v=0.1.10')}")
+              f"?v=0.1.11×{idx_html.count('?v=0.1.11')}")
         reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
         if os.path.exists(chrome):
             def dump_tour(urlpath):
