@@ -38,6 +38,9 @@ jobs:
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
+      - name: CI 闸门：e2e 全量测试（双保险，防本地漏跑 scripts/release）
+        run: python3 scripts/pre-deploy.py
+
       - name: Rsync to ECS（与 DEPLOY.md 手动发版同一命令与排除规则）
         run: |
           rsync -az --delete \

@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""GEO 一键发版：跑闸门 → 闸门 PASS → commit → push → 自动触发 deploy.yml。
+用法：./scripts/release "<commit message>"
+   或 scripts/release  # 不带参则只跑闸门，不 commit/push（预览模式）
+失败路径：e2e 不绿 → 直接退出，不 commit 不 push。"""
+import os, re, subprocess, sys, time
+from datetime import datetime
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(REPO_ROOT)
+
+msg = " ".join(sys.argv[1:]).strip() if len(sys.argv) > 1 else ""
+
+print("[1/4] 闸门：跑 e2e 全量测试")
+env = dict(os.environ); env["GEO_MOCK_ARK"] = "1"
+try:
+    r = subprocess.run([sys.executable, "scripts/pre-deploy.py"], env=env, timeout=540)
+except subprocess.TimeoutExpired:
+    print("✗ 闸门：e2e 超时（540s）"); sys.exit(1)
+if r.returncode != 0:
+    print("✗ 闸门未通过，停止发版。"); sys.exit(1)
+
+# 闸门通过才走到这步；读摘要
+summary_path = "/tmp/geo-release-summary.txt"
+if not os.path.exists(summary_path):
+    print(f"✗ 摘要文件 {summary_path} 不存在（闸门异常退出），停止。")
+    sys.exit(1)
+summary = open(summary_path).read().strip()
+if not summary.startswith("PASS"):
+    print(f"✗ 摘要非 PASS：{summary}")
+    sys.exit(1)
+
+print(f"\n[2/4] 检查未提交改动")
+status = subprocess.check_output(["git", "status", "--short"], text=True).strip()
+if not status and not msg:
+    print("✓ 工作区干净；无 commit message，只跑闸门（预览模式），到此结束。")
+    sys.exit(0)
+if not msg:
+    print("✗ 工作区有未提交改动，但未给 commit message，停止。")
+    print("   用法：./scripts/release \"<commit message>\"")
+    sys.exit(1)
+
+print("[3/4] 提交并挂闸门标签")
+commit_msg = f"{msg}\n\n[发版闸门] {summary}"
+subprocess.check_call(["git", "add", "-A"])
+subprocess.check_call(["git", "commit", "-m", commit_msg])
+
+print("\n[4/4] push 到 main（触发自动发版）")
+try:
+    subprocess.check_call(["git", "push", "origin", "main"], timeout=120)
+except Exception as e:
+    print(f"\n✗ push 失败：{e}（代码已本地 commit 未推送，可手动 git push origin main）")
+    sys.exit(1)
+
+print("\n✓ 已 push，Actions 将自动执行 deploy.yml。")
+print("  盯 run：gh run list --repo JackieAi2008/geo-control-console --limit 1")
