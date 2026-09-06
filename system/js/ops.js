@@ -14,7 +14,7 @@ function setDgMode(m) {
   const isSite = m === "site";
   const bS = $("#dgModeSite"), bE = $("#dgModeEntity"), f = $("#dgSiteForm");
   if (!bS || !bE || !f) return;
-  bS.classList.toggle("on", isSite); bE.classList.toggle("on", !isSite);
+  bS.classList.toggle("on", isSite); bE.classList.toggle("on", !isSite);   /* V4.7.5 chip→seg-item 同名 on 态 */
   f.hidden = !isSite;
   $("#dgHelp").hidden = !isSite; $("#dgHelpEntity").hidden = isSite;
   $("#dgRun").textContent = isSite ? "开始一键诊断" : "开始实体体检";
@@ -431,8 +431,8 @@ render.report = () => {
   }).join("") : '<p class="muted" style="padding:16px 0;text-align:center">还没有诊断记录——先到「一键诊断」跑一次。</p>';
   $$("#reportList [data-rp]").forEach(el => el.addEventListener("click", () => { RPT_IDX = +el.dataset.rp; render.report(); }));
   const e = H[RPT_IDX];
-  $("#rptMode").innerHTML = `<button class="chip ${RPT_MODE === "report" ? "on" : ""}" data-rm="report">📄 查阅报告</button>
-    <button class="chip ${RPT_MODE === "wo" ? "on" : ""}" data-rm="wo">🛠 整改工单（可派发）</button>`;
+  $("#rptMode").innerHTML = `<button class="seg-item ${RPT_MODE === "report" ? "on" : ""}" data-rm="report">查阅报告</button>
+    <button class="seg-item ${RPT_MODE === "wo" ? "on" : ""}" data-rm="wo">整改工单</button>`;
   $$("#rptMode [data-rm]").forEach(b => b.addEventListener("click", () => { RPT_MODE = b.dataset.rm; render.report(); }));
   if (!e) { $("#reportView").innerHTML = '<p class="muted">暂无报告</p>'; $("#rptMeta").textContent = ""; return; }
   $("#rptMeta").textContent = `${e.ts} · ${e.url}`;

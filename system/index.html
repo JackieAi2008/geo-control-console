@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>招商产园 GEO 智控台 V4.2</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
-<link rel="stylesheet" href="css/tokens.css?v=4.7.4">
-<link rel="stylesheet" href="css/app.css?v=4.7.4">
+<link rel="stylesheet" href="css/tokens.css?v=4.7.5">
+<link rel="stylesheet" href="css/app.css?v=4.7.5">
 </head>
 <body>
 
@@ -166,9 +166,9 @@
     <div class="grid grid-2">
       <div class="card">
         <h3>发起诊断 <span class="hint">真实联网检查 + 真实搜索，约10–30秒</span></h3>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="dgModeBar">
-          <button class="chip on" id="dgModeSite">官网体检（查网站）</button>
-          <button class="chip" id="dgModeEntity">实体体检（查品牌，没有官网也能做）</button>
+        <div class="seg" id="dgModeBar" role="tablist" aria-label="体检方式" style="margin-bottom:12px">
+          <button class="seg-item on" id="dgModeSite" role="tab">官网体检</button>
+          <button class="seg-item" id="dgModeEntity" role="tab">实体体检</button>
         </div>
         <div class="form-grid" id="dgSiteForm">
           <label class="full lb">官方承载页域名（园区若无独立官网，填上级官网——蛇口网谷填招商蛇口官网 www.cmsk1979.com）<input id="dgUrl" class="inp" placeholder="www.cmsk1979.com"></label>
@@ -202,7 +202,7 @@
             <button class="btn btn-sm btn-ghost" id="rptDl">下载.md</button>
           </span>
         </h3>
-        <div class="filter-row" id="rptMode" style="margin-bottom:10px"></div>
+        <div class="seg" id="rptMode" style="margin-bottom:10px" role="tablist" aria-label="查看方式"></div>
         <div id="reportView"></div>
       </div>
     </div>
@@ -703,7 +703,7 @@
 
 <script src="js/data.js?v=4.7.3"></script>
 <script src="js/app.js?v=4.7.3"></script>
-<script src="js/ops.js?v=4.7.3"></script>
+<script src="js/ops.js?v=4.7.5"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>

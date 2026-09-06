@@ -472,6 +472,16 @@ pre.prompt-view {
 .proj-card .pc-todo { font-size: var(--text-xs); color: var(--color-bad); font-weight: 600; margin-top: 6px; }
 .proj-card.archived { opacity: .62; border-left-color: var(--color-line-2); }
 
+/* ── V4.7.5 分段切换器（模式二选一：等宽同高短标签，说明文字放控件外不进按钮）── */
+.seg { display: inline-flex; border: 1px solid var(--color-line-2); border-radius: var(--radius-s); overflow: hidden; background: var(--color-paper); }
+.seg-item { appearance: none; cursor: pointer; border: none; border-left: 1px solid var(--color-line-2);
+  background: transparent; color: var(--color-ink-2); font-family: var(--font-body); font-size: var(--text-sm);
+  padding: 6px 18px; min-height: 34px; white-space: nowrap; }
+.seg-item:first-child { border-left: none; }
+.seg-item:hover { color: var(--color-ink); background: var(--color-paper-2); }
+.seg-item.on { background: var(--color-ink); color: var(--color-paper); }
+.seg-item:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+
 /* 项目总览：卡片墙（真实数据，无数据显 —） */
 .proj-grid {
   display: grid; gap: var(--space-md); align-items: stretch;
@@ -525,6 +535,7 @@ pre.prompt-view {
   #pjQ { flex: 1 1 100%; }
   .pj-chips { row-gap: 8px; }
   .pj-chips .chip { min-height: 44px; }
+  .seg-item { min-height: 44px; }
   .pj-stat { flex: 1 1 100%; }
   .pj-recent { flex-wrap: wrap; }
 }
