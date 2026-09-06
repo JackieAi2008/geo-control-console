@@ -31,7 +31,7 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "5.0.1"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处
+APP_VERSION = "6.0.0"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}
@@ -321,11 +321,11 @@ def _robots_blocks(txt):
     if agent and rules: blocks.setdefault(agent, rules)
     return blocks
 
-def diagnose(url, brand="", own_domains=None, mode="site"):
+def diagnose(url, brand="", own_domains=None, mode="site", group_domains=None):
     """一键诊断。mode="site"：对园区官网做真实技术体检；mode="entity"（V4.5）：无官网实体体检——
     品牌词真实搜索推导实体资产证据（自有渠道/百科/企业信息/权威信源），不依赖官网。全部带证据。"""
     if mode == "entity":
-        return _diagnose_entity(brand, own_domains)
+        return _diagnose_entity(brand, own_domains, group_domains)
     host = re.sub(r"^https?://", "", (url or "").strip().rstrip("/"))
     if not host or "/" in host: host = (host or "").split("/")[0]
     if not host:
@@ -415,7 +415,7 @@ def diagnose(url, brand="", own_domains=None, mode="site"):
                        "score": {"C6": 2 if ratio >= 0.6 else 1}})
     # ── 品牌词搜索：自有阵地是否进前10 ──
     if brand:
-        pr = run_probe(brand, own_domains)
+        pr = run_probe(brand, own_domains, group_domains)
         if not pr.get("error"):
             tops = pr.get("results", [])[:10]
             own = [t for t in tops if t["own"]]
@@ -423,7 +423,8 @@ def diagnose(url, brand="", own_domains=None, mode="site"):
             checks.append({"id": "E2a", "name": "品牌词搜索·自有阵地", "status": "pass" if own else "fail",
                            "evidence": ("前10含自有阵地：" + "、".join(urlparse(t["url"]).netloc for t in own)) if own else
                                        (f"搜索「{brand}」前10全部为第三方：" + "、".join(doms[:5]) + "…"),
-                           "score": {"E2": 1 if own else 0}, "top_domains": doms})
+                           "score": {"E2": 1 if own else 0}, "top_domains": doms,
+                           "tops": [{"title": t.get("title", ""), "url": t.get("url", ""), "own": bool(t.get("own"))} for t in tops]})
         else:
             checks.append({"id": "E2a", "name": "品牌词搜索·自有阵地", "status": "warn",
                            "evidence": f"搜索通道暂不可用：{pr['error']}", "score": {}})
@@ -435,7 +436,7 @@ def diagnose(url, brand="", own_domains=None, mode="site"):
             "auto_scores": score_map, "ts": __import__("time").strftime("%Y-%m-%d %H:%M"), "mode": "site"}
 
 
-def _diagnose_entity(brand, own_domains):
+def _diagnose_entity(brand, own_domains, group_domains=None):
     """V4.5 实体体检：无官网项目的诊断入口。一次品牌词真实搜索推导四类实体证据——
     E2a 自有渠道是否进前10 / E1 百科词条 / E6 企业信息平台 / E4 权威信源。
     判定保守（warn 为主），证据里写明人工核实方法，不编造。"""
@@ -443,7 +444,7 @@ def _diagnose_entity(brand, own_domains):
     if not brand:
         return {"error": "实体体检需要品牌词（如：万海大厦）——它替代官网成为检查对象"}
     checks = []
-    pr = run_probe(brand, own_domains)
+    pr = run_probe(brand, own_domains, group_domains)
     if pr.get("error"):
         return {"error": "搜索通道暂不可用：" + str(pr["error"])}
     tops = pr.get("results", [])[:10]
@@ -453,7 +454,8 @@ def _diagnose_entity(brand, own_domains):
     checks.append({"id": "E2a", "name": "品牌词搜索·自有渠道", "status": "pass" if own else "fail",
                    "evidence": ("前10含自有渠道：" + "、".join(urlparse(t["url"]).netloc for t in own)) if own else
                                (f"搜索「{brand}」前10全部为第三方：" + "、".join(doms[:5]) + "…"),
-                   "score": {"E2": 1 if own else 0}, "top_domains": doms})
+                   "score": {"E2": 1 if own else 0}, "top_domains": doms,
+                   "tops": [{"title": t.get("title", ""), "url": t.get("url", ""), "own": bool(t.get("own"))} for t in tops]})
     # ── E1 百科词条：前10 是否出现百度百科（AI 交叉对照的基础层）──
     baike = [d for d in doms if d.endswith("baike.baidu.com")]
     checks.append({"id": "E1", "name": "百科词条", "status": "pass" if baike else "warn",
@@ -550,6 +552,45 @@ def parse_answer(text, brand, competitors, headers=None, conn=None):
             "citedDomains": doms[:10],
             "competitorMentions": [str(x).strip() for x in (d.get("competitorMentions") or []) if str(x).strip()][:10]}
 
+# V6 1.3 品牌词歧义检测：城市/地标词表（阳性信号=结果标题中"其他城市+核心词"共现）
+AMBIG_PLACES = ["北京", "上海", "广州", "深圳", "杭州", "成都", "重庆", "武汉", "西安", "南京", "苏州", "天津",
+                "长沙", "郑州", "青岛", "大连", "厦门", "合肥", "福州", "昆明", "沈阳", "哈尔滨", "石家庄",
+                "济南", "无锡", "宁波", "佛山", "东莞", "纽约", "伦敦", "东京", "巴黎", "首尔", "新加坡", "香港"]
+
+def brand_check(conn, brand, city):
+    """V6 R2：阳性信号判定——只看"检出其他城市+品牌核心词共现"，不做"缺本地词"推断（会误伤）。
+    结果 24h 缓存（kv brand:check:<词>）控外呼成本；anysearch 不可用时如实返回 unknown。"""
+    brand = (brand or "").strip()
+    city = (city or "").strip()
+    if not brand or len(brand) < 2:
+        return {"ambiguity": False}
+    ck = "brand:check:" + brand
+    cached = kv_get(conn, ck) or {}
+    import time as _t
+    if cached.get("result") and (_t.time() - (cached.get("ts") or 0)) < 86400:
+        return cached["result"]
+    core = brand[len(city):] if (city and brand.startswith(city) and len(brand) > len(city)) else brand
+    if len(core) < 3:   # 核心词太短（如"广场"）无法可靠判定
+        return {"ambiguity": False}
+    if not os.path.exists(ANYSEARCH):
+        return {"ambiguity": False, "unknown": True}
+    try:
+        p = subprocess.run([sys.executable, ANYSEARCH, "search", brand],
+                           capture_output=True, text=True, timeout=40)
+    except Exception:
+        return {"ambiguity": False, "unknown": True}
+    titles = [t.strip() for t, u in re.findall(r"###\s*\d+\.\s*(.+?)\n\s*-\s*\*\*URL\*\*:\s*(\S+)", p.stdout or "")]
+    others = [c for c in AMBIG_PLACES if c != city[:2] and c != city]
+    samples = []
+    for t in titles:
+        if any(c in t for c in others) and core[:6] in t:
+            samples.append(t[:60])
+    result = {"ambiguity": len(samples) >= 2, "samples": samples[:3],
+              "suggestion": (city + core) if city else "", "core": core}
+    kv_put(conn, ck, {"ts": _t.time(), "result": result})
+    return result
+
+
 def _own_hit(url, owns):
     """V5：自有域名判定改 hostname 后缀匹配（host 等于 d 或以 .d 结尾），
     修复旧子串匹配偏宽（自有域名出现在第三方 URL 路径中会误判）与偏窄（缺 www 变体）两个方向的失真。"""
@@ -559,10 +600,12 @@ def _own_hit(url, owns):
         return False
     return any(host == d.lower() or host.endswith("." + d.lower()) for d in owns if d)
 
-def run_probe(query, own_domains=None):
+def run_probe(query, own_domains=None, group_domains=None):
     """真实外呼：调用本机 anysearch（失败时如实返回 error，不编造结果）。
-    own_domains：该项目的自有域名列表（V4 参数化，未传时回退全局默认）"""
+    own_domains：该项目的自有域名列表（V4 参数化，未传时回退全局默认）；
+    group_domains：集团信源（V6 R5——判定合并：可控阵地+集团信源都算"我们这边"）"""
     owns = [d.strip() for d in (own_domains or []) if d and d.strip()] or OWN_DOMAINS
+    owns = list(dict.fromkeys(owns + [d.strip() for d in (group_domains or []) if d and d.strip()]))
     if not query or len(query) > 120:
         return {"error": "query 必须为 1–120 字"}
     if not os.path.exists(ANYSEARCH):
@@ -736,6 +779,7 @@ class Handler(BaseHTTPRequestHandler):
                         "industries": [str(i).strip()[:30] for i in (body.get("industries") or []) if str(i).strip()][:5],
                         "competitors": [str(c).strip()[:40] for c in (body.get("competitors") or []) if str(c).strip()][:5],
                         "matrixTier": "lite" if str(body.get("matrixTier") or "").strip() == "lite" else "park",
+                        "groupDomains": [str(d).strip()[:80] for d in (body.get("groupDomains") or []) if str(d).strip()][:10],
                         "ownDomains": [str(d).strip()[:80] for d in (body.get("ownDomains") or []) if str(d).strip()][:20],
                         "createdAt": time.strftime("%Y-%m-%d"), "archived": False}
                 kv_put(self.conn, "projects", plist + [proj])
@@ -766,6 +810,8 @@ class Handler(BaseHTTPRequestHandler):
                     p["competitors"] = [str(c).strip()[:40] for c in (body.get("competitors") or []) if str(c).strip()][:5]
                 if "matrixTier" in body:
                     p["matrixTier"] = "lite" if str(body.get("matrixTier") or "").strip() == "lite" else "park"
+                if "groupDomains" in body:
+                    p["groupDomains"] = [str(d).strip()[:80] for d in (body.get("groupDomains") or []) if str(d).strip()][:10]
                 if "ownDomains" in body:
                     p["ownDomains"] = [str(d).strip()[:80] for d in (body.get("ownDomains") or []) if str(d).strip()][:20]
                 kv_put(self.conn, "projects", plist)
@@ -815,16 +861,23 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/probe":
             try:
                 body = self._body() or {}
-                return self._send(200, run_probe(str(body.get("query", "")), body.get("ownDomains")))
+                return self._send(200, run_probe(str(body.get("query", "")), body.get("ownDomains"), body.get("groupDomains")))
             except Exception as e:
                 return self._send(400, {"error": str(e)})
         if path == "/api/diagnose":
             try:
                 body = self._body() or {}
                 mode = "entity" if str(body.get("mode", "")) == "entity" else "site"
-                return self._send(200, diagnose(str(body.get("url", "")), str(body.get("brand", "")), body.get("ownDomains"), mode))
+                return self._send(200, diagnose(str(body.get("url", "")), str(body.get("brand", "")), body.get("ownDomains"), mode, body.get("groupDomains")))
             except Exception as e:
                 return self._send(500, {"error": str(e)})
+        if path == "/api/brandcheck":
+            """V6 1.3：品牌词歧义检测（阳性信号，24h 缓存）"""
+            try:
+                body = self._body() or {}
+                return self._send(200, brand_check(self.conn, str(body.get("brand") or ""), str(body.get("city") or "")))
+            except Exception as e:
+                return self._send(400, {"error": str(e)})
         if path == "/api/parse":
             """V4 3.4：贴答案自动填（结构化抽取，人确认后才入库）"""
             try:

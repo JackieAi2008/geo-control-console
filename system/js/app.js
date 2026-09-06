@@ -12,7 +12,7 @@ const PKEY = "geodesk.projects";                // V4 项目层：{list, current
 const DEFAULT_OWN = ["cmsk1979.com", "cmhk.com", "mp.weixin.qq.com", "weixin.qq.com"];
 const defaultState = (fresh, meta) => ({
   audit: Object.fromEntries(GEO.audit.flatMap(d => d.items.map(i => [i.id, 0]))),
-  caliber: fresh ? [] : JSON.parse(JSON.stringify(GEO.caliberSeed)),   // 新项目不带蛇口网谷口径种子
+  caliber: fresh ? buildCaliberScaffold(meta) : JSON.parse(JSON.stringify(GEO.caliberSeed)),   // V5 不带蛇口种子；V6 生成待填骨架（锚定+档位字段）
   prompts: fresh ? instPrompts(meta || {}, (meta || {}).matrixTier)    // V5：新项目按元数据实例化模板（不再继承蛇口30问）
                  : GEO.prompts.map(p => ({ id: p.id, cat: p.cat, q: p.q,
       severity: { "对比竞品": 5, "选址决策": 4, "品牌认知": 3, "产业服务": 3 }[p.cat] || 3 })),  // 非 fresh 仅作老项目/本地模式兼容基底
@@ -33,6 +33,8 @@ const projKey = id => STORE_KEY + "." + id;
 function curProjectId() { return CUR; }
 function curProject() { return PROJECTS.find(p => p.id === CUR) || { id: CUR, name: "当前项目", url: "", brand: "", ownDomains: DEFAULT_OWN }; }
 function curOwn() { const d = curProject().ownDomains; return (d && d.length) ? d : DEFAULT_OWN; }
+/* V6 R5：判定合并——自有可控阵地 + 集团信源（解读分层见 ledgerStats/分析卡） */
+function curOwnAll() { return [...new Set([...curOwn(), ...((curProject() || {}).groupDomains || [])])]; }
 /* V4.5 承载形态：own=有独立官网 / parent=上级官网承载页 / none=暂无官网（实体体检路线，官网专属项不进分母）
    老项目无此字段时按 url 推导，蛇口网谷（填了上级官网）→parent */
 function entMode() {
@@ -124,7 +126,7 @@ const SEV_SEED = { "对比竞品": 5, "选址决策": 4, "品牌认知": 3, "产
 function P_prompts() {
   if (state.prompts && state.prompts.length) return state.prompts;
   /* V5 通用化：空矩阵不再继承蛇口种子，按当前项目元数据实例化模板 */
-  state.prompts = instPrompts(curProject() || {}, (curProject() || {}).matrixTier);
+  state.prompts = instPrompts(Object.assign({}, curProject() || {}, { district: caliberDistrict() }), (curProject() || {}).matrixTier);
   return state.prompts;
 }
 /* V5 模板实例化器：项目元数据 → 问题矩阵（缺参走各模板自带兜底问法） */
@@ -133,11 +135,29 @@ function instPrompts(meta, tier) {
   const m = {
     park: (meta.brand || meta.name || "本项目").trim(),
     city: (meta.city || "").trim(),
+    district: (meta.district || meta.city || "").trim(),   /* V6 R3：区位词数据源=口径「所在片区/商圈」，由调用方注入（新建=城市兜底，重建=口径值） */
     industry: (meta.industries || []).map(s => String(s).trim()).filter(Boolean),
     competitors: (meta.competitors || []).map(s => String(s).trim()).filter(Boolean),
     operator: (meta.operator || "").trim(),
   };
   return bank.map(t => ({ id: t.id, cat: t.cat, q: t.q(m), severity: SEV_SEED[t.cat] || 3 }));
+}
+/* V6：读口径表锚定区的片区值（official 已填才算） */
+function caliberDistrict() {
+  try {
+    const r = (state.caliber || []).find(x => x.field === "所在片区/商圈");
+    return (r && r.official || "").trim();
+  } catch (e) { return ""; }
+}
+/* V6 1.1：口径骨架——锚定区 + 档位字段（official 留空=待填，hint 放 source 列展示指引） */
+function buildCaliberScaffold(meta) {
+  const tier = ((meta || {}).matrixTier === "lite") ? "lite" : "park";
+  const park = ((meta || {}).brand || (meta || {}).name || "本项目").trim();
+  const mk = spec => ({ park, field: spec.field, official: "", asOf: "", source: "", hint: spec.hint, scaffold: true, conflicts: [] });
+  return [
+    ...(GEO.caliberScaffold.anchor || []).map(mk),
+    ...(GEO.caliberScaffold[tier] || []).map(mk),
+  ];
 }
 function P_cats() { const c = [...new Set(P_prompts().map(p => p.cat))]; return c.length ? c : GEO.promptCats; }
 
@@ -343,6 +363,7 @@ async function submitNewProject() {
   renderProjectContext(); renderAllViews();
   go("dashboard");
   toast(`项目「${meta.name}」已创建，问题矩阵已按本项目生成（${state.prompts.length} 问）。下一步：${mode === "none" ? "诊断 → 一键诊断 → 实体体检（用品牌词查网上存在感）" : "诊断 → 一键诊断；再到口径表 建立本项目唯一事实源"}`);
+  brandCheckHint(meta.brand, meta.city, async nb => { meta.brand = nb; await saveProjMeta({ brand: nb }); state.prompts = instPrompts(Object.assign({}, meta, { district: caliberDistrict() }), meta.matrixTier); save(); renderAllViews(); });
 }
 let state = {};   /* 由 initProjects() → loadCurrentState() 按 CUR 填充（调用在文件末尾，save 定义之后，避免 TDZ） */
 /* save() 定义在服务器模式区块（本地即时存 + 服务器防抖同步） */
@@ -480,10 +501,11 @@ async function initServerMode() {
         ((lm.operator || "") !== (sp.operator || "")) || ((lm.entityMode || "") !== (sp.entityMode || "")) ||
         ((lm.city || "") !== (sp.city || "")) || JSON.stringify(lm.industries || []) !== JSON.stringify(sp.industries || []) ||
         JSON.stringify(lm.competitors || []) !== JSON.stringify(sp.competitors || []) || ((lm.matrixTier || "park") !== (sp.matrixTier || "park")) ||
+        JSON.stringify(lm.groupDomains || []) !== JSON.stringify(sp.groupDomains || []) ||
         JSON.stringify(lm.ownDomains || []) !== JSON.stringify(sp.ownDomains || []);
       if (diff) await API.updateProject({ id: sp.id, name: lm.name, brand: lm.brand || "", operator: lm.operator || "", entityMode: lm.entityMode || "",
         city: lm.city || "", industries: lm.industries || [], competitors: lm.competitors || [], matrixTier: lm.matrixTier || "park",
-        ownDomains: lm.ownDomains || sp.ownDomains || [] });
+        groupDomains: lm.groupDomains || [], ownDomains: lm.ownDomains || sp.ownDomains || [] });
     }
     const fresh = await API.projects();
     /* V4.6 活跃/归档分离：PROJECTS=可进入项目；ARCHIVED_PROJS=项目库「含已归档」开关下灰显+可恢复 */
@@ -491,6 +513,7 @@ async function initServerMode() {
                          operator: p.operator || "", entityMode: p.entityMode || "", archived: !!p.archived,
                          city: p.city || "", industries: p.industries || [], competitors: p.competitors || [],
                          matrixTier: p.matrixTier || "park",
+                         groupDomains: p.groupDomains || [],
                          ownDomains: p.ownDomains || [], createdAt: p.createdAt });
     ARCHIVED_PROJS = fresh.projects.filter(p => p.archived).map(mapP);
     PROJECTS = fresh.projects.filter(p => !p.archived).map(p => {
@@ -613,8 +636,12 @@ function ledgerStats() {
   const pos = posBase.length ? posBase.reduce((a, r) => a + (+r.sentiment || 0), 0) / posBase.length : null;
     const withUrl = ans.filter(r => (r.url || "").trim());
     const OWN = curOwn();   /* V4：引用份额按当前项目自有域名计算；V5：hostname 后缀匹配（与 server _own_hit 同口径） */
-  const own = withUrl.filter(r => { try { const h = new URL(r.url).hostname.toLowerCase(); return OWN.some(d => h === d.toLowerCase() || h.endsWith("." + d.toLowerCase())); } catch (e) { return false; } });
-  return { n:L.length, ansN:ans.length, mention, pos, engines:new Set(L.map(r => r.engine)), share: withUrl.length ? own.length / withUrl.length : null };
+    const GRP = (curProject() || {}).groupDomains || [];   /* V6 R5：集团信源——判定合并、解读分层 */
+  const hitOwn = r => { try { const h = new URL(r.url).hostname.toLowerCase(); return OWN.some(d => h === d.toLowerCase() || h.endsWith("." + d.toLowerCase())); } catch (e) { return false; } };
+  const hitGrp = r => { try { const h = new URL(r.url).hostname.toLowerCase(); return !hitOwn(r) && GRP.some(d => h === d.toLowerCase() || h.endsWith("." + d.toLowerCase())); } catch (e) { return false; } };
+  const own = withUrl.filter(hitOwn), grp = withUrl.filter(hitGrp);
+  return { n:L.length, ansN:ans.length, mention, pos, engines:new Set(L.map(r => r.engine)), share: withUrl.length ? (own.length + grp.length) / withUrl.length : null,
+           ownC: own.length, ownG: grp.length };
 }
 function heatData() {
   /* 引擎(+搜索通道+台账中出现的其他引擎) × 问题类别 提及率（来自台账，问题取当前项目矩阵） */
@@ -1329,14 +1356,44 @@ render.dashboard = () => {
   $("#dashMon").innerHTML = `<div class="kpi-num">${curMention === null ? (st.mention === null ? "—" : Math.round(st.mention * 100) + "<small>%</small>") : curMention.v + "<small>%</small>"}</div>
     <p>${curMention ? `${curMention.ch}提及率 · n=${curMention.n}${sb.comparable ? deltaTag(curMention.v, baseMention, "pp") : ""}` : `答案侧平均提及率 · ${st.ansN}条人工记录${st.ansN ? "" : "（先在监测页人工录入）"}`}</p>
     <a href="#/monitor" class="mini-link">去监测 →</a>`;
+  const _og = (typeof ledgerStats === "function" ? (ledgerStats() || {}) : {});
   $("#dashCal").innerHTML = `<div class="kpi-num">${sb.cur && sb.cur.ownHitN !== null ? sb.cur.ownHitN + "<small> /" + (sb.cur.ownHitTotal || "?") + "</small>" : "—"}</div>
-    <p>品牌词自有渠道（信源最近一轮）${sb.comparable && sb.cur.ownHitN !== null && sb.base.ownHitN !== null ? deltaTag(sb.cur.ownHitN, sb.base.ownHitN, "问") : ""}<br>
+    <p>品牌词自有渠道（信源最近一轮）${sb.comparable && sb.cur.ownHitN !== null && sb.base.ownHitN !== null ? deltaTag(sb.cur.ownHitN, sb.base.ownHitN, "问") : ""}${_og.ownC !== undefined && (_og.ownC || _og.ownG) ? `<br><span class="muted" style="font-size:11px">答案侧被引：可控阵地 ${_og.ownC} · 集团信源 ${_og.ownG}</span>` : ""}<br>
     <span class="muted" style="font-size:11px">口径表 ${state.caliber.length} 字段 · ${state.caliber.filter(r => (r.conflicts || []).length).length} 冲突</span></p>
     <a href="#/diag/caliber" class="mini-link">去治理 →</a>`;
 
+  /* V6 1.6 四步起步向导卡（三空项目：口径空 或 未体检） */
+  const ob = $("#dashOnboard");
+  const filledCal = state.caliber.filter(r => (r.official || "").trim()).length;
+  const calEmpty = !state.caliber.length, diagEmpty = !state.lastDiag;
+  if (ob) {
+    const isFresh = calEmpty || diagEmpty || filledCal < 3;
+    ob.hidden = !isFresh;
+    if (isFresh) {
+      const hasTk = (state.watch || state.fixQueue || []).length > 0 || !!(state.planInputs || {}).everBuilt;
+      const steps = [
+        { ok: filledCal >= 3, t: "① 填口径骨架", d: "锚定实体全称/地址，填 3 个最关键数字（10 分钟）", href: "#/diag/caliber", est: "10 分钟" },
+        { ok: !!state.lastDiag, t: "② 跑体检 + 看谁在替你说话", d: "一键真实搜索，看这个项目在网上现在是什么样子（2 分钟）", href: "#/diag/scan", est: "2 分钟" },
+        { ok: hasTk, t: "③ 下载《百科词条更新稿》", d: "按稿提交创建/更新词条——没有官网的项目，百科就是第一官方门面（15 分钟）", href: "#/act/toolkit", est: "15 分钟" },
+        { ok: !!(state.onboard || {}).mapDone, t: "④ 三大地图认领", d: "按《地图信息核对清单》在高德/百度/腾讯认领（清单已生成）", href: "#/act/toolkit", est: "10 分钟" },
+      ];
+      const done = steps.filter(x => x.ok).length;
+      $("#obSteps").innerHTML = steps.map(x => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--color-paper-2);border:1px solid var(--color-line)">
+          <span class="tag ${x.ok ? "tag-ok" : "tag-warn"}" style="min-width:auto">${x.ok ? "✓ 已完成" : x.est}</span>
+          <span style="flex:1"><b>${x.t}</b> <span class="muted" style="font-size:12px">${x.d}</span></span>
+          ${x.ok ? "" : `<a class="btn btn-sm btn-primary" href="${x.href}" style="height:28px">前往 →</a>`}
+        </div>`).join("") + (steps[3].ok ? "" : `<div style="display:flex;justify-content:flex-end;margin-top:2px"><button class="btn btn-sm btn-ghost" id="obMapDone" style="height:28px">④ 已完成地图认领 ✓</button></div>`);
+      $("#obProg").textContent = `进度 ${done}/4${done === 4 ? "——起步完成！下一步：双周跑一轮监测看变化。" : ""}`;
+      const obm = $("#obMapDone");
+      if (obm) obm.addEventListener("click", () => { state.onboard = Object.assign({}, state.onboard, { mapDone: true }); save(); render.dashboard(); toast("起步四步完成 ✓ 建议双周跑一轮监测"); });
+    }
+  }
+
   /* 下一步清单（按状态推导） */
   const todo = [];
-  if (s.pct === 0) todo.push(["体检", "完成30项园区GEO体检，建立成熟度起始数据", "#/diag/audit"]);
+  if (!state.caliber.length) todo.push(["口径", "先建口径：骨架已生成（锚定实体/地址/片区+关键数字），填 3 个最关键字段即可开始", "#/diag/caliber"]);
+  if (s.pct === 0) todo.push(["体检", (curProject() || {}).matrixTier === "lite" ? "完成实体资产清单打分，建立起始数据" : "完成30项园区GEO体检，建立成熟度起始数据", "#/diag/audit"]);
   /* V4.2：冲突提示带出真实字段名，不再写死蛇口网谷案例 */
   const _confFields = state.caliber.filter(r => (r.conflicts || []).length).map(r => r.field);
   if (_confFields.length) todo.push(["口径", `口径表存在冲突字段（${_confFields.slice(0, 3).join("、")}），先统一再发布任何内容`, "#/diag/caliber"]);
@@ -1467,6 +1524,7 @@ async function refreshProjectsFromServer() {
                          operator: p.operator || "", entityMode: p.entityMode || "", archived: !!p.archived,
                          city: p.city || "", industries: p.industries || [], competitors: p.competitors || [],
                          matrixTier: p.matrixTier || "park",
+                         groupDomains: p.groupDomains || [],
                          ownDomains: p.ownDomains || [], createdAt: p.createdAt });
     const oldOpen = Object.fromEntries(PROJECTS.map(p => [p.id, p.lastOpen]));
     ARCHIVED_PROJS = d.projects.filter(p => p.archived).map(mapP);
@@ -1528,9 +1586,26 @@ function openProjEdit(pid) {
   $("#peComp").value = (p.competitors || []).join("、");
   $("#peOperator").value = p.operator || "";
   $("#peOwn").value = (p.ownDomains || []).join("\n");
+  $("#peGroup").value = (p.groupDomains || []).join("\n");
   $("#peTier").value = p.matrixTier || "park";
   $("#projEditModal").dataset.pid = pid;
   $("#projEditModal").hidden = false;
+}
+/* V6 1.3：品牌词歧义异步检测（阳性信号；只提示不阻断） */
+async function brandCheckHint(brand, city, onFix) {
+  if (!brand || !SERVER_MODE) return;
+  try {
+    const r = await fetch("/api/brandcheck", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brand, city: city || "" }) });
+    const d = await r.json();
+    if (d && d.ambiguity && d.suggestion && d.suggestion !== brand) {
+      const sample = (d.samples || [])[0] || "";
+      if (confirm(`提醒：搜索「${brand}」时出现了其他城市的同名项目${sample ? `（例：${sample}…）` : ""}。\n建议把品牌词改为「${d.suggestion}」，监测和体检会更准。\n\n点「确定」改为「${d.suggestion}」，点「取消」保持不变。`)) {
+        await onFix(d.suggestion);
+        toast("品牌词已修正为「" + d.suggestion + "」");
+      }
+    }
+  } catch (e) { /* 检测失败静默——不阻断任何操作 */ }
 }
 async function saveProjEdit() {
   const pid = $("#projEditModal").dataset.pid;
@@ -1547,6 +1622,7 @@ async function saveProjEdit() {
     competitors: $("#peComp").value.split(/[,，、;；\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 5),
     operator: $("#peOperator").value.trim().slice(0, 60),
     ownDomains: $("#peOwn").value.split(/[\n,，;；]+/).map(s => s.trim()).filter(Boolean).slice(0, 20),
+    groupDomains: $("#peGroup").value.split(/[\n,，;；\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 10),
     matrixTier: $("#peTier").value === "lite" ? "lite" : "park",
   };
   await saveProjMetaFor(pid, partial);
@@ -1554,6 +1630,8 @@ async function saveProjEdit() {
   $("#projEditModal").hidden = true;
   renderProjectCards(SERVER_MODE && !!SERVER_SUM);
   toast("项目信息已保存" + (partial.entityMode === "none" ? "（体检分母已按 24 项口径）" : ""));
+  if (partial.brand && partial.brand !== (PROJECTS.find(x => x.id === pid) || {}).brand) { /* 已保存，仅提示性检测 */ }
+  brandCheckHint(partial.brand, partial.city, async nb => { await saveProjMeta({ brand: nb }); state.prompts = instPrompts(Object.assign({}, curProject(), { district: caliberDistrict() }), curProject().matrixTier); save(); renderAllViews(); });
 }
 async function rebuildPromptsByTier() {
   const pid = $("#projEditModal").dataset.pid;
@@ -1564,7 +1642,7 @@ async function rebuildPromptsByTier() {
   await saveProjEdit();
   if (!confirm(`按「${tier === "lite" ? "轻量版 12 问" : "完整版 30 问"}」重新生成问题矩阵？\n（会覆盖问题矩阵里的手动编辑；已录台账与曲线不受影响）`)) return;
   if (CUR === pid) {
-    state.prompts = instPrompts(p, tier);
+    state.prompts = instPrompts(Object.assign({}, p, { district: caliberDistrict() }), tier);
     save();
     toast(`问题矩阵已重新生成（${state.prompts.length} 问）——到「监测」查看`);
     go("monitor");
@@ -1631,7 +1709,8 @@ function caliberRow(r, i) {
     <td data-col="园区"><input class="inp" style="min-height:34px" value="${esc(r.park)}" data-ci="${i}" data-f="park"></td>
     <td data-col="字段"><input class="inp" style="min-height:34px" value="${esc(r.field)}" data-ci="${i}" data-f="field"></td>
     <td data-col="官方口径" class="${conflict ? "cal-conflict" : ""}"><textarea class="ta" rows="${Math.min(9, Math.max(2, Math.ceil((r.official || "").length / 16)))}" data-ci="${i}" data-f="official" style="min-height:0;padding:8px 10px;line-height:1.55;font-size:13px">${esc(r.official)}</textarea>
-      ${conflict ? `<span class="conflict-note">⚠ 外部存在${conflict}个冲突口径（右侧）</span>` : ""}</td>
+      ${conflict ? `<span class="conflict-note">⚠ 外部存在${conflict}个冲突口径（右侧）</span>` : ""}
+      ${(r.scaffold && !r.official) ? `<span class="conflict-note" style="color:var(--color-ink-3)">💡 待填 · ${esc(r.hint || "")}</span>` : ""}</td>
     <td data-col="时点"><input class="inp" style="min-height:34px" value="${esc(r.asOf)}" data-ci="${i}" data-f="asOf"></td>
     <td data-col="来源"><input class="inp" style="min-height:34px" value="${esc(r.source)}" data-ci="${i}" data-f="source"></td>
     <td data-col="冲突口径" class="cal-conflicts">${(r.conflicts || []).map(c => `<span class="tag tag-warn" title="${esc(c.src)}">${esc(c.v)} · ${esc(c.src)}</span>`).join("") || '<span class="muted">—</span>'}

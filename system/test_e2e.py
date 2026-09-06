@@ -411,7 +411,7 @@ console.log(JSON.stringify({
             r = json.loads(np.stdout)
             check("V5园区版30问实例化", r["parkN"] == 30 and r["cats"] == "品牌认知/选址决策/对比竞品/产业服务",
                   f"n={r['parkN']} 类别={r['cats']}")
-            check("V5轻量版12问", r["liteN"] == 12, f"n={r['liteN']}")
+            check("V5轻量版12问(V6扩至14)", r["liteN"] == 14, f"n={r['liteN']}（V6 追加 L13/L14 区位词探针）")
             check("V5参数注入", r["hasBrand"] and r["hasCity"] and r["hasComp"], f"品牌/城市/竞品 全部进入问题")
             check("V5零种子残留", not r["badWords"], f"蛇口/招商/深圳等字样={r['badWords'] or '无'}")
             check("V5缺参兜底通顺", r["bareOk"], "全空元数据仍生成30问且每问≥8字")
@@ -424,7 +424,59 @@ console.log(JSON.stringify({
             check("V5 parse可用（本机Ollama轨道）", True, f"mention={d.get('mention')} 共现={d.get('competitorMentions')}")
         else:
             check("V5 parse无模型大白话报错", "配置你自己的模型" in err and "ollama" not in err, f"error={err[:60]}")
-        # 6. own 后缀匹配单元（python exec server.py 顶层取 _own_hit）
+        print("T12 V6 冷启动与发言权（骨架/区位词/阵地分层/歧义检测/向导卡）")
+        # 1. data.js 骨架结构（node）
+        node_v6 = """
+const fs = require('fs');
+const GEO = new Function(fs.readFileSync('js/data.js', 'utf8') + '; return GEO;')();
+const sc = GEO.caliberScaffold;
+const lite = GEO.promptTemplates.lite;
+const m = { park: '南京金融城', city: '南京河西', district: '元通商圈', industry: ['金融科技'], competitors: [], operator: '' };
+const mk = t => ({ id: t.id, cat: t.cat, q: t.q(m) });
+const qs = lite.map(mk);
+console.log(JSON.stringify({
+  anchorN: sc.anchor.length, parkN: sc.park.length, liteN: sc.lite.length,
+  hintsOk: [...sc.anchor, ...sc.park, ...sc.lite].every(x => x.field && x.hint),
+  liteQ: qs.length, l13: (qs.find(x => x.id === 'L13') || {}).q, l14: (qs.find(x => x.id === 'L14') || {}).q,
+  l13NoBrand: !(qs.find(x => x.id === 'L13') || {q:''}).q.includes('南京金融城'),
+  l13FallbackCity: lite.find(x => x.id === 'L13').q(Object.assign({}, m, { district: '' })),
+}));
+"""
+        nv = subprocess.run(["node", "-e", node_v6], capture_output=True, text=True, cwd=BASE)
+        if nv.returncode == 0 and nv.stdout.strip():
+            r = json.loads(nv.stdout)
+            check("V6口径骨架结构", r["anchorN"] == 3 and r["parkN"] == 5 and r["liteN"] == 6 and r["hintsOk"],
+                  f"锚定{r['anchorN']}+园区{r['parkN']}+楼宇{r['liteN']}·每字段带指引={r['hintsOk']}")
+            check("V6 lite 14问+区位词", r["liteQ"] == 14 and "元通商圈" in r["l13"] and "元通商圈" in r["l14"],
+                  f"n={r['liteQ']} L13={r['l13']}")
+            check("V6 区位词不带品牌词", r["l13NoBrand"], "L13 度量的是真实搜索路径而非品牌词")
+            check("V6 区位缺省退城市", "南京河西" in r["l13FallbackCity"], r["l13FallbackCity"])
+        else:
+            check("V6骨架/区位词", False, nv.stderr[:120] or "node 无输出", skippable=True)
+        # 2. groupDomains API 往返
+        s, d = req("POST", "/api/projects", {"name": "V6分层测试楼", "brand": "V6分层测试楼", "entityMode": "none",
+            "city": "测试市", "ownDomains": ["own-test.com"], "groupDomains": ["group-test.com"]})
+        pid6 = d.get("id")
+        s, d = req("GET", "/api/projects")
+        pj6 = next((x for x in d.get("projects", []) if x.get("id") == pid6), {})
+        check("V6 groupDomains 创建回读", pj6.get("groupDomains") == ["group-test.com"] and pj6.get("ownDomains") == ["own-test.com"],
+              f"own={pj6.get('ownDomains')} group={pj6.get('groupDomains')}")
+        s, d = req("POST", "/api/projects/update", {"id": pid6, "groupDomains": ["grp2.com", "grp3.com"]})
+        s, d = req("GET", "/api/projects")
+        pj6 = next((x for x in d.get("projects", []) if x.get("id") == pid6), {})
+        check("V6 groupDomains 更新生效", pj6.get("groupDomains") == ["grp2.com", "grp3.com"], str(pj6.get("groupDomains")))
+        # 3. brandcheck（真实外呼，结构断言，失败可跳过）
+        try:
+            s, d = req("POST", "/api/brandcheck", {"brand": "新时代广场", "city": "深圳南山"})
+            _ok = "ambiguity" in d and (not d.get("ambiguity") or bool(d.get("samples") or d.get("suggestion")))
+            check("V6 brandcheck 结构", _ok,
+                  f"ambiguity={d.get('ambiguity')} suggestion={str(d.get('suggestion'))[:20]}", skippable=True)
+        except Exception as e:
+            check("V6 brandcheck 结构", False, f"异常: {e}", skippable=True)
+        # 4. 向导卡容器（无头渲染工作台）
+        html = dump("dashboard")
+        check("V6 起步向导卡容器", "dashOnboard" in html and "起步四步" in html, "四步向导卡渲染（三空项目显示，蛇口等成熟项目 hidden）")
+        # 5. own 后缀匹配单元（python exec server.py 顶层取 _own_hit）
         g = {"__file__": os.path.join(BASE, "server.py")}
         try:
             exec(compile(open(os.path.join(BASE, "server.py"), encoding="utf-8").read(), "server.py", "exec"), g)

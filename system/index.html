@@ -112,6 +112,12 @@
     <h2>概览</h2>
     <p>系统当前状态与下一步建议。</p>
   </div>
+  <!-- V6 1.6 四步起步向导卡（三空项目专属：口径骨架→体检+发言权→百科稿→地图认领，线性路径） -->
+  <div class="card" id="dashOnboard" hidden style="margin-bottom:16px;border-color:var(--color-accent)">
+    <h3>起步四步 <span class="hint">约 30 分钟 · 做完这个项目在网上就有"自己的家"了</span></h3>
+    <div id="obSteps" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0" id="obProg"></p>
+  </div>
   <div class="card" style="margin-bottom:16px">
     <h3>三步上手向导 <span class="hint">每步都是真实动作：点按钮 → 真实探测/生成/搜索，不是演示</span></h3>
     <div class="grid grid-3">
@@ -640,7 +646,8 @@
           <label class="chip" style="cursor:pointer"><input type="radio" name="npTier" value="lite" style="margin-right:4px">轻量版 12 问（单楼宇/单体项目）</label>
         </div>
       </div>
-      <label class="full lb">自有域名（每行一个——用于自有渠道判定、AI 引用中来自自有渠道的比例与品牌词搜索）<textarea id="npOwn" class="inp" rows="3" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号，有就填）"></textarea></label>
+      <label class="full lb">自有域名·可控阵地（每行一个：官网/公众号——能发布内容的才算）<textarea id="npOwn" class="inp" rows="2" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号，有就填）"></textarea></label>
+      <label class="full lb">集团信源·选填（每行一个：集团官网/REIT 披露页——可信但不能在上面发布内容）<textarea id="npGroup" class="inp" rows="2" placeholder="如：cmcreit.com（集团 REIT 披露页）"></textarea></label>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
       <button class="btn btn-ghost" id="npCancel" type="button">取消</button>
@@ -669,7 +676,8 @@
       <label class="full lb">主导产业（逗号分隔）<input id="peInd" class="inp" placeholder="如：数字经济、人工智能" maxlength="80"></label>
       <label class="full lb">主要竞品（逗号分隔，2–5个——对比类问题与竞品参照线用）<input id="peComp" class="inp" placeholder="如：深圳湾科技园、天安数码城" maxlength="120"></label>
       <label class="full lb">运营主体<input id="peOperator" class="inp" placeholder="如：××集团产业园区事业部" maxlength="60"></label>
-      <label class="full lb">自有域名（每行一个）<textarea id="peOwn" class="inp" rows="2" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号，有就填）"></textarea></label>
+      <label class="full lb">自有域名·可控阵地（每行一个）<textarea id="peOwn" class="inp" rows="2" placeholder="example.com&#10;mp.weixin.qq.com（官方公众号，有就填）"></textarea></label>
+      <label class="full lb">集团信源·选填（可信但不能发布内容的：集团官网/披露页）<textarea id="peGroup" class="inp" rows="2" placeholder="如：cmcreit.com"></textarea></label>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
       <span class="lb" style="margin:0">问题矩阵档位</span>
@@ -748,9 +756,9 @@
   </div>
 </div>
 
-<script src="js/data.js?v=5.0.1"></script>
-<script src="js/app.js?v=5.0.1"></script>
-<script src="js/ops.js?v=5.0.1"></script>
+<script src="js/data.js?v=6.0.0"></script>
+<script src="js/app.js?v=6.0.0"></script>
+<script src="js/ops.js?v=6.0.0"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -766,6 +774,6 @@
   })();
 </script>
 <script src="js/chat-kb.js?v=4.7.3"></script>
-<script src="js/chat.js?v=5.0.0"></script>
+<script src="js/chat.js?v=6.0.0"></script>
 </body>
 </html>

@@ -87,6 +87,64 @@ function bindEntityChecklist() {
     render.dashboard();
   }));
 }
+/* ═══ V6 1.4「现在网上谁在替你说话」分析卡 ═══
+ * 分类规则透明可解释（按优先级先命中先归类）；系统不自动定性"代建站"——
+ * 陌生域名逐个给「是我们的→」归位按钮（可控阵地/集团信源），人工确认为准。 */
+function classifyReferrer(host) {
+  const h = (host || "").toLowerCase().replace(/^www\./, "");
+  const rules = GEO.referrerRules || {};
+  const hit = arr => (arr || []).some(d => { d = String(d).toLowerCase(); return h === d || h.endsWith("." + d) || h.includes(d); });
+  if (hit(rules.agency)) return { k: "agency", t: "中介平台" };
+  if (hit(rules.ugc)) return { k: "ugc", t: "网友点评" };
+  if (hit(rules.authority)) return { k: "authority", t: "权威平台" };
+  return { k: "other", t: "其他网站" };
+}
+function referrerCardHtml(res) {
+  const e2a = (res.checks || []).find(c => c.id === "E2a");
+  const tops = (e2a && e2a.tops) || [];
+  if (tops.length < 3) return "";   /* 数据不足不渲染（不编造） */
+  const own = curOwn(), grp = (curProject() || {}).groupDomains || [];
+  const isOurs = h => own.some(d => h === d || h.endsWith("." + d)) || grp.some(d => h === d || h.endsWith("." + d));
+  const KN = { own: "自有·可控阵地", group: "集团信源", authority: "权威平台", ugc: "网友点评", agency: "中介平台", other: "其他网站" };
+  const CL = { own: "tag-ok", group: "tag-gold", authority: "tag-info", ugc: "tag-warn", agency: "tag-warn", other: "tag" };
+  const rows = tops.map(t => {
+    let host = t.url; try { host = new URL(t.url).hostname.replace(/^www\./, ""); } catch (e) {}
+    let k;
+    if (isOurs(host)) k = grp.some(d => host === d || host.endsWith("." + d)) ? "group" : "own";
+    else k = classifyReferrer(host).k;
+    return { host, k, title: (t.title || "").slice(0, 40) };
+  });
+  const cnt = {}; rows.forEach(r => cnt[r.k] = (cnt[r.k] || 0) + 1);
+  const order = ["own", "group", "authority", "ugc", "agency", "other"];
+  const statLine = order.filter(k => cnt[k]).map(k => `${KN[k]} ${cnt[k]}`).join(" · ");
+  const thirdN = (cnt.agency || 0) + (cnt.other || 0);
+  const concl = thirdN >= Math.ceil(tops.length / 2)
+    ? `——现在替你说话的主要是中介和第三方网站，<b>它们的错误信息（旧租金/空置情况）会被 AI 直接当作官方数据引用</b>`
+    : (cnt.own || cnt.group) ? "——我们这边的阵地已在场，保持口径一致并持续更新" : "";
+  return `<div class="card" style="margin-top:12px;border-color:var(--color-accent)">
+    <h3 style="border:none;margin:0 0 4px">现在网上谁在替你说话 <span class="hint">品牌词前 ${tops.length} 条信源分类 · 点「是我们的」归位后即时重算</span></h3>
+    <p style="margin:6px 0">${statLine}${concl}</p>
+    <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">${rows.map((r, i) => `
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;flex-wrap:wrap">
+        <span class="tag ${CL[r.k]}" style="min-width:88px;text-align:center">${KN[r.k]}</span>
+        <b class="num" style="min-width:150px">${esc(r.host)}</b>
+        <span class="muted" style="flex:1;min-width:120px;font-size:12px">${esc(r.title)}</span>
+        ${r.k === "other" || r.k === "agency" ? `<button class="btn btn-sm btn-ghost" data-refclaim="${esc(r.host)}" style="height:28px">是我们的 →</button>` : ""}
+      </div>`).join("")}</div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0">分类依据域名规则库（透明可查）；「其他网站」里若有专门做本项目内容的陌生站，而你们没建过——那就是第三方在替你说话，<a href="#/monitor" style="color:var(--color-info)">看场景词上谁在赢 →</a></p>
+  </div>`;
+}
+/* V6 1.5 友军归位（二选一：可控阵地 / 集团信源），归位后该次结果即时重算 */
+async function referrerClaim(host) {
+  const kind = confirm(`「${host}」是我们这边的吗？\n\n点「确定」= 可控阵地（能发布内容：官网/公众号）\n点「取消」= 集团信源（可信但不能发布：集团官网/披露页）\n（都不是就关闭本弹窗的父提示框）`);
+  const p = curProject() || {};
+  const list = kind ? (p.ownDomains || []) : (p.groupDomains || []);
+  if (!list.includes(host)) list.push(host);
+  await saveProjMeta(kind ? { ownDomains: list } : { groupDomains: list });
+  /* 前端即时重算该次结果的重分类展示 */
+  if (state.lastDiag) renderDiagResult(state.lastDiag, 0, 0);
+  toast(`已归位为「${kind ? "自有·可控阵地" : "集团信源"}」——E2a 与命中统计按新口径生效`);
+}
 function renderDiagResult(res, filled, kept) {
   const LV = { pass: "pass", warn: "warn", fail: "fail" }, IC = { pass: "✓", warn: "⚠", fail: "✗" };
   const isEnt = res.mode === "entity";
@@ -94,6 +152,7 @@ function renderDiagResult(res, filled, kept) {
     `<p class="muted">${isEnt ? "实体体检" : "诊断"}时间 <b class="num">${res.ts}</b> · 检查对象 <b class="num">${isEnt ? "品牌词「" + esc(res.brand || res.url) + "」" : esc(res.url)}</b> · 已自动填入体检表 <b>${filled}</b> 项${kept ? `（${kept} 项已有手动评分，未被覆盖，请在「诊断→30项体检」人工复核）` : ""}</p>` +
     res.checks.map(c => `<div class="chk ${LV[c.status]}"><span class="ico">${IC[c.status]}</span>
       <div><b>${c.id} ${esc(c.name)}</b><span class="why" style="color:var(--color-ink-2)">${esc(c.evidence)}</span></div></div>`).join("") +
+    referrerCardHtml(res) +
     (isEnt ? `<div class="card" style="margin-top:12px;border-color:var(--color-accent)">
       <h3 style="border:none;margin:0 0 4px">实体资产核对清单（12 项 · 无官网项目的主战场）</h3>
       <p class="muted" style="font-size:var(--text-sm);margin:0 0 4px">上面是系统自动查的；下面 12 项需要你按提示人工核对后打分（0=没做，1=做了一半，2=做到了），分数直接计入体检表与发展曲线。</p>
@@ -113,6 +172,21 @@ function renderDiagResult(res, filled, kept) {
     copyText(diagReportMd(res));
     toast("若浏览器未开始下载场景同此：已复制全文，可粘贴到任意文档保存");
   });
+  /* V6 1.3：品牌词唯一性观察行（异步取 brandcheck 缓存，不阻塞渲染） */
+  if (isEnt && SERVER_MODE && res.brand) {
+    fetch("/api/brandcheck", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brand: res.brand, city: (projCtx().city || "") }) })
+      .then(r => r.json()).then(d => {
+        if (d && d.ambiguity) {
+          const line = document.createElement("p");
+          line.className = "muted"; line.style.cssText = "font-size:12px;margin:4px 0";
+          line.innerHTML = `⚠ 品牌词唯一性：搜「${esc(res.brand)}」混入了其他城市同名项目${(d.samples || [])[0] ? `（例：${esc(d.samples[0])}…）` : ""}——建议在项目设置改为「${esc(d.suggestion)}」`;
+          const out = $("#dgOut"); out && out.insertBefore(line, out.firstChild);
+        }
+      }).catch(() => {});
+  }
+  /* V6 1.4/1.5：分析卡归位按钮绑定 */
+  $$("#dgOut [data-refclaim]").forEach(b => b.addEventListener("click", () => referrerClaim(b.dataset.refclaim)));
 }
 function diagReportMd(res) {
   const auto = res.auto_scores || (() => {   /* 历史记录未存auto_scores时从checks重算 */
@@ -147,10 +221,11 @@ function genSchema(park, url, city, industry) {
 function genBaikeDraft(park, F, op) {
   const g = (k, d) => F[k] || d;
   const VN = venueNoun();
-  return `# 百科词条更新稿：${park}\n> 生成 ${today()} · 百度百科是各 AI 引擎交叉对照的基础层。每个数字必须与口径表一致并附权威来源链接，无来源的数字百科审核不过、AI 也不敢引用。\n\n## 词条正文（按百科惯例结构，逐段替换）\n\n${park}是${op}运营的${VN}，位于【待填：城市+片区】，主导${g("主导产业", "【待填】")}产业。\n\n【基本信息】\n- 运营面积：${g("面积", "【待填：见口径表】")}\n- 入驻企业：${g("入驻企业数", "【待填：见口径表】")}\n- 产业聚集度：${g("产业聚集度", "【待填：见口径表】")}\n- 权威背书：${g("行业排名", "【待填：榜单名+年份，必须写明榜单名】")}\n\n【区位交通】\n【待填：地址/地铁线站/主干道/距离机场高铁站】\n\n【产业定位】\n【待填：主导产业+代表企业，数据取口径表】\n\n## 参考资料清单（百科正文每个关键数字都要能对到一条）\n1. 【政府网站/权威媒体名】报道标题，日期，链接\n2. 【REIT公告/榜单发布方】文件名，日期，链接\n3. 【待补：逐条补齐后才能提交】\n\n## 提交方法\n1. 打开 baike.baidu.com 搜「${park}」：有词条→「编辑」逐项更新；无词条→「创建词条」\n2. 正文按上述结构粘贴，【待填】全部补齐\n3. 参考资料逐条添加来源链接（政府网站、权威媒体、REIT 公告优先）\n\n*更新时间：${today()} · 责任人：__*`;
+  return `# 百科词条更新稿：${park}\n> 生成 ${today()} · 百度百科是各 AI 引擎交叉对照的基础层。每个数字必须与口径表一致并附权威来源链接，无来源的数字百科审核不过、AI 也不敢引用。\n\n## 词条正文（按百科惯例结构，逐段替换）\n\n${g("实体全称", "") ? g("实体全称", "") : park}是${op}运营的${VN}，位于${g("详细地址", "") || "【待填：详细地址（口径表锚定区）】"}，主导${g("主导产业", "【待填】")}产业。\n\n【基本信息】\n- 运营面积：${g("面积", "【待填：见口径表】")}\n- 入驻企业：${g("入驻企业数", "【待填：见口径表】")}\n- 产业聚集度：${g("产业聚集度", "【待填：见口径表】")}\n- 权威背书：${g("行业排名", "【待填：榜单名+年份，必须写明榜单名】")}\n\n【区位交通】\n【待填：地址/地铁线站/主干道/距离机场高铁站】\n\n【产业定位】\n【待填：主导产业+代表企业，数据取口径表】\n\n## 参考资料清单（百科正文每个关键数字都要能对到一条）\n1. 【政府网站/权威媒体名】报道标题，日期，链接\n2. 【REIT公告/榜单发布方】文件名，日期，链接\n3. 【待补：逐条补齐后才能提交】\n\n## 提交方法\n1. 打开 baike.baidu.com 搜「${park}」：有词条→「编辑」逐项更新；无词条→「创建词条」\n2. 正文按上述结构粘贴，【待填】全部补齐\n3. 参考资料逐条添加来源链接（政府网站、权威媒体、REIT 公告优先）\n\n*更新时间：${today()} · 责任人：__*`;
 }
 function genMapChecklist(park) {
-  return `# 地图信息核对清单：${park}\n> AI 与搜索引擎回答「在哪儿 / 怎么去 / 周边有什么」类问题时高度依赖地图数据。三个平台逐项核对，约 30 分钟，不需要任何技术。\n\n## 三个平台逐项核对\n\n| 平台 | 入口 | 动作 |\n|---|---|---|\n| 高德地图 | https://ditu.amap.com 搜「${park}」 | 认领主体 → 核对名称/地址/电话 → 补实景照片 → 类目选「${venueNoun() === "商务楼宇" ? "商务写字楼/商业楼宇" : "产业园区"}」 |\n| 百度地图 | https://map.baidu.com 搜「${park}」 | 同上（百度系数据同时喂给文心一言） |\n| 腾讯地图 | https://map.qq.com 搜「${park}」 | 同上 |\n\n## 核对项（三平台必须完全一致）\n- 名称：与品牌词一字不差（无错别字/无旧名）\n- 地址：与官方口径一致\n- 电话：招商热线（与口径表同一号码）\n- 类目：${venueNoun() === "商务楼宇" ? "商务写字楼/商业楼宇（勿选「写字楼出租」等杂类）" : "产业园区/产业园（勿选「写字楼出租」等杂类）"}\n- 照片：≥3 张实景（${venueNoun() === "商务楼宇" ? "楼栋外立面/大堂/办公场景" : "园区门头/办公场景/区位交通"}）\n- 营业状态：正常营业\n\n## 常见问题\n- 搜不到 → 先创建地点并认领（需营业执照）\n- 名称对但信息是旧的 → 平台内「报错/反馈」提交更正\n- 三平台信息互相矛盾 → 以口径表为准逐个改齐（AI 交叉验证不一致会降权）\n\n*核对完成 ${today()} · 责任人：__*`;
+  const addr = ((state.caliber || []).find(r => r.field === "详细地址") || {}).official || "";
+  return `# 地图信息核对清单：${park}\n> AI 与搜索引擎回答「在哪儿 / 怎么去 / 周边有什么」类问题时高度依赖地图数据。三个平台逐项核对，约 30 分钟，不需要任何技术。\n\n## 三个平台逐项核对\n\n| 平台 | 入口 | 动作 |\n|---|---|---|\n| 高德地图 | https://ditu.amap.com 搜「${park}」 | 认领主体 → 核对名称/地址/电话 → 补实景照片 → 类目选「${venueNoun() === "商务楼宇" ? "商务写字楼/商业楼宇" : "产业园区"}」 |\n| 百度地图 | https://map.baidu.com 搜「${park}」 | 同上（百度系数据同时喂给文心一言） |\n| 腾讯地图 | https://map.qq.com 搜「${park}」 | 同上 |\n\n## 核对项（三平台必须完全一致）\n- 名称：与品牌词一字不差（无错别字/无旧名）\n- 地址：与官方口径一致${addr ? "（" + addr + "）" : ""}\n- 电话：招商热线（与口径表同一号码）\n- 类目：${venueNoun() === "商务楼宇" ? "商务写字楼/商业楼宇（勿选「写字楼出租」等杂类）" : "产业园区/产业园（勿选「写字楼出租」等杂类）"}\n- 照片：≥3 张实景（${venueNoun() === "商务楼宇" ? "楼栋外立面/大堂/办公场景" : "园区门头/办公场景/区位交通"}）\n- 营业状态：正常营业\n\n## 常见问题\n- 搜不到 → 先创建地点并认领（需营业执照）\n- 名称对但信息是旧的 → 平台内「报错/反馈」提交更正\n- 三平台信息互相矛盾 → 以口径表为准逐个改齐（AI 交叉验证不一致会降权）\n\n*核对完成 ${today()} · 责任人：__*`;
 }
 
 /* ══════ 整改工单（人话行动卡版：五要素+按业务价值排序+可直贴微信的转发消息）════════ */

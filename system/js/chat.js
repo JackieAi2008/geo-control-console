@@ -224,8 +224,9 @@ const CHAT_SUGGEST = [
         const finalText = clean(acc).trim();
         if (!liveNode.isConnected) body.appendChild(liveNode);
         if (!finalText) {
-          /* V4.4：空回答直接移除气泡，不留空泡 */
+          /* V4.4：空回答直接移除气泡，不留空泡；V6：DOM 里的提问气泡同步移除（此前只撤数组，界面残留提问） */
           liveNode.remove();
+          if (userNode && userNode.isConnected) userNode.remove();
           history.pop();   /* 把刚 push 的 user 消息也撤回（本次问答无效） */
         } else {
           const badge = thought ? '<span class="think-badge">💡 已深度思考</span>' : "";

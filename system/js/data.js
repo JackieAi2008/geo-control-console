@@ -260,7 +260,45 @@ GEO.promptTemplates = {
     { id:"L10", cat:"对比竞品", q: m => `${m.city}知名的产业园区或商务楼宇有哪些？` },
     { id:"L11", cat:"产业服务", q: m => m.industry[0] ? `${m.city}${m.industry[0]}企业都聚在哪里办公？` : `${m.city}重点产业的企业聚集在哪些区域？` },
     { id:"L12", cat:"产业服务", q: () => `楼宇和园区的产业服务一般包括什么？` },
+    /* V6 R3 区位词探针：不带品牌词，度量租户真实搜索路径上的排位；片区取口径表「所在片区/商圈」，缺省退城市 */
+    { id:"L13", cat:"选址决策", q: m => `${m.district || m.city}写字楼租赁有哪些推荐？` },
+    { id:"L14", cat:"选址决策", q: m => `${m.district || m.city}办公楼租金大概什么价位？` },
   ],
+};
+
+/* ══════════ V6 口径骨架（冷启动：新项目自动生成待填字段+「去哪查」指引；园区/楼宇两版随档位）══════════
+ * 锚定区（V6 R1）：实体全称/地址/片区——防同名异楼消歧 + 百科词条锚点 + 区位词探针数据源 */
+GEO.caliberScaffold = {
+  anchor: [
+    { field: "实体全称", hint: "工商注册名或对外法定全称（如：深圳市南山区新时代广场）——百科词条用这个名字，防止和其他城市同名项目混淆" },
+    { field: "详细地址", hint: "精确到门牌（如：南山区蛇口太子路1号）——三大地图与百科必须一字不差" },
+    { field: "所在片区/商圈", hint: "租户嘴里的片区名（如：海上世界/蛇口）——区位类问题监测用这个词" },
+  ],
+  park: [
+    { field: "入驻企业数", hint: "内部台账定稿优先；对外统一「约N家（年份）」带年份的表述，AI 才敢引用" },
+    { field: "运营面积", hint: "注明口径（建面/运营），多口径并存时先定稿一个" },
+    { field: "产业聚集度", hint: "同产业企业占比，REIT 披露或年报常有" },
+    { field: "主导产业", hint: "2–3 个，与项目设置里的主导产业一致" },
+    { field: "权威背书", hint: "榜单名+年份+名次，必须写明榜单名（两张50强榜单不可混）" },
+  ],
+  lite: [
+    { field: "楼层数", hint: "地面层+标准层，与物业资料一致" },
+    { field: "标准层面积", hint: "㎡，招商资料常驻字段" },
+    { field: "租金区间", hint: "取区间不取单点（如 120–180 元/㎡/月）——AI 引用区间更稳，单点易过时被打脸" },
+    { field: "入驻率", hint: "百分比+时点（如 92%（2026-H1））" },
+    { field: "竣工年份", hint: "与百度百科/REIT 披露一致" },
+    { field: "物业运营方", hint: "运营主体全称——与项目设置的运营主体一致，AI 查「谁在运营」时交叉验证用" },
+  ],
+};
+
+/* ══════════ V6 信源分类规则库（「谁在替你说话」分析卡）══════════
+ * 按优先级顺序匹配（先命中先归类）；全部透明可解释，界面只标"疑似"，人工确认为准 */
+GEO.referrerRules = {
+  authority: ["www.gov.cn", "gov.cn", "people.com.cn", "xinhuanet.com", "news.cn", "cctv.com", "chinanews.com",
+              "baike.baidu.com", "qcc.com", "tianyancha.com", "aiqicha.baidu.com", "reit", "cmcreit.com"],
+  ugc: ["dianping.com", "zhihu.com", "meituan.com", "xiaohongshu.com", "map.baidu.com", "amap.com", "map.qq.com", "maoyan.com"],
+  agency: ["regus", "kbgok.com", "youkegongchang", "wework", "krspace", "chuangfugang", "mycupar", "atlasworkplace",
+           "taofenlei", "58.com", "anjuke", "fang.com", "winshang.com", "dongdongzu", "leju.com", "lianjia.com"],
 };
 
 /* ══════════ 30项园区GEO体检清单 ══════════ */
