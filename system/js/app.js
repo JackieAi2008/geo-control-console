@@ -2182,8 +2182,10 @@ async function updateServerBadge() {
   /* V4.7.3 页脚导出/导入=本地模式专属（手动备份/搬家）；服务器模式数据有每日自动备份，
      这两个按钮对品宣是噪音且有误覆盖风险——隐藏，恢复交给「备份与恢复」管理员通道 */
   const se = $("#stateExport"), si = $("#stateImportWrap");
+  const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
+    if (av) av.textContent = "4.7.6";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }
@@ -2191,6 +2193,7 @@ async function updateServerBadge() {
   try {
     const r = await fetch("/api/ping", { signal: AbortSignal.timeout(1500) });
     const d = await r.json();
+    if (av) av.textContent = d.version || "?";
     el.textContent = "服务器已连接 · v" + (d.version || "?") + (document.documentElement.dataset.jsv && document.documentElement.dataset.jsv !== d.version ? "（前端与版本不一致，请刷新/重启服务器）" : "");
   } catch (e) { el.textContent = "服务器连接异常"; }
 }

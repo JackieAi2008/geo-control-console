@@ -31,6 +31,7 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
+APP_VERSION = "4.7.6"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}
@@ -589,7 +590,7 @@ def kv_migrate(conn):
         kv_put(conn, "doc", {"rev": 1, "state": old or {}})
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "GeoDesk/4.2"
+    server_version = "GeoDesk/" + APP_VERSION
     conn = None  # 由 main 注入
 
     def log_message(self, fmt, *args):
@@ -615,7 +616,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         qs = dict(p.split("=", 1) for p in urlparse(self.path).query.split("&") if "=" in p)
         if path == "/api/ping":
-            return self._send(200, {"ok": True, "server": "geodesk", "version": "4.2"})
+            return self._send(200, {"ok": True, "server": "geodesk", "version": APP_VERSION})
         if path == "/api/llm/status":
             src, model, cfg = llm_resolve(self.conn, self.headers)
             return self._send(200, {"backend": "remote" if src in ("user", "server") else src,

@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>招商产园 GEO 智控台 V4.2</title>
+<title>招商产园 GEO 智控台</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
-<link rel="stylesheet" href="css/tokens.css?v=4.7.6">
-<link rel="stylesheet" href="css/app.css?v=4.7.6">
+<link rel="stylesheet" href="css/tokens.css?v=4.7.7">
+<link rel="stylesheet" href="css/app.css?v=4.7.7">
 </head>
 <body>
 
@@ -605,7 +605,7 @@
 </main>
 
 <footer class="foot">
-  <p><b>招商产园 GEO 智控台 V4.2</b> · <span id="srvState" class="muted">正在检测服务端…</span> ·
+  <p><b>招商产园 GEO 智控台 V<span id="appVer">—</span></b> · <span id="srvState" class="muted">正在检测服务端…</span> ·
     <button class="btn btn-sm btn-ghost" id="stateExport" style="vertical-align:middle" hidden>导出本项目数据</button>
     <label class="btn btn-sm btn-ghost" id="stateImportWrap" style="vertical-align:middle;cursor:pointer" hidden>导入数据
       <input type="file" id="stateImport" accept=".json" style="display:none"></label>
@@ -703,7 +703,7 @@
 
 <script src="js/data.js?v=4.7.3"></script>
 <script src="js/app.js?v=4.7.3"></script>
-<script src="js/ops.js?v=4.7.6"></script>
+<script src="js/ops.js?v=4.7.7"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
