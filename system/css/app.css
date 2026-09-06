@@ -644,6 +644,19 @@ pre.prompt-view {
 .audit-item .q .score-seg { margin-left: auto; flex-shrink: 0; }
 .audit-item .std { font-size: var(--text-xs); color: var(--color-ink-3); margin-top: 3px; }
 
+/* V0.1.10 诊断自动填入痕迹：「自动」标 + 聚焦金框 + 说明条 */
+.auto-tag {
+  display: inline-block; margin-left: 6px; padding: 0 5px;
+  font-size: 10px; line-height: 16px; white-space: nowrap; vertical-align: 1px;
+  border: 1px solid var(--color-gold); color: var(--color-gold); border-radius: var(--radius-s);
+}
+.audit-item.auto-hl { box-shadow: inset 3px 0 0 var(--color-gold); background: color-mix(in oklab, var(--color-gold) 7%, var(--color-paper)); }
+.auto-note {
+  grid-column: 1 / -1; font-size: var(--text-xs); color: var(--color-ink-2);
+  border: 1px dashed var(--color-gold); border-radius: var(--radius-m);
+  padding: var(--space-xs) var(--space-sm); margin-bottom: 2px;
+}
+
 /* 维度得分条（总结栏内，点击跳到对应维度卡） */
 .dim-bar {
   appearance: none; cursor: pointer; width: 100%;

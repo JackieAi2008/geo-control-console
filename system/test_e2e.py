@@ -420,6 +420,13 @@ const snap = vm.runInContext(`computeSnapshot("round", {audit: {T1: 2, T2: 1, T3
   {date: "2026-09-04", engine: "豆包", promptId: "P1", mention: 1},
   {date: "2026-09-04", engine: "Kimi", promptId: "P2", mention: 0}]})`, ctx);
 const snapNone = vm.runInContext('computeSnapshot("diag", {entityMode: "none", audit: {T1: 2, T2: 2, T3: 2, E1: 2, E2: 1}, lastDiag: {checks: []}, ledger: []})', ctx);
+const af = vm.runInContext(`(() => {
+  state.audit = {}; state.autoAudit = {};          /* 复现线上 bug：doc 覆盖导致 audit 稀疏 */
+  const r1 = applyAutoScores({T1:0, T2:2, T4:0, C2:1, X9:2});
+  const marked = !!state.autoAudit.T1 && !!state.autoAudit.T4 && !state.autoAudit.X9;
+  const r2 = applyAutoScores({T2:2, T5:2});        /* T2 已有 2 分=保持；T5 稀疏键缺失=可填 */
+  return {f1: r1.filled, k1: r1.kept, marked, f2: r2.filled, k2: r2.kept, scoreT2: state.audit.T2};
+})()`, ctx);
 const landing = vm.runInContext('landingView()', ctx);
 console.log(JSON.stringify({bad: r1.score, good: r2.score,
   fp: {hi: fp1, mid: fp2, d: [dt1, dt2, dt3]},
@@ -427,7 +434,8 @@ console.log(JSON.stringify({bad: r1.score, good: r2.score,
   snapNone: {pct: snapNone.auditPct},
   landing,
   bp: {n: bp.rows.length, badn: bp.bad.length, co: (bp.rows[0] && bp.rows[0].cooccur || []).length},
-  samp: {n: samp.qs.length, sev: samp.qs[0] ? samp.qs[0].severity : 0, noDoubao: !samp.engs.includes("豆包")}}));
+  samp: {n: samp.qs.length, sev: samp.qs[0] ? samp.qs[0].severity : 0, noDoubao: !samp.engs.includes("豆包")},
+  af}));
 '''
         open("/tmp/e2e_harness.js", "w").write(harness)
         subprocess.run(["cp", "/tmp/bad.md", "/tmp/e2e_bad.md"], check=True)
@@ -454,6 +462,10 @@ console.log(JSON.stringify({bad: r1.score, good: r2.score,
                   f"none模式 T1–T3(满分6)不进分母，E1+E2=3/4=75%·实测{r.get('snapNone', {}).get('pct')}%")
             check("V4.7落地分流(无上次记录→项目库)", r.get("landing") == "projects",
                   f"node环境无lastOpen→projects（有项目卡片+全貌导航）·实测{r.get('landing')}")
+            af = r.get("af", {})
+            check("V0.1.10 诊断自动填入(稀疏audit闭环)", af.get("f1") == 4 and af.get("k1") == 0 and af.get("marked")
+                  and af.get("f2") == 1 and af.get("k2") == 1 and af.get("scoreT2") == 2,
+                  f"稀疏audit填{af.get('f1')}项(0分也留痕={af.get('marked')})·非法id拒·已评分保持{af.get('k2')}·T2分={af.get('scoreT2')}")
         else:
             check("评分器单元", False, p.stderr[:200] or "node 输出为空", skippable=True)
 
@@ -598,18 +610,18 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V0.1 版本号0.1.9", d.get("version") == "0.1.9", f"v={d.get('version')}")
+        check("V0.1 版本号0.1.10", d.get("version") == "0.1.10", f"v={d.get('version')}")
         for path, mark in [("/js/tour.js", "南山大厦"), ("/css/tour.css", "tour-ring")]:
             with urllib.request.urlopen(ROOT + path + "?v=6.1.0", timeout=10) as resp:
                 body = resp.read().decode("utf-8", "ignore")
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V0.1 版本戳统一0.1.9", idx_html.count("?v=0.1.9") >= 9 and "?v=0.1.8" not in idx_html
+        check("V0.1 版本戳统一0.1.10", idx_html.count("?v=0.1.10") >= 9 and "?v=0.1.9" not in idx_html
               and "?v=6.2.0" not in idx_html and "?v=6.1.2" not in idx_html and "?v=6.1.1" not in idx_html
               and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html
               and "?v=4.7.3" not in idx_html,
-              f"?v=0.1.9×{idx_html.count('?v=0.1.9')}")
+              f"?v=0.1.10×{idx_html.count('?v=0.1.10')}")
         reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
         if os.path.exists(chrome):
             def dump_tour(urlpath):

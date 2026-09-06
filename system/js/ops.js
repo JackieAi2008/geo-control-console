@@ -72,13 +72,7 @@ async function opsDiagnose() {
   btn.classList.remove("is-busy"); btn.textContent = mode === "site" ? "开始一键诊断" : "开始实体体检";
   if (res.error) { $("#dgOut").innerHTML = `<p style="color:var(--color-bad)">诊断失败：${esc(res.error)}</p>`; return; }
 
-  let filled = 0, kept = 0;
-  Object.entries(res.auto_scores || {}).forEach(([k, v]) => {
-    if (Object.prototype.hasOwnProperty.call(state.audit, k)) {
-      if ((state.audit[k] || 0) === 0) { state.audit[k] = v; filled++; }   // 只填入未评分项
-      else kept++;                                                          // 已有手动评分不覆盖
-    }
-  });
+  const { filled, kept } = applyAutoScores(res.auto_scores);   /* V0.1.10：稀疏 audit 也认合法体检项 id；填入记「自动」痕 */
   res.brand = brand;   /* V4.5：实体体检报告/历史记录展示用 */
   state.lastDiag = { ts: res.ts, url: res.url, brand, checks: res.checks, mode: res.mode || "site" };
   state.diagHistory = [JSON.parse(JSON.stringify(state.lastDiag)), ...(state.diagHistory || [])].slice(0, 20);
@@ -106,6 +100,7 @@ function entityChecklistHtml() {
 function bindEntityChecklist() {
   $$("#dgChk [data-echk]").forEach(b => b.addEventListener("click", () => {
     state.audit[b.dataset.echk] = +b.dataset.v;
+    if (state.autoAudit) delete state.autoAudit[b.dataset.echk];   /* 人工点分=转人工 */
     save();
     $("#dgChk").innerHTML = entityChecklistHtml();
     bindEntityChecklist();
@@ -191,7 +186,7 @@ function renderDiagResult(res, filled, kept) {
   $("#dgOut").innerHTML =
     `<div class="dg-head">
       <div style="min-width:0">
-        <p class="dg-meta">${isEnt ? "实体体检" : "诊断"}时间 <b class="num">${res.ts}</b> · 检查对象 <b class="num">${isEnt ? "品牌词「" + esc(res.brand || res.url) + "」" : esc(res.url)}</b> · 已自动填入体检表 <b>${filled}</b> 项${kept ? `（${kept} 项已有手动评分，未被覆盖，请在「诊断→体检」人工复核）` : ""}</p>
+        <p class="dg-meta">${isEnt ? "实体体检" : "诊断"}时间 <b class="num">${res.ts}</b> · 检查对象 <b class="num">${isEnt ? "品牌词「" + esc(res.brand || res.url) + "」" : esc(res.url)}</b> · ${filled > 0 ? `已自动填入体检表 <b>${filled}</b> 项（体检表中标「自动」，人工可覆盖）` : kept > 0 ? `本次无新增填入：${kept} 项此前已有人工评分，未覆盖` : "本次无自动可评项"}</p>
         <div class="dg-counts">
           <span class="tag tag-ok">✓ 通过 ${cnt.pass}</span>
           <span class="tag tag-warn">⚠ 待改进 ${cnt.warn}</span>
@@ -203,7 +198,7 @@ function renderDiagResult(res, filled, kept) {
         <button class="btn btn-ghost" id="dgCopy">复制报告内容</button>
         <a class="btn btn-primary" href="#/diag/report" onclick="RPT_MODE='wo'">生成整改工单 →</a>
         <a class="btn btn-ghost" href="#/diag/report">查阅完整报告 →</a>
-        <a class="btn btn-ghost" href="#/diag/audit">去体检表看填入 →</a>
+        <a class="btn btn-ghost" href="#/diag/audit" onclick="window.__auditAuto=1">去体检表看填入 →</a>
       </div>
     </div>
     <div class="dg-grid">${groups.map(g => `<div class="card dg-dim"><h3>${g.dim} <span class="hint">${g.items.length} 项</span></h3>${g.items.map(chkHtml).join("")}</div>`).join("")}</div>` +

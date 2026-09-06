@@ -12,6 +12,8 @@ const PKEY = "geodesk.projects";                // V4 项目层：{list, current
 const DEFAULT_OWN = ["cmsk1979.com", "cmhk.com", "mp.weixin.qq.com", "weixin.qq.com"];
 const defaultState = (fresh, meta) => ({
   audit: Object.fromEntries(GEO.audit.flatMap(d => d.items.map(i => [i.id, 0]))),
+  autoAudit: {},   /* V0.1.10：一键诊断自动填入的体检项（id→1）；人工点分即移除=转人工 */
+
   caliber: fresh ? buildCaliberScaffold(meta) : JSON.parse(JSON.stringify(GEO.caliberSeed)),   // V5 不带蛇口种子；V6 生成待填骨架（锚定+档位字段）
   prompts: fresh ? instPrompts(meta || {}, (meta || {}).matrixTier)    // V5：新项目按元数据实例化模板（不再继承蛇口30问）
                  : GEO.prompts.map(p => ({ id: p.id, cat: p.cat, q: p.q,
@@ -618,6 +620,24 @@ function route() {
 }
 
 /* ── 计算 ─────────────────────────────────── */
+/* V0.1.10 诊断自动填入（纯函数，e2e 可驱动）。修复：老项目 doc 的 audit 字段可能稀疏
+   （Object.assign 覆盖默认 30 键），旧逻辑用 hasOwnProperty 判定 → 全部跳过 →「填入 0 项」
+   的假闭环。现在只认 GEO.audit 的合法 id，0 分（=未评分，含缺失）即填入并记 autoAudit 痕；
+   ≥1 分视为已有人工评分保持不覆盖。 */
+function applyAutoScores(map) {
+  const out = { filled: 0, kept: 0 };
+  const ids = new Set(GEO.audit.flatMap(d => d.items.map(i => i.id)));
+  state.autoAudit = state.autoAudit || {};
+  Object.entries(map || {}).forEach(([k, v]) => {
+    if (!ids.has(k)) return;
+    if ((state.audit[k] || 0) === 0) {
+      state.audit[k] = v;
+      state.autoAudit[k] = 1;   /* 0 分也留痕：该项系统实测未通过，可溯源 */
+      out.filled++;
+    } else out.kept++;
+  });
+  return out;
+}
 function auditScore() {
   /* V4.5：无官网项目官网专属项不进分母（与 computeSnapshot 同口径）；分母为空时按 0 分防 NaN */
   const ids = Object.keys(state.audit).filter(k => !(noSite() && (GEO.SITE_IDS || []).includes(k)));
@@ -1755,15 +1775,20 @@ render.caliber = () => {
 
 /* ══ 3. 体检 ══ */
 render.audit = () => {
-  $("#auditChecklist").innerHTML = GEO.audit.map((d, di) => {
+  /* V0.1.10：「去体检表看填入」带一次性聚焦——自动填入项加金框+顶部说明条（阅后即焚） */
+  const autoFocus = typeof window !== "undefined" && window.__auditAuto;
+  if (typeof window !== "undefined") window.__auditAuto = 0;
+  const autoNote = autoFocus && state.autoAudit && Object.keys(state.autoAudit).length
+    ? `<div class="auto-note">金框「自动」项 = 最近一次一键诊断自动填入（含实测 0 分项）——人工复核后点任意分值即转为人工评分。</div>` : "";
+  $("#auditChecklist").innerHTML = autoNote + GEO.audit.map((d, di) => {
     const dimSkip = noSite() && d.dim === "技术可达";   /* V4.5：无官网项目这6项不适用，灰显不计分 */
     return `
     <div class="card audit-dim" id="dimcard-${di}"${dimSkip ? ' style="opacity:.55"' : ""}>
       <h3>${esc(d.dim)} <span class="hint" id="dim-${esc(d.dim)}"></span></h3>
       ${dimSkip ? '<p class="muted" style="font-size:var(--text-sm);margin:0 0 8px">本项目暂无官网承载页——这 6 项不适用、不进总分。先做下面「实体与权威」「渠道铺设」两组；有了官网回来补测。</p>' : ""}
       ${d.items.map(i => `
-        <div class="audit-item"${dimSkip ? ' title="无官网项目不适用"' : ""}>
-          <div class="q"><span class="code">${i.id}</span><span class="t">${esc(i.t)}</span>
+        <div class="audit-item${autoFocus && state.autoAudit && state.autoAudit[i.id] ? " auto-hl" : ""}"${dimSkip ? ' title="无官网项目不适用"' : ""}>
+          <div class="q"><span class="code">${i.id}</span><span class="t">${esc(i.t)}${state.autoAudit && state.autoAudit[i.id] ? '<span class="auto-tag" title="最近一次一键诊断自动填入；点任意分值即转为人工评分">自动</span>' : ""}</span>
             <span class="score-seg" role="radiogroup" aria-label="${esc(i.id)}打分">
             ${[0,1,2].map(v => `<button data-audit="${i.id}" data-v="${v}" class="${state.audit[i.id] === v ? "on-" + v : ""}" aria-pressed="${state.audit[i.id] === v}"${dimSkip ? " disabled" : ""}>${v}</button>`).join("")}
             </span></div>
@@ -1771,7 +1796,9 @@ render.audit = () => {
         </div>`).join("")}
     </div>`; }).join("");
   $$("#auditChecklist [data-audit]").forEach(b => b.addEventListener("click", () => {
-    state.audit[b.dataset.audit] = +b.dataset.v; save(); render.audit();
+    state.audit[b.dataset.audit] = +b.dataset.v;
+    if (state.autoAudit) delete state.autoAudit[b.dataset.audit];   /* 人工点分=转人工，移除自动痕 */
+    save(); render.audit();
   }));
   const s = auditScore(), dims = auditDims();
   const color = s.pct >= 70 ? "var(--color-ok)" : s.pct >= 40 ? "var(--color-warn)" : "var(--color-accent)";
@@ -2486,7 +2513,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "0.1.9";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.1.10";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }
