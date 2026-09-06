@@ -30,7 +30,14 @@ def req(method, path, body=None):
         return resp.status, json.loads(resp.read() or b"{}")
 
 def main():
-    chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    # V0.2.1 闸门：chrome 路径按 OS 自动检测；CI (ubuntu runner) 用 /usr/bin/google-chrome，本地 macOS 用 .app
+    _candidates = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/opt/google/chrome/chrome",
+    ]
+    chrome = next((p for p in _candidates if os.path.exists(p)), None)
     try: os.remove("/tmp/geodesk_e2e.db")   # V4：多项目测试要求全新 db（避免上次运行的项目残留）
     except FileNotFoundError: pass
     srv = subprocess.Popen([sys.executable, os.path.join(BASE, "server.py"),
@@ -151,7 +158,7 @@ def main():
                                                           headers={"Content-Type": "application/json"}), timeout=10)
         except Exception:
             pass
-        if os.path.exists(chrome):
+        if chrome:
             def dump(frag):
                 out = f"/tmp/e2e_{frag.replace('/', '_')}.html"
                 with open(out, "w") as fh:
@@ -567,7 +574,10 @@ console.log(JSON.stringify({
         if d.get("mention") is not None:
             check("V5 parse可用（本机Ollama轨道）", True, f"mention={d.get('mention')} 共现={d.get('competitorMentions')}")
         else:
-            check("V5 parse无模型大白话报错", "配置你自己的模型" in err and "ollama" not in err, f"error={err[:60]}")
+            # V0.2.0 C4 parse_answer 回退豆包通道后，无本机模型时错误文案可能来自豆包通道（401/未配置）
+            # 本地有模型 → mention 非 None 走上一条；CI 无模型 → 两种错误都视为 PASS（都说明 LLM 调用被正确拒绝）
+            acceptable = ("配置你自己的模型" in err and "ollama" not in err) or "豆包通道" in err or "未配置" in err
+            check("V5 parse无模型合理报错", acceptable, f"error={err[:60]}", skippable=True)
         print("T12 V6 冷启动与发言权（骨架/区位词/阵地分层/歧义检测/向导卡）")
         # 1. data.js 骨架结构（node）
         node_v6 = """
@@ -617,9 +627,12 @@ console.log(JSON.stringify({
                   f"ambiguity={d.get('ambiguity')} suggestion={str(d.get('suggestion'))[:20]}", skippable=True)
         except Exception as e:
             check("V6 brandcheck 结构", False, f"异常: {e}", skippable=True)
-        # 4. 向导卡容器（无头渲染工作台）
-        html = dump("dashboard")
-        check("V6 起步向导卡容器", "dashOnboard" in html and "起步四步" in html, "四步向导卡渲染（三空项目显示，蛇口等成熟项目 hidden）")
+        # 4. 向导卡容器（无头渲染工作台）——CI 上可能无 Chrome（ubuntu runner 自带但某些环境缺）
+        if chrome:
+            html = dump("dashboard")
+            check("V6 起步向导卡容器", "dashOnboard" in html and "起步四步" in html, "四步向导卡渲染（三空项目显示，蛇口等成熟项目 hidden）")
+        else:
+            check("V6 起步向导卡容器", False, "CI 无 Chrome，跳过", skippable=True)
         # 5. own 后缀匹配单元（python exec server.py 顶层取 _own_hit）
         g = {"__file__": os.path.join(BASE, "server.py")}
         try:
@@ -669,7 +682,7 @@ console.log(JSON.stringify({
               and "?v=4.7.3" not in idx_html,
               f"?v=0.2.0×{idx_html.count('?v=0.2.0')}")
         reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
-        if os.path.exists(chrome):
+        if chrome:
             def dump_tour(urlpath):
                 out = "/tmp/e2e_tour.html"
                 with open(out, "w") as fh:
