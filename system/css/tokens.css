@@ -43,7 +43,7 @@
 
   /* ── rule / radius / ease / dur ───────── */
   --rule-hair: 1px; --rule-bold: 2px;
-  --radius-s: 3px; --radius-m: 6px; --radius-l: 10px;
+  --radius-s: 2px; --radius-m: 2px; --radius-l: 3px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in:  cubic-bezier(0.7, 0, 0.84, 0);
   --ease-in-out: cubic-bezier(0.37, 0, 0.63, 1);
