@@ -2148,12 +2148,15 @@ ${GEO.audit.map(d => {
     ch.classList.add("on"); render.monitor();
   });
   $("#pRun").addEventListener("click", genPlan);
-  $("#stateExport").addEventListener("click", () => download(`GEO智控台-全量数据-${today()}.json`, JSON.stringify(state, null, 2), "application/json"));
+  $("#stateExport").addEventListener("click", () => download(`GEO智控台-${(curProject().name || "项目")}-数据-${today()}.json`, JSON.stringify(state, null, 2), "application/json"));
   $("#stateImport").addEventListener("change", e => {
     const f = e.target.files[0]; if (!f) return;
+    e.target.value = "";
+    /* V4.7.3 导入=整包替换当前项目数据，必须二次确认（误选文件的代价是当天录入全部被覆盖） */
+    if (!confirm(`导入会用这份文件替换当前项目「${curProject().name || "未命名"}」的全部数据（体检/口径表/台账/曲线/工单），且无法撤销。\n\n通常只有一种情况需要导入：恢复自己之前导出的备份。确定继续？`)) return;
     const rd = new FileReader();
     rd.onload = () => {
-      try { state = Object.assign(defaultState(), JSON.parse(rd.result)); save(); route(); toast("导入成功 ✓"); }
+      try { state = Object.assign(defaultState(), JSON.parse(rd.result)); save(); route(); toast("导入成功 ✓（当前项目数据已被这份文件替换）"); }
       catch (err) { toast("导入失败：文件格式错误"); }
     };
     rd.readAsText(f);
@@ -2176,7 +2179,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 /* V4.2：页脚服务端状态徽标（服务器模式显示版本号；本地双击打开显示本地模式） */
 async function updateServerBadge() {
   const el = $("#srvState"); if (!el) return;
-  if (!SERVER_MODE) { el.textContent = "本地模式（数据存浏览器）"; return; }
+  /* V4.7.3 页脚导出/导入=本地模式专属（手动备份/搬家）；服务器模式数据有每日自动备份，
+     这两个按钮对品宣是噪音且有误覆盖风险——隐藏，恢复交给「备份与恢复」管理员通道 */
+  const se = $("#stateExport"), si = $("#stateImportWrap");
+  if (!SERVER_MODE) {
+    el.textContent = "本地模式（数据存浏览器）";
+    if (se) se.hidden = false; if (si) si.hidden = false;
+    return;
+  }
+  if (se) se.hidden = true; if (si) si.hidden = true;
   try {
     const r = await fetch("/api/ping", { signal: AbortSignal.timeout(1500) });
     const d = await r.json();

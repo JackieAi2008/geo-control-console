@@ -606,8 +606,8 @@
 
 <footer class="foot">
   <p><b>招商产园 GEO 智控台 V4.2</b> · <span id="srvState" class="muted">正在检测服务端…</span> ·
-    <button class="btn btn-sm btn-ghost" id="stateExport" style="vertical-align:middle">导出全量数据</button>
-    <label class="btn btn-sm btn-ghost" style="vertical-align:middle;cursor:pointer">导入数据
+    <button class="btn btn-sm btn-ghost" id="stateExport" style="vertical-align:middle" hidden>导出本项目数据</button>
+    <label class="btn btn-sm btn-ghost" id="stateImportWrap" style="vertical-align:middle;cursor:pointer" hidden>导入数据
       <input type="file" id="stateImport" accept=".json" style="display:none"></label>
   </p>
 </footer>
@@ -701,9 +701,9 @@
   </div>
 </div>
 
-<script src="js/data.js?v=4.7.2"></script>
-<script src="js/app.js?v=4.7.2"></script>
-<script src="js/ops.js?v=4.7.2"></script>
+<script src="js/data.js?v=4.7.3"></script>
+<script src="js/app.js?v=4.7.3"></script>
+<script src="js/ops.js?v=4.7.3"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -718,7 +718,7 @@
     } catch (e) {}
   })();
 </script>
-<script src="js/chat-kb.js?v=4.7.2"></script>
+<script src="js/chat-kb.js?v=4.7.3"></script>
 <script src="js/chat.js?v=4.4"></script>
 </body>
 </html>
