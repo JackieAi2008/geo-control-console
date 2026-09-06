@@ -569,3 +569,104 @@ pre.prompt-view {
 .pc-arch:hover { color: var(--color-bad); border-color: var(--color-bad); }
 .proj-card { position: relative; }
 #cvEngine { margin-left: 4px; }
+
+/* ══ V0.1.8 诊断页布局重构 ═════════════════════════════════════
+   在既有锁定系统（招商蓝金 / Workbench）内做结构重构，token 不变：
+   · 一键诊断：表单横置「发射台」+ 结果区占满全宽（检查项按维度分组多列）
+   · N项体检：总结栏 sticky 随行 + 维度卡两列网格 + 单行工作表式体检项
+   · 移动端（≤768）独立排布：发射台竖排、触控目标 ≥44px、单列网格 */
+
+/* ── 一键诊断 · 发射台 ── */
+.dg-launch { padding: var(--space-md) var(--space-lg); }
+.dg-launch-row { display: flex; gap: var(--space-md); align-items: flex-end; flex-wrap: wrap; }
+.dg-launch-row .seg { flex-shrink: 0; margin-bottom: 2px; }
+.dg-fields { display: flex; flex: 1 1 300px; min-width: 0; }
+.dg-brand-lb { flex: 1 1 260px; min-width: 0; margin-bottom: 0; }
+.dg-launch-row .lb { display: flex; flex-direction: column; gap: 3px; width: 100%; margin-bottom: 0; }
+.dg-launch-row .lb .inp { width: 100%; }
+.dg-lb-sub { font-size: var(--text-xs); font-weight: 400; color: var(--color-ink-3); }
+.dg-launch-row .btn { flex-shrink: 0; }
+.dg-launch-help { margin: var(--space-sm) 0 0; font-size: var(--text-xs); border-top: var(--rule-hair) dashed var(--color-line); padding-top: var(--space-xs); }
+
+/* ── 一键诊断 · 结果区（全宽主角）── */
+.dg-out { margin-top: var(--space-md); }
+.dg-head {
+  display: flex; gap: var(--space-md); justify-content: space-between; align-items: flex-start;
+  flex-wrap: wrap; border-bottom: var(--rule-bold) solid var(--color-gold); padding-bottom: var(--space-sm);
+}
+.dg-head .dg-meta { margin: 0 0 6px; font-size: var(--text-sm); color: var(--color-ink-2); }
+.dg-counts { display: flex; gap: 6px; flex-wrap: wrap; }
+.dg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* 检查项按维度分组的响应式多列网格（组少时自动拉宽） */
+.dg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: var(--space-md); align-items: start; margin-top: var(--space-md); }
+.dg-dim { min-width: 0; }
+.dg-dim .chk b { display: inline; }
+.dg-dim .chk .why { margin-top: 2px; }
+
+/* 空态预检清单：只预告将查什么（虚线框=未发生，不出示任何未测结果） */
+.dg-preview { border: var(--rule-hair) dashed var(--color-line-2); border-radius: var(--radius-m); padding: var(--space-md); }
+.dg-preview .dg-grid { margin-top: var(--space-sm); }
+.chk.is-todo { color: var(--color-ink-3); }
+.chk.is-todo .ico { background: var(--color-paper-3); color: var(--color-ink-3); border: 1px dashed var(--color-line-2); }
+
+/* 信源分类行：宽屏双列，行内已 flex-wrap 兜底 */
+.ref-rows { display: grid; grid-template-columns: 1fr; gap: 4px 28px; margin-top: 6px; }
+.ref-row { display: flex; align-items: center; gap: 8px; font-size: 13px; flex-wrap: wrap; min-width: 0; }
+.ref-row .tag { min-width: 88px; text-align: center; }
+.ref-row .host { font-family: var(--font-mono); font-weight: 600; }
+.ref-row .rtitle { color: var(--color-ink-3); flex: 1; min-width: 120px; font-size: 12px; }
+.ref-row .btn { height: 28px; }
+@media (min-width: 1440px) { .ref-rows { grid-template-columns: 1fr 1fr; } }
+
+/* ── N项体检 · 总结栏随行 + 两列维度网格 ── */
+.audit-grid { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: var(--space-md); align-items: start; }
+.audit-rail { position: sticky; top: 100px; max-height: calc(100vh - 116px); overflow-y: auto; min-width: 0; }
+.audit-cols { display: grid; grid-template-columns: 1fr; gap: var(--space-md); align-items: start; min-width: 0; }
+@media (min-width: 1180px) {
+  .audit-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .audit-cols .audit-dim:last-child { grid-column: 1 / -1; }
+}
+
+/* 体检项 = 单行工作表：编号+标题+打分同行，标准小字第二行 */
+.audit-item { border-bottom: var(--rule-hair) solid var(--color-line); padding: var(--space-xs) 0; }
+.audit-item:last-child { border-bottom: none; }
+.audit-item .q { display: flex; gap: var(--space-sm); align-items: center; flex-wrap: wrap; min-width: 0; }
+.audit-item .q .t { flex: 1; min-width: 8em; }
+.audit-item .q .score-seg { margin-left: auto; flex-shrink: 0; }
+.audit-item .std { font-size: var(--text-xs); color: var(--color-ink-3); margin-top: 3px; }
+
+/* 维度得分条（总结栏内，点击跳到对应维度卡） */
+.dim-bar {
+  appearance: none; cursor: pointer; width: 100%;
+  display: grid; grid-template-columns: 64px 1fr 48px; gap: 8px; align-items: center;
+  background: none; border: none; border-top: var(--rule-hair) dashed var(--color-line);
+  padding: 6px 2px; font-family: var(--font-body); font-size: var(--text-xs);
+  color: var(--color-ink-2); text-align: left;
+}
+.dim-bar:first-child { border-top: none; }
+.dim-bar:hover { background: var(--color-paper-2); color: var(--color-ink); }
+.dim-bar:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+.dim-bar .track { height: 6px; background: var(--color-paper-3); border-radius: 1px; overflow: hidden; }
+.dim-bar .track i { display: block; height: 100%; background: var(--color-accent); }
+.dim-bar .num { font-family: var(--font-mono); text-align: right; color: var(--color-ink-3); }
+
+/* 图表不撑破窄容器（雷达 260 定宽 → 窄屏等比缩） */
+#radarBox svg, #scoreRing svg { max-width: 100%; height: auto; }
+
+/* ── 诊断页 · 响应式 ── */
+@media (max-width: 1024px) {
+  .audit-grid { grid-template-columns: 1fr; }
+  .audit-rail { position: static; max-height: none; overflow: visible; }
+}
+@media (max-width: 768px) {
+  .dg-launch { padding: var(--space-md) var(--space-sm); }
+  .dg-launch-row { flex-direction: column; align-items: stretch; }
+  .dg-launch-row .seg { display: flex; margin-bottom: 0; }
+  .dg-launch-row .seg-item { flex: 1; }
+  .dg-fields, .dg-brand-lb { flex: auto; }
+  .dg-launch-row .btn { width: 100%; min-height: 48px; }
+  .dg-actions .btn { flex: 1 1 44%; }
+  .audit-item .q .score-seg { width: 100%; margin-left: 0; }
+  .audit-item .q .score-seg button { flex: 1; min-height: 44px; }
+}

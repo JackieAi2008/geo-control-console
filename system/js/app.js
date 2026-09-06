@@ -43,6 +43,8 @@ function entMode() {
   return (p.url || "").trim() ? "parent" : "none";
 }
 function noSite() { return entMode() === "none"; }
+/* V6.0.1：体检文案分母跟承载形态（与计分口径一致：none=24，其余=30） */
+function auditN() { return noSite() ? 24 : 30; }
 function projCtx() {
   const p = curProject() || {};
   const op = (p.operator || "").trim();
@@ -409,6 +411,10 @@ const API = {
     } catch (e) { return null; }
   },
   async probe(q, ownDomains) { try { const r = await fetch("/api/probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q, ownDomains: ownDomains || curOwn() }) }); return await r.json(); } catch (e) { return { error: String(e) }; } },
+  async botStart(payload) { try { const r = await fetch("/api/answerbot/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); return await r.json(); } catch (e) { return { error: String(e) }; } },
+  async botStatus(runId) { try { const r = await fetch("/api/answerbot/status?runId=" + encodeURIComponent(runId), { signal: AbortSignal.timeout(8000) }); if (!r.ok) return { error: "进度查询失败" }; return await r.json(); } catch (e) { return { error: String(e) }; } },
+  async botConfig() { try { const r = await fetch("/api/answerbot/config", { signal: AbortSignal.timeout(4000) }); if (!r.ok) return { configured: false }; return await r.json(); } catch (e) { return { configured: false }; } },
+  async botSaveConfig(cfg) { try { const r = await fetch("/api/answerbot/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) }); return await r.json(); } catch (e) { return { configured: false, error: String(e) }; } },
 };
 /* 冲突合并：本机改过的字段以本机为准，未改字段用服务器新版；台账取并集（不丢任何人的记录） */
 function mergeServerState(server, local, base) {
@@ -562,6 +568,7 @@ function landingView() {
   return (cur && cur.lastOpen) ? "dashboard" : "projects";
 }
 function route() {
+  { const nb = document.querySelector('[data-sub="audit"]'); if (nb) { const i = nb.querySelector("i"); nb.textContent = ""; if (i) nb.appendChild(i); nb.appendChild(document.createTextNode(auditN() + "项体检")); } }
   let path = (location.hash || "").replace(/^#\/?/, "");
   if (LEGACY[path]) { location.hash = "#/" + LEGACY[path]; return; }
   const [view, subRaw] = path.split("/");
@@ -1037,7 +1044,7 @@ function renderWinCard() {
         <td class="num">${b.count}</td><td class="num">${b.qn}</td><td class="num" style="font-size:11px">${esc(b.last.slice(5))}</td>
         <td style="font-size:11px">${b.own ? "守住并扩大" : tn === "通吃平台" ? "入驻它（开号分发）" : tn === "基础层" ? "口径一致+词条更新" : "PR 目标：争取被引"}</td></tr>`; }).join("")}
     </tbody></table></div>
-    <p class="muted" style="font-size:11px;margin-top:6px">数据：信源=每轮30问的top-10域名（probes）；被引=台账录入的AI引用链接。自有域名绿底。通吃平台=六引擎均引用（起步优先入驻）；基础层=百科/企查查（口径必须一致）。</p>`
+    <p class="muted" style="font-size:11px;margin-top:6px">数据：信源=每轮30问的top-10域名（probes）；被引=台账录入的AI引用链接。自有域名绿底。通吃平台=六引擎均引用（起步优先入驻）；基础层=百科/企查查（口径必须一致）。台账「AI」标=AI代问自动录入（豆包·联网检索），与人工记录同口径统计。</p>`
     : '<p class="muted">先跑一轮30问积累探针数据，域名榜自动生成——"哪些域名正在赢走我们的问题"，这就是修复路线图。</p>';
   const matrixHtml = matrix.length ? matrix.map(m => `
     <div style="border-top:1px solid var(--color-line);padding:10px 0 4px">
@@ -1352,7 +1359,7 @@ render.dashboard = () => {
                       (sb.cur.mentionSrc !== null ? { v: sb.cur.mentionSrc, ch: "信源", n: sb.cur.mentionSrcN } : null)) : null;
   const baseMention = sb.base ? (sb.base.mentionAns !== null ? sb.base.mentionAns : sb.base.mentionSrc) : null;
   $("#dashScore").innerHTML = `<div class="kpi-num">${s.pct}<small> /100</small></div>
-    <p>园区GEO成熟度（30项体检）${sb.comparable ? deltaTag(sb.cur.auditPct, sb.base.auditPct, "分") : (sb.n === 1 ? '<span class="tag tag-gold" style="margin-left:6px">首测即起始数据</span>' : "")}</p>
+    <p>园区GEO成熟度（${auditN()}项体检）${sb.comparable ? deltaTag(sb.cur.auditPct, sb.base.auditPct, "分") : (sb.n === 1 ? '<span class="tag tag-gold" style="margin-left:6px">首测即起始数据</span>' : "")}</p>
     <a href="#/diag/audit" class="mini-link">去体检 →</a>`;
   $("#dashMon").innerHTML = `<div class="kpi-num">${curMention === null ? (st.mention === null ? "—" : Math.round(st.mention * 100) + "<small>%</small>") : curMention.v + "<small>%</small>"}</div>
     <p>${curMention ? `${curMention.ch}提及率 · n=${curMention.n}${sb.comparable ? deltaTag(curMention.v, baseMention, "pp") : ""}` : `答案侧平均提及率 · ${st.ansN}条人工记录${st.ansN ? "" : "（先在监测页人工录入）"}`}</p>
@@ -1394,7 +1401,7 @@ render.dashboard = () => {
   /* 下一步清单（按状态推导） */
   const todo = [];
   if (!state.caliber.length) todo.push(["口径", "先建口径：骨架已生成（锚定实体/地址/片区+关键数字），填 3 个最关键字段即可开始", "#/diag/caliber"]);
-  if (s.pct === 0) todo.push(["体检", (curProject() || {}).matrixTier === "lite" ? "完成实体资产清单打分，建立起始数据" : "完成30项园区GEO体检，建立成熟度起始数据", "#/diag/audit"]);
+  if (s.pct === 0) todo.push(["体检", (curProject() || {}).matrixTier === "lite" ? "完成实体资产清单打分，建立起始数据" : `完成${auditN()}项园区GEO体检，建立成熟度起始数据`, "#/diag/audit"]);
   /* V4.2：冲突提示带出真实字段名，不再写死蛇口网谷案例 */
   const _confFields = state.caliber.filter(r => (r.conflicts || []).length).map(r => r.field);
   if (_confFields.length) todo.push(["口径", `口径表存在冲突字段（${_confFields.slice(0, 3).join("、")}），先统一再发布任何内容`, "#/diag/caliber"]);
@@ -1747,19 +1754,19 @@ render.caliber = () => {
 
 /* ══ 3. 体检 ══ */
 render.audit = () => {
-  $("#auditChecklist").innerHTML = GEO.audit.map(d => {
+  $("#auditChecklist").innerHTML = GEO.audit.map((d, di) => {
     const dimSkip = noSite() && d.dim === "技术可达";   /* V4.5：无官网项目这6项不适用，灰显不计分 */
     return `
-    <div class="card" style="margin-bottom:var(--space-md)${dimSkip ? ";opacity:.55" : ""}">
+    <div class="card audit-dim" id="dimcard-${di}"${dimSkip ? ' style="opacity:.55"' : ""}>
       <h3>${esc(d.dim)} <span class="hint" id="dim-${esc(d.dim)}"></span></h3>
       ${dimSkip ? '<p class="muted" style="font-size:var(--text-sm);margin:0 0 8px">本项目暂无官网承载页——这 6 项不适用、不进总分。先做下面「实体与权威」「渠道铺设」两组；有了官网回来补测。</p>' : ""}
       ${d.items.map(i => `
         <div class="audit-item"${dimSkip ? ' title="无官网项目不适用"' : ""}>
-          <div class="q"><span class="code">${i.id}</span><span class="t">${esc(i.t)}</span></div>
-          <div class="std">${esc(i.std)}</div>
-          <div class="score-seg" role="radiogroup" aria-label="${esc(i.id)}打分">
+          <div class="q"><span class="code">${i.id}</span><span class="t">${esc(i.t)}</span>
+            <span class="score-seg" role="radiogroup" aria-label="${esc(i.id)}打分">
             ${[0,1,2].map(v => `<button data-audit="${i.id}" data-v="${v}" class="${state.audit[i.id] === v ? "on-" + v : ""}" aria-pressed="${state.audit[i.id] === v}"${dimSkip ? " disabled" : ""}>${v}</button>`).join("")}
-          </div>
+            </span></div>
+          <div class="std">${esc(i.std)}</div>
         </div>`).join("")}
     </div>`; }).join("");
   $$("#auditChecklist [data-audit]").forEach(b => b.addEventListener("click", () => {
@@ -1772,6 +1779,22 @@ render.audit = () => {
   $("#scoreLevel").textContent = s.pct >= 80 ? "优秀" : s.pct >= 60 ? "良好" : s.pct >= 40 ? "待改进" : s.pct > 0 ? "起步" : "未开始";
   $("#radarBox").innerHTML = radarSvg(dims);
   GEO.audit.forEach((d, i) => { const el = $("#dim-" + d.dim); if (el) el.textContent = `${dims[i].got}/${dims[i].full}`; });
+  /* V0.1.8 维度得分条：随行总结栏里的明细导航（点击滚到对应维度卡） */
+  const bars = $("#dimBars");
+  if (bars) {
+    bars.innerHTML = GEO.audit.map((d, i) => {
+      const full = dims[i].full, got = dims[i].got;
+      const p = full ? Math.round(got / full * 100) : 0;
+      return `<button class="dim-bar" data-dimjump="${i}" aria-label="跳到${esc(d.dim)}维度卡">
+        <span>${esc(d.dim)}</span>
+        <span class="track"><i style="width:${p}%"></i></span>
+        <span class="num">${full ? `${got}/${full}` : "不适用"}</span></button>`;
+    }).join("");
+    $$("[data-dimjump]", bars).forEach(b => b.addEventListener("click", () => {
+      const el = $("#dimcard-" + b.dataset.dimjump);
+      if (el) el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    }));
+  }
 };
 
 /* ══ 4. 内容工场 ══ */
@@ -1940,7 +1963,7 @@ render.monitor = () => {
       const id = state.ledger.length - 1 - ri;
       const p = P_prompts().find(x => x.id === r.promptId);
       const isSrc = r.channel === "src" || r.engine === "搜索通道";   /* V4.2：信源行按命中语义展示，不冒充答案侧提及/倾向 */
-      return `<tr><td data-col="日期" class="num">${esc(r.date)}</td><td data-col="引擎">${esc(r.engine)}</td>
+      return `<tr><td data-col="日期" class="num">${esc(r.date)}</td><td data-col="引擎">${esc(r.engine)}${r.src === "api" ? ' <span class="tag tag-info" title="AI代问自动录入（豆包·联网检索）">AI</span>' : ""}</td>
         <td data-col="问题"><span class="code num" style="color:var(--color-accent);font-family:var(--font-mono);font-size:12px">${r.promptId}</span> ${p ? esc(p.q.slice(0, 18)) + "…" : ""}</td>
         <td data-col="提及">${isSrc ? (+r.mention === 1 ? '<span class="tag tag-ok">自有在榜</span>' : '<span class="tag">未在榜</span>') : (+r.mention === 1 ? '<span class="tag tag-ok">提及</span>' : +r.mention === 0.5 ? '<span class="tag tag-warn">相似</span>' : '<span class="tag tag-bad">未提及</span>')}</td>
         <td data-col="倾向">${isSrc ? "—" : (+r.sentiment === 1 ? "正面" : +r.sentiment === 0.5 ? "中性" : "负面")}</td>
@@ -1948,7 +1971,7 @@ render.monitor = () => {
         <td data-col="引用链接" style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--color-info);word-break:break-all">${esc(r.url.slice(0, 30))}</a>` : "—"}</td>
         <td data-col="备注" style="max-width:160px">${esc(r.note || "—")}</td>
         <td data-col="操作"><button class="btn btn-sm btn-danger" data-mdel="${id}">删</button></td></tr>`;
-    }).join("")}</tbody></table>` : `<p class="muted" style="padding:16px 0;text-align:center">暂无记录。按30问矩阵在各引擎人工提问后录入。</p>`;
+    }).join("")}</tbody></table>` : `<p class="muted" style="padding:16px 0;text-align:center">暂无记录。点上方「AI 代问」自动录入，或按30问矩阵在各引擎人工提问后录入。</p>`;
   $$("#mTable [data-mdel]").forEach(b => b.addEventListener("click", () => {
     state.ledger.splice(+b.dataset.mdel, 1); save(); render.monitor(); toast("已删除");
   }));
@@ -1972,13 +1995,46 @@ function saveRecord() {
   $("#mUrl").value = ""; $("#mNote").value = ""; $("#mCooccur").value = "";
 }
 function exportCsv() {
-  const head = "日期,引擎,问题ID,问题,提及,倾向,引用链接,竞品同时出现,备注";
+  const head = "日期,引擎,来源,问题ID,问题,提及,倾向,引用链接,竞品同时出现,备注";
   const rows = state.ledger.map(r => {
     const p = P_prompts().find(x => x.id === r.promptId);
-    return [r.date, r.engine, r.promptId, p ? p.q : "", r.mention, r.sentiment, r.url, (r.cooccur || []).join("、"), r.note]
+    return [r.date, r.engine, r.src === "api" ? "AI代问" : "人工", r.promptId, p ? p.q : "", r.mention, r.sentiment, r.url, (r.cooccur || []).join("、"), r.note]
       .map(x => `"${String(x ?? "").replace(/"/g, '""')}"`).join(",");
   });
   download(`GEO监测台账-${today()}.csv`, "\uFEFF" + [head, ...rows].join("\n"), "text/csv;charset=utf-8");
+}
+
+/* ══ V0.1.7 AI 代问：系统替你向豆包提问并自动录入台账（元宝等无公开接口的引擎仍人工）══ */
+async function runAnswerBot() {
+  const btn = $("#botRun");
+  if (!btn || btn.disabled) return;
+  const { qs } = pickSample(P_prompts(), state.ledger, SAMPLE_ENGINES);
+  if (!qs.length) { toast("问题矩阵为空——先在「管理问题矩阵」添加问题"); return; }
+  const stat = $("#botStat");
+  const r0 = await API.botStart({
+    project: CUR, prompts: qs.map(p => ({ id: p.id, q: p.q })),
+    brand: curProject().brand || curProject().name,
+    competitors: curProject().competitors || [], ownDomains: curOwnAll(),
+  });
+  if (r0.error) { toast(r0.error); return; }
+  btn.disabled = true;
+  const t0 = Date.now();
+  const timer = setInterval(async () => {
+    const st = await API.botStatus(r0.runId);
+    if (st.error) { clearInterval(timer); btn.disabled = false; if (stat) stat.textContent = "进度查询失败（服务可能已重启），请刷新页面重试。"; return; }
+    if (st.status === "running" && stat) stat.textContent = `AI 代问中 ${st.done}/${st.total} · 当前：${st.current || "…"}（已 ${Math.round((Date.now() - t0) / 1000)} 秒）`;
+    if (st.status !== "running") {
+      clearInterval(timer);
+      btn.disabled = false;
+      const items = st.items || [];
+      const okN = items.filter(x => x.ok).length;
+      const fail = items.filter(x => !x.ok);
+      if (SERVER_MODE) { await loadProjectFromServer(); renderProjectContext(); renderAllViews(); }
+      toast(`AI 代问完成：${okN}/${st.total} 问已自动记入台账${fail.length ? `；${fail.length} 问未录：${fail[0].note}` : ""}`);
+      const spot = qs.slice(0, 2).map(p => p.id).join("、");
+      if (stat) stat.textContent = `本轮自动完成 ${okN}/${st.total}。腾讯元宝暂不能自动——请在元宝 App 里人工抽查 2 题（建议 ${spot}），点对应引擎名录入。`;
+    }
+  }, 2500);
 }
 
 /* ══ V4 1.7 本轮人工采样（≤20分钟采集纪律）══ */
@@ -2010,9 +2066,30 @@ function renderSampleCard() {
   }
   const total = qs.length * engs.length;
   box.innerHTML = `
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px">
+      <button class="btn btn-sm btn-primary" id="botRun">▶ AI 代问（豆包·自动录入）</button>
+      <span class="muted" id="botStat" style="font-size:12px;flex:1;min-width:220px">系统替你向豆包逐条提问（联网检索），自动记入台账并打「AI」标，约 1–3 分钟；腾讯元宝暂不能自动，仍需人工。</span>
+    </div>
     <p class="muted" style="margin-top:0">本轮只测 <b class="num">${qs.length}</b> 个高严重度问题 × <b class="num">${engs.length}</b> 个引擎（${engs.join("、")}，人工覆盖最少的引擎优先轮换）＝ <b class="num">${total}</b> 条，今日已录 <b class="num" style="color:${done >= total ? "var(--color-ok)" : "var(--color-accent)"}">${done}/${total}</b>。每条动作用：复制问题 → 去引擎提问 → 点对应引擎名自动选入②区 → 保存。全量 30×6 留给季度起始数据。</p>
     ${stale ? `<p style="font-size:var(--text-sm);color:var(--color-warn);margin-top:4px">⚠ ${stale}</p>` : ""}
     ${rows}`;
+  const botBtn = $("#botRun");
+  if (botBtn) botBtn.addEventListener("click", runAnswerBot);
+  /* 未配置通道时给管理员一个就地入口；已配置则不打扰 */
+  if (SERVER_MODE) API.botConfig().then(c => {
+    const stat = $("#botStat");
+    if (!stat || c.configured) return;
+    stat.innerHTML = '管理员尚未配置豆包通道，AI 代问暂不可用——<a href="javascript:void(0)" id="botCfg" style="color:var(--color-info);text-decoration:underline">通道设置</a>';
+    const cfgLink = $("#botCfg");
+    if (cfgLink) cfgLink.addEventListener("click", async () => {
+      const key = prompt("粘贴火山方舟 API Key（只存服务器，任何界面只显示尾 4 位）：");
+      if (!key || !key.trim()) return;
+      const model = prompt("模型或联网接入点 ID：", c.model || "doubao-seed-1-6-250615");
+      const r = await API.botSaveConfig({ apiKey: key.trim(), model: (model || "").trim() });
+      if (r.configured) { toast("豆包通道已配置 ✓ 现在可点「AI 代问」"); renderSampleCard(); }
+      else toast("保存失败，请重试");
+    });
+  }).catch(() => {});
   $$("#sampleCard [data-copyq2]").forEach(b => b.addEventListener("click", () => copyText(b.dataset.copyq2)));
   $$("#sampleCard [data-sample]").forEach(b => b.addEventListener("click", () => {
     const [pid, eng] = b.dataset.sample.split("|");
@@ -2178,7 +2255,7 @@ function genPlan() {
 - 资源档位：${f.budget}
 - 已具备资产：${f.assets.length ? f.assets.join("、") : "暂无（第一批补建）"}
 
-## 1. 现状差距（来自30项体检）
+## 1. 现状差距（来自${auditN()}项体检）
 ${gaps}
 
 ## 2. 目标（北极星指标）
@@ -2346,7 +2423,7 @@ ${GEO.audit.map(d => {
     download(`园区GEO体检报告-${today()}.md`, md, "text/markdown");
   });
   $("#auditReset").addEventListener("click", () => {
-    if (confirm("清空全部30项打分？")) { state.audit = defaultState().audit; save(); render.audit(); toast("已清空"); }
+    if (confirm(`清空全部${auditN()}项打分？`)) { state.audit = defaultState().audit; save(); render.audit(); toast("已清空"); }
   });
   $("#scorerRun").addEventListener("click", runScorer);
   $("#briefGen").addEventListener("click", gen选题单);
@@ -2408,7 +2485,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "6.2.1";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.1.8";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }

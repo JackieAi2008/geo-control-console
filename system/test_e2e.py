@@ -35,7 +35,8 @@ def main():
     except FileNotFoundError: pass
     srv = subprocess.Popen([sys.executable, os.path.join(BASE, "server.py"),
                             "--port", str(PORT), "--db", "/tmp/geodesk_e2e.db"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           env=dict(os.environ, GEO_MOCK_ARK="1"))   # V0.1.7：AI代问走罐头通道，e2e 绝不外呼豆包
     time.sleep(1.2)
     try:
         print("T1 健康检查")
@@ -82,6 +83,56 @@ def main():
         except Exception as e:
             check("probe 真实搜索", False, f"异常: {e}", skippable=True)
 
+        print("T3b AI代问（GEO_MOCK_ARK=1 罐头通道，绝不外呼）")
+        s, d = req("GET", "/api/answerbot/config")
+        check("AI代问 初始未配置", s == 200 and d.get("configured") is False, f"config={d}")
+        try:
+            req("POST", "/api/answerbot/start", {"project": "p_default", "prompts": [{"id": "P1", "q": "x"}]})
+            check("AI代问 未配密钥拒绝启动", False, "未拒绝")
+        except urllib.error.HTTPError as e:
+            body = json.loads(e.read() or b"{}")
+            check("AI代问 未配密钥拒绝启动", e.code == 400 and "未配置" in body.get("error", ""), f"{e.code} {body.get('error')}")
+        s, d = req("POST", "/api/answerbot/config", {"apiKey": "e2e-test-key-123456", "model": "doubao-seed-1-6-250615"})
+        check("AI代问 保存配置", s == 200 and d.get("configured") is True and str(d.get("keyTail", "")).startswith("****"),
+              f"keyTail={d.get('keyTail')}")
+        s, d = req("GET", "/api/answerbot/config")
+        check("AI代问 密钥不回显全文", "e2e-test-key" not in json.dumps(d), f"响应={d}")
+        prompts = [{"id": "P1", "q": "招商蛇口产业园区有哪些代表项目？"}, {"id": "P2", "q": "蛇口网谷是什么？里面有哪些类型的企业？"}]
+        s, d = req("POST", "/api/answerbot/start", {"project": "p_default", "prompts": prompts,
+                                                    "brand": "蛇口网谷", "competitors": ["张江高科"],
+                                                    "ownDomains": ["cmsk1979.com"]})
+        check("AI代问 启动返回runId", s == 200 and d.get("runId") and d.get("total") == 2, f"{d}")
+        rid, st = d.get("runId"), {}
+        for _ in range(30):
+            time.sleep(0.6)
+            s, st = req("GET", f"/api/answerbot/status?runId={rid}")
+            if s == 200 and st.get("status") != "running":
+                break
+        check("AI代问 运行完成", st.get("status") == "done" and st.get("total") == 2,
+              f"status={st.get('status')} items={st.get('items')}")
+        check("AI代问 2问自动录入", sum(1 for it in (st.get("items") or []) if it.get("ok")) == 2, f"items={st.get('items')}")
+        s, d = req("GET", "/api/data?project=p_default")
+        rows = [r for r in (d.get("ledger") or []) if r.get("src") == "api"]
+        check("AI代问 台账AI行", len(rows) == 2 and all(r.get("engine") == "豆包" and "AI代问" in (r.get("note") or "") for r in rows),
+              f"src=api行×{len(rows)}")
+        check("AI代问 提及抽取", any(r.get("mention") == 1 for r in rows), "罐头答案含品牌词→提及=1")
+        s, d = req("POST", "/api/answerbot/start", {"project": "p_default", "prompts": prompts[:1],
+                                                    "brand": "蛇口网谷", "competitors": [], "ownDomains": []})
+        rid = d.get("runId")
+        for _ in range(30):
+            time.sleep(0.6)
+            s, st = req("GET", f"/api/answerbot/status?runId={rid}")
+            if s == 200 and st.get("status") != "running":
+                break
+        s, d = req("GET", "/api/data?project=p_default")
+        rows = [r for r in (d.get("ledger") or []) if r.get("src") == "api"]
+        check("AI代问 重跑替换不重复累计", len(rows) == 2, f"src=api行×{len(rows)}")
+        try:
+            req("GET", "/api/answerbot/status?runId=nonexistent")
+            check("AI代问 未知runId返回404", False, "未拒绝")
+        except urllib.error.HTTPError as e:
+            check("AI代问 未知runId返回404", e.code == 404, f"{e.code}")
+
         print("T4 静态资源")
         for path, mark in [("/", "GEO 智控台"), ("/js/app.js", "scoreContent"), ("/css/tokens.css", "招商蓝"),
                            ("/js/data.js?v=4.6", "entityChecklist"), ("/js/ops.js?v=4.6", "实体体检"),
@@ -106,9 +157,13 @@ def main():
                                     "--dump-dom", f"{ROOT}/#{frag}"], stdout=fh, stderr=subprocess.DEVNULL, timeout=60)
                 return open(out, encoding="utf-8", errors="ignore").read()
             html = dump("diag/scan")
-            check("一键诊断页渲染", "dgRun" in html and "开始一键诊断" in html, f"诊断表单与按钮存在")
+            # 按钮文案跟项目承载形态（V4.5：无官网项目落实体体检）；dump 断言按模式二选一
+            check("一键诊断页渲染", "dgRun" in html and ("开始一键诊断" in html or "开始实体体检" in html), f"诊断表单与按钮存在")
             check("V4.5诊断双入口", "实体体检" in html and "dgModeEntity" in html and "dgModeSite" in html,
                   "官网体检/实体体检双入口chip渲染")
+            check("V0.1.8 诊断发射台+预检清单", "dg-launch" in html and "dg-launch-row" in html and "dgPreview" in html
+                  and "将检查什么" in html and "is-todo" in html,
+                  "表单横置发射台 + 空态预检清单（维度分组ghost卡）渲染")
             html = dump("projects")
             check("V4.5新建弹窗承载形态", "网上哪里能找到这个项目" in html and "暂时都没有" in html and 'value="none"' in html,
                   "三选一承载形态单选（own/parent/none）")
@@ -118,6 +173,9 @@ def main():
             html = dump("diag/audit")
             check("体检页30项评分控件", html.count("score-seg") >= 30,
                   f"score-seg×{html.count('score-seg')}")
+            check("V0.1.8 体检总结栏随行+两列网格", "audit-rail" in html and "audit-cols" in html
+                  and "dimBars" in html and "dim-bar" in html and "audit-dim" in html,
+                  f"sticky总结栏+维度得分条×{html.count(chr(34) + 'dim-bar' + chr(34))}+维度卡×{html.count('card audit-dim')}")
             html = dump("diag/evidence")
             check("V4证据库渲染", "evBox" in html and "已核验引言" in html and ("王强" in html or "暂无证据" in html), "证据库子页+进度条+条目")
             html = dump("act/toolkit")
@@ -130,6 +188,10 @@ def main():
             check("V6.2 PR层指路", "谁在替你说话" in html and "数字 PR" in html and "争取被引" in html,
                   "权威媒体不走开号入驻的指路文案")
             check("V4资产追踪卡", "watchBox" in html and "查排名" in html, "资产追踪管理区（空态引导文案含查排名）")
+            html = dump("monitor")
+            check("V0.1 AI代问按钮与口径行", "botRun" in html and "AI 代问（豆包·自动录入）" in html
+                  and "元宝" in html and "「AI」标" in html,
+                  "采样卡顶部AI代问按钮+元宝仍人工说明+台账AI标口径行（零新术语）")
 
             def dump_lc(frag):
                 out = f"/tmp/e2e_lc_{frag.replace('/', '_') or 'home'}.html"
@@ -137,7 +199,8 @@ def main():
                     subprocess.run([chrome, "--headless=new", "--disable-gpu", "--virtual-time-budget=8000",
                                     "--dump-dom", f"{ROOT}/?layoutcheck=1#/{frag}"], stdout=fh, stderr=subprocess.DEVNULL, timeout=90)
                 return open(out, encoding="utf-8", errors="ignore").read()
-            for frag, label in [("", "工作台"), ("act/toolkit", "渠道图"), ("monitor", "监测")]:
+            for frag, label in [("", "工作台"), ("act/toolkit", "渠道图"), ("monitor", "监测"),
+                                ("diag/scan", "诊断"), ("diag/audit", "体检")]:
                 lh = dump_lc(frag)
                 ok = ("W320" in lh and "W375" in lh and "W768" in lh
                       and "LAYOUT_FAIL" not in lh and "LAYOUT_ERR" not in lh and "测量中" not in lh)
@@ -535,17 +598,18 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V6.2 版本号6.2.1", d.get("version") == "6.2.1", f"v={d.get('version')}")
+        check("V0.1 版本号0.1.8", d.get("version") == "0.1.8", f"v={d.get('version')}")
         for path, mark in [("/js/tour.js", "南山大厦"), ("/css/tour.css", "tour-ring")]:
             with urllib.request.urlopen(ROOT + path + "?v=6.1.0", timeout=10) as resp:
                 body = resp.read().decode("utf-8", "ignore")
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V6.2 版本戳统一6.2.1", idx_html.count("?v=6.2.1") >= 9 and "?v=6.2.0" not in idx_html
-              and "?v=6.1.2" not in idx_html and "?v=6.1.1" not in idx_html and "?v=6.1.0" not in idx_html
-              and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html and "?v=4.7.3" not in idx_html,
-              f"?v=6.2.1×{idx_html.count('?v=6.2.1')}")
+        check("V0.1 版本戳统一0.1.8", idx_html.count("?v=0.1.8") >= 9 and "?v=0.1.7" not in idx_html
+              and "?v=6.2.0" not in idx_html and "?v=6.1.2" not in idx_html and "?v=6.1.1" not in idx_html
+              and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html
+              and "?v=4.7.3" not in idx_html,
+              f"?v=0.1.8×{idx_html.count('?v=0.1.8')}")
         reqh("POST", "/api/onboarding/seen")   # local 用户也标记：后续 dump 不受自动弹影响（webdriver 兜底之外第二层）
         if os.path.exists(chrome):
             def dump_tour(urlpath):
@@ -566,6 +630,8 @@ console.log(JSON.stringify({
             html = dump_tour("/?tour=force&tourStep=8#/projects")
             check("V6.1 监测曲线演示", "GEO 发展曲线" in html and html.count("<polyline") >= 2 and "南山大厦" in html,
                   "第9步=发展曲线渲染示例快照（报头/演示态=南山大厦）")
+            check("V0.1 引导监测步含AI代问", "AI 代问" in html and "人工抽查" in html,
+                  "新手展示同步：监测步气泡教「AI 代问」并说明元宝仍需人工抽查")
             check("V6.1.1 口径一致(14问)", "14 问真实搜索" in html and "跑一轮14问" in html and "12 问" not in html,
                   "气泡与页面同屏均为 14 问（P1 修复回归断言）")
             html = dump_tour("/#/projects")

@@ -24,6 +24,30 @@ function setDgMode(m) {
   f.hidden = !isSite;
   $("#dgHelp").hidden = !isSite; $("#dgHelpEntity").hidden = isSite;
   $("#dgRun").textContent = isSite ? "开始一键诊断" : "开始实体体检";
+  renderDiagPreview();   /* V0.1.8：切模式同步刷新预检清单（有结果时结果区不被本函数触碰） */
+}
+/* V0.1.8 空态预检清单：只预告「将查什么」，不出示任何未测结果（不编造数据）。
+   renderDiagResult 会整体替换 #dgOut，预览随之自然消失；再次进入本子页时按当前模式重建。 */
+function renderDiagPreview() {
+  const box = $("#dgPreview"); if (!box) return;
+  const isSite = dgMode() === "site";
+  const PLAN = isSite ? [
+    ["技术可达", ["网站可达性与 HTTPS 证书", "robots.txt 是否放行 AI 爬虫", "llms.txt AI 说明文件（可选项）", "首页源码正文量（是否依赖 JS 渲染）", "Schema 结构化数据标记"]],
+    ["内容可摘录", ["标题与页面描述", "图片 alt 覆盖率"]],
+    ["实体与权威", ["品牌词真实搜索：自有阵地是否进前 10"]],
+  ] : [
+    ["实体与权威", ["品牌词真实搜索：自有渠道是否进前 10", "百科词条", "企业信息平台", "权威信源覆盖"]],
+  ];
+  box.innerHTML = `<div class="dg-preview">
+    <h3 style="border:none;margin:0">将检查什么 <span class="hint">预检清单 · 真实探测完成后，结果按维度分组显示在这里，每项附证据</span></h3>
+    <div class="dg-grid">${PLAN.map(([dim, items]) => `
+      <div class="card dg-dim"><h3>${dim} <span class="hint">${items.length} 项</span></h3>
+        ${items.map(t => `<div class="chk is-todo"><span class="ico">·</span><div><b>${t}</b></div></div>`).join("")}
+      </div>`).join("")}</div>
+    <p class="muted" style="font-size:var(--text-xs);margin:10px 0 0">${isSite
+      ? "以上为预检清单——点上方「开始一键诊断」发起真实联网检查（约 10–30 秒）；结果可直接下载报告发给网站管理员或外包执行整改。"
+      : "实体体检另附 <b>12 项实体资产核对清单</b>（地图POI/百科/公众号等人工核对项），探测完成后出现在结果下方，打分直接计入体检表。"}</p>
+  </div>`;
 }
 async function opsDiagnose() {
   if (!SERVER_MODE) {
@@ -65,18 +89,19 @@ async function opsDiagnose() {
   render.dashboard();
 }
 
-/* V4.5 实体资产核对清单（无官网项目主战场）：核对后打分直接计入体检表同编号项 */
+/* V4.5 实体资产核对清单（无官网项目主战场）：核对后打分直接计入体检表同编号项
+   V0.1.8：改为维度卡分组（与检查结果/体检表同构），打分键并入行内右对齐 */
 function entityChecklistHtml() {
   return GEO.entityChecklist.map(g => `
-    <p class="kicker" style="margin:12px 0 2px">${esc(g.dim)}</p>
+    <div class="card dg-dim"><h3>${esc(g.dim)} <span class="hint">${g.items.length} 项</span></h3>
     ${g.items.map(i => `
       <div class="audit-item">
-        <div class="q"><span class="code">${i.id}</span><span class="t">${esc(i.t)}</span></div>
-        <div class="std"><b>核对什么：</b>${esc(i.what)}　<b>怎么核对：</b>${esc(i.how)}</div>
-        <div class="score-seg" role="radiogroup" aria-label="${esc(i.id)}打分">
+        <div class="q"><span class="code">${i.id}</span><span class="t">${esc(i.t)}</span>
+          <span class="score-seg" role="radiogroup" aria-label="${esc(i.id)}打分">
           ${[0, 1, 2].map(v => `<button data-echk="${i.id}" data-v="${v}" class="${state.audit[i.id] === v ? "on-" + v : ""}" aria-pressed="${state.audit[i.id] === v}">${v}</button>`).join("")}
-        </div>
-      </div>`).join("")}`).join("");
+          </span></div>
+        <div class="std"><b>核对什么：</b>${esc(i.what)}　<b>怎么核对：</b>${esc(i.how)}</div>
+      </div>`).join("")}</div>`).join("");
 }
 function bindEntityChecklist() {
   $$("#dgChk [data-echk]").forEach(b => b.addEventListener("click", () => {
@@ -121,15 +146,15 @@ function referrerCardHtml(res) {
   const concl = thirdN >= Math.ceil(tops.length / 2)
     ? `——现在替你说话的主要是中介和第三方网站，<b>它们的错误信息（旧租金/空置情况）会被 AI 直接当作官方数据引用</b>`
     : (cnt.own || cnt.group) ? "——我们这边的阵地已在场，保持口径一致并持续更新" : "";
-  return `<div class="card" style="margin-top:12px;border-color:var(--color-accent)">
+  return `<div class="card" id="dgRefCard" style="margin-top:var(--space-md);border-color:var(--color-accent)">
     <h3 style="border:none;margin:0 0 4px">现在网上谁在替你说话 <span class="hint">品牌词前 ${tops.length} 条信源分类 · 点「是我们的」归位后即时重算</span></h3>
     <p style="margin:6px 0">${statLine}${concl}</p>
-    <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">${rows.map((r, i) => `
-      <div style="display:flex;align-items:center;gap:8px;font-size:13px;flex-wrap:wrap">
-        <span class="tag ${CL[r.k]}" style="min-width:88px;text-align:center">${KN[r.k]}</span>
-        <b class="num" style="min-width:150px">${esc(r.host)}</b>
-        <span class="muted" style="flex:1;min-width:120px;font-size:12px">${esc(r.title)}</span>
-        ${r.k === "other" || r.k === "agency" ? `<button class="btn btn-sm btn-ghost" data-refclaim="${esc(r.host)}" style="height:28px">是我们的 →</button>` : ""}
+    <div class="ref-rows">${rows.map((r, i) => `
+      <div class="ref-row">
+        <span class="tag ${CL[r.k]}">${KN[r.k]}</span>
+        <b class="num host">${esc(r.host)}</b>
+        <span class="rtitle">${esc(r.title)}</span>
+        ${r.k === "other" || r.k === "agency" ? `<button class="btn btn-sm btn-ghost" data-refclaim="${esc(r.host)}">是我们的 →</button>` : ""}
       </div>`).join("")}</div>
     <p class="muted" style="font-size:12px;margin:8px 0 0">分类依据域名规则库（透明可查）；「其他网站」里若有专门做本项目内容的陌生站，而你们没建过——那就是第三方在替你说话，<a href="#/monitor" style="color:var(--color-info)">看场景词上谁在赢 →</a></p>
   </div>`;
@@ -148,21 +173,45 @@ async function referrerClaim(host) {
 function renderDiagResult(res, filled, kept) {
   const LV = { pass: "pass", warn: "warn", fail: "fail" }, IC = { pass: "✓", warn: "⚠", fail: "✗" };
   const isEnt = res.mode === "entity";
+  const checks = res.checks || [];
+  /* V0.1.8：结果头条（时间/对象/自动填入 + 三态计数 + 动作组前置）；
+     检查项按编号前缀归维（与体检表五维同构），分组多列展示替代单列长条 */
+  const cnt = { pass: 0, warn: 0, fail: 0 };
+  checks.forEach(c => { cnt[c.status] = (cnt[c.status] || 0) + 1; });
+  const DIM = { T: "技术可达", C: "内容可摘录", E: "实体与权威", D: "生态布源", M: "监测治理" };
+  const groups = [];
+  checks.forEach(c => {
+    const dim = DIM[(c.id || "X")[0]] || "其他检查";
+    let g = groups.find(x => x.dim === dim);
+    if (!g) groups.push(g = { dim, items: [] });
+    g.items.push(c);
+  });
+  const chkHtml = c => `<div class="chk ${LV[c.status] || ""}"><span class="ico">${IC[c.status] || "·"}</span>
+    <div><b>${c.id} ${esc(c.name)}</b><span class="why" style="color:var(--color-ink-2)">${esc(c.evidence)}</span></div></div>`;
   $("#dgOut").innerHTML =
-    `<p class="muted">${isEnt ? "实体体检" : "诊断"}时间 <b class="num">${res.ts}</b> · 检查对象 <b class="num">${isEnt ? "品牌词「" + esc(res.brand || res.url) + "」" : esc(res.url)}</b> · 已自动填入体检表 <b>${filled}</b> 项${kept ? `（${kept} 项已有手动评分，未被覆盖，请在「诊断→30项体检」人工复核）` : ""}</p>` +
-    res.checks.map(c => `<div class="chk ${LV[c.status]}"><span class="ico">${IC[c.status]}</span>
-      <div><b>${c.id} ${esc(c.name)}</b><span class="why" style="color:var(--color-ink-2)">${esc(c.evidence)}</span></div></div>`).join("") +
+    `<div class="dg-head">
+      <div style="min-width:0">
+        <p class="dg-meta">${isEnt ? "实体体检" : "诊断"}时间 <b class="num">${res.ts}</b> · 检查对象 <b class="num">${isEnt ? "品牌词「" + esc(res.brand || res.url) + "」" : esc(res.url)}</b> · 已自动填入体检表 <b>${filled}</b> 项${kept ? `（${kept} 项已有手动评分，未被覆盖，请在「诊断→体检」人工复核）` : ""}</p>
+        <div class="dg-counts">
+          <span class="tag tag-ok">✓ 通过 ${cnt.pass}</span>
+          <span class="tag tag-warn">⚠ 待改进 ${cnt.warn}</span>
+          <span class="tag tag-bad">✗ 未通过 ${cnt.fail}</span>
+        </div>
+      </div>
+      <div class="dg-actions">
+        <button class="btn btn-primary" id="dgDl">下载${isEnt ? "实体体检" : "诊断"}报告(.md)</button>
+        <button class="btn btn-ghost" id="dgCopy">复制报告内容</button>
+        <a class="btn btn-primary" href="#/diag/report" onclick="RPT_MODE='wo'">生成整改工单 →</a>
+        <a class="btn btn-ghost" href="#/diag/report">查阅完整报告 →</a>
+        <a class="btn btn-ghost" href="#/diag/audit">去体检表看填入 →</a>
+      </div>
+    </div>
+    <div class="dg-grid">${groups.map(g => `<div class="card dg-dim"><h3>${g.dim} <span class="hint">${g.items.length} 项</span></h3>${g.items.map(chkHtml).join("")}</div>`).join("")}</div>` +
     referrerCardHtml(res) +
-    (isEnt ? `<div class="card" style="margin-top:12px;border-color:var(--color-accent)">
+    (isEnt ? `<div class="card" style="margin-top:var(--space-md);border-color:var(--color-accent)">
       <h3 style="border:none;margin:0 0 4px">实体资产核对清单（12 项 · 无官网项目的主战场）</h3>
       <p class="muted" style="font-size:var(--text-sm);margin:0 0 4px">上面是系统自动查的；下面 12 项需要你按提示人工核对后打分（0=没做，1=做了一半，2=做到了），分数直接计入体检表与发展曲线。</p>
-      <div id="dgChk">${entityChecklistHtml()}</div></div>` : "") +
-    `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-primary" id="dgDl">下载${isEnt ? "实体体检" : "诊断"}报告(.md)</button>
-      <button class="btn btn-ghost" id="dgCopy">复制报告内容</button>
-      <a class="btn btn-primary" href="#/diag/report" onclick="RPT_MODE='wo'">生成整改工单 →</a>
-      <a class="btn btn-ghost" href="#/diag/report">查阅完整报告 →</a>
-      <a class="btn btn-ghost" href="#/diag/audit">去体检表看填入 →</a></div>`;
+      <div id="dgChk" class="dg-grid" style="margin-top:var(--space-xs)">${entityChecklistHtml()}</div></div>` : "");
   if (isEnt) bindEntityChecklist();
   $("#dgDl").addEventListener("click", () => {
     const md = diagReportMd(res);
@@ -620,7 +669,9 @@ render.scan = () => {
   const brandInp = $("#dgBrand");
   if (brandInp && !brandInp.value.trim()) brandInp.value = projCtx().park;   /* V5：品牌词预填（不覆盖已输入） */
   setDgMode(dgMode());   /* V4.5：双入口默认跟随项目承载形态（无官网项目直接落在实体体检） */
-  if (state.lastDiag) renderDiagResult(state.lastDiag, 0);
+  /* V0.1.8：有结果重演结果区（原行为）；无结果时按当前模式重建空态预检清单 */
+  if (state.lastDiag && state.lastDiag.checks) renderDiagResult(state.lastDiag, 0);
+  else renderDiagPreview();
 };
 render.toolkit = () => {
   /* V4.2：园区名默认值跟随当前项目（品牌词/项目名），禁止把种子项目（蛇口网谷）带进其他项目

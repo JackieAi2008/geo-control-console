@@ -12,11 +12,15 @@
   · PUT  /api/data                 保存全量工作区状态
   · POST /api/probe  {"query":..}  信源侧快检：真实调用本机搜索通道(anysearch)，
                                     返回Top10结果与自有阵地标记（与2026-09-04基线同方法）
+  · POST /api/answerbot/start      V0.1.7「AI代问」：后台线程逐问调用豆包（火山方舟联网通道），
+                                    自动抽取提及/倾向/引用写入台账；GET /api/answerbot/status 轮询进度；
+                                    GET/POST /api/answerbot/config 通道配置（密钥只存服务器，回显尾4位）
 
-说明：六大AI引擎（豆包/DeepSeek等）无公开问答API，其提及率必须人工提问录入；
+说明：答案侧监测以人工录入为基准；豆包已可经火山方舟联网通道自动提问（AI代问，标注 src=api，
+      与人工记录同口径统计）；腾讯元宝等无公开API的引擎仍需人工提问录入。
       /api/probe 检测的是「实时检索通道的素材池」，是AI引用的上游，真实可自动化。
 """
-import argparse, json, os, re, sqlite3, subprocess, sys, threading, time, urllib.request, urllib.error, uuid
+import argparse, hashlib, json, os, re, sqlite3, subprocess, sys, threading, time, urllib.request, urllib.error, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -31,11 +35,16 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "6.2.1"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处
+APP_VERSION = "0.1.8"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（V0.1.x 序列：0.1.7=AI代问；旧 6.x 序列已封存）
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}
 ANYSEARCH = os.environ.get("ANYSEARCH_CLI", os.path.expanduser("~/.openclaw/skills/anysearch/scripts/anysearch_cli.py"))   # 生产可用 env 指向独立部署的搜索脚本
+# ===== 豆包联网通道（V0.1.7「AI代问」，火山方舟 Responses API + 内置 web_search 工具）=====
+ARK_URL = os.environ.get("ARK_URL", "https://ark.cn-beijing.volces.com/api/v3/responses").strip()
+ARK_API_KEY = os.environ.get("ARK_API_KEY", "").strip()          # 密钥只放环境变量或管理设置，严禁入库
+ARK_MODEL = os.environ.get("ARK_MODEL", "").strip()              # 接入点 ID（ep-…）；数据面要求 ep，经「通道设置」或 env 注入
+BOT_CAP_DEFAULT = 2000    # 每项目每月自动调用上限（联网搜索免费额度2万次/月的护栏，kv bot:cap 可调）
 OWN_DOMAINS = ["cmsk1979.com", "cmhk.com", "mp.weixin.qq.com", "weixin.qq.com"]
 MAX_BODY = 5 * 1024 * 1024
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
@@ -646,6 +655,170 @@ def _probe_mmx(query, owns):
     return {"query": query, "n": len(res), "results": res,
             "own_hits": sum(1 for r in res if r["own"]), "source": "mmx"}
 
+# ══════ V0.1.7「AI代问」：豆包联网自动监测（火山方舟通道）════════
+BOT_RUNS = {}            # runId → 运行态（内存态：完成即写库，重启丢失无碍，前端收到 404 提示重跑即可）
+BOT_LOCK = threading.Lock()
+
+def ark_cfg(conn):
+    """豆包通道配置：密钥=环境变量 > 管理设置(kv bot:ark:key)；模型=管理设置(kv bot:ark:model) > 默认。
+    密钥任何响应只回显 mask_key 尾4位，绝不完整下发。"""
+    key = ARK_API_KEY or (kv_get(conn, "bot:ark:key") or "")
+    model = (kv_get(conn, "bot:ark:model") or "") or ARK_MODEL
+    return {"key": str(key).strip(), "model": str(model).strip()}
+
+ARK_SYS = "你是面向企业选址者的AI助手。直接回答用户问题；答案中若参考了网站，在相关句子后以（来源：域名）标注。"
+
+def ark_ask(conn, question, brand=""):
+    """向豆包发一问（Responses API + 内置 web_search 工具，模型自主联网检索）。
+    返回 (answer_text, 检索URL列表, 错误文案)，成功时错误文案为空串。
+    GEO_MOCK_ARK=1（e2e）返回罐头答案，绝不外呼。"""
+    if os.environ.get("GEO_MOCK_ARK"):
+        return (f"（mock）关于这个问题：{brand or '该项目'}是区域内的代表性载体，相关信息可参考（来源：example.com）。", [], "")
+    cfg = ark_cfg(conn)
+    if not cfg["key"] or not cfg["model"]:
+        return None, [], "豆包通道未配置：管理员在「监测 → AI 代问 · 通道设置」填入密钥与联网接入点 ID（ep-…）"
+    payload = {"model": cfg["model"], "instructions": ARK_SYS,
+               "input": [{"role": "user", "content": [{"type": "input_text", "text": question}]}],
+               "tools": [{"type": "web_search"}], "store": False,
+               "thinking": {"type": "disabled"}}   # 关思考：监测问答要快与省（实测同问 353→47 token）
+
+    def _post(p):
+        req = urllib.request.Request(ARK_URL, data=json.dumps(p).encode(),
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer " + cfg["key"]})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.loads(r.read())
+    try:
+        try:
+            d = _post(payload)
+        except urllib.error.HTTPError as e:
+            detail = ""
+            try:
+                detail = json.loads(e.read().decode("utf-8", "ignore")).get("error", {}).get("message", "")
+            except Exception:
+                pass
+            if e.code == 400 and "instructions" in str(detail).lower():   # 不认 instructions → 并入问题文本重试
+                payload.pop("instructions", None)
+                payload["input"] = [{"role": "user", "content": [
+                    {"type": "input_text", "text": f"（回答要求：{ARK_SYS}）{question}"}]}]
+                d = _post(payload)
+            elif e.code == 400 and "think" in str(detail).lower():        # 模型不认 thinking 参数 → 去掉重试
+                payload.pop("thinking", None)
+                d = _post(payload)
+            elif "not activated web search" in str(detail):
+                return None, [], "账号未开通联网搜索插件——控制台开通后重试"
+            else:
+                return None, [], f"豆包通道 HTTP {e.code}：{str(detail)[:150] or '调用失败'}"
+    except urllib.error.HTTPError as e:
+        return None, [], f"豆包通道 HTTP {e.code}"
+    except Exception as e:
+        return None, [], f"豆包通道不可达：{type(e).__name__}"
+    text, cites = [], []
+    for item in d.get("output") or []:
+        t = item.get("type")
+        if t == "message":
+            for c in item.get("content") or []:
+                if c.get("type") in ("output_text", "text") and c.get("text"):
+                    text.append(c["text"])
+                    for a in (c.get("annotations") or []):
+                        if a.get("url"):
+                            cites.append(a["url"])
+        elif t in ("function_web_search", "web_search_call"):
+            act = item.get("action") or {}
+            cites += [u for u in (act.get("urls") or []) if u]
+    out = "\n".join(x for x in text if x).strip()
+    if not out:
+        return None, [], "豆包返回空答案"
+    return out, cites[:8], ""
+
+def answerbot_worker(db_path, rid, pid, prompts, brand, competitors, own_domains):
+    """后台逐问执行：预算闸门→24h缓存→豆包→结构化→台账。写库前最后一刻重读文档，最小化与用户保存的竞态窗口。"""
+    conn = db(db_path)
+    st = BOT_RUNS[rid]
+    try:
+        ym = time.strftime("%Y-%m")
+        ukey = f"bot:usage:{pid}:{ym}"
+        cap = int(kv_get(conn, "bot:cap") or BOT_CAP_DEFAULT)
+        usage = int(kv_get(conn, ukey) or 0)
+        can_llm = llm_resolve(conn, {})[0] != "none" and not os.environ.get("GEO_MOCK_ARK")   # e2e mock 下不做 LLM 抽取（快且确定）
+        today = time.strftime("%Y-%m-%d")
+        # 今日已有人工记录的（豆包·问题）不再自动覆盖——人工是基准，自动是补充
+        doc0 = kv_get(conn, proj_doc_key(pid)) or {"state": {}}
+        manual_today = {(r.get("promptId")) for r in ((doc0.get("state") or {}).get("ledger") or [])
+                        if r.get("date") == today and r.get("engine") == "豆包" and not r.get("src")}
+        added, skipped = 0, 0
+        for i, p in enumerate(prompts):
+            st["done"], st["current"] = i, p["q"][:24]
+            if p["id"] in manual_today:
+                st["items"].append({"promptId": p["id"], "ok": False, "note": "今日已有人工记录，未覆盖（人工是基准）"})
+                skipped += 1
+                continue
+            if usage >= cap:
+                st["items"].append({"promptId": p["id"], "ok": False, "note": "已达本月自动调用上限（管理员可调 bot:cap），本问跳过"})
+                skipped += 1
+                continue
+            # 24h 答案缓存：同问不重复外呼（换问法即新键）
+            qkey = "bot:ans:" + pid + ":" + hashlib.md5((p["id"] + "|" + p["q"]).encode()).hexdigest()[:16]
+            cached = kv_get(conn, qkey)
+            if cached and (time.time() - (cached.get("ts") or 0)) < 86400 and cached.get("q") == p["q"]:
+                text = cached.get("text") or ""
+                web_urls = cached.get("urls") or []
+            else:
+                text, web_urls, err = ark_ask(conn, p["q"], brand)
+                if text is None:
+                    st["items"].append({"promptId": p["id"], "ok": False, "note": err})
+                    continue
+                kv_put(conn, qkey, {"ts": time.time(), "q": p["q"], "text": text, "urls": web_urls})
+            usage += 1
+            kv_put(conn, ukey, usage)
+            # 结构化：有 LLM 沿用同一套 parse_answer 抽取；没有则退化为纯提及检测（如实标注，不冒充）
+            ex = parse_answer(text, brand, competitors, {}, conn) if can_llm else None
+            if ex and ex.get("error"):
+                ex = None
+            if ex:
+                mention, senti = ex.get("mention"), ex.get("sentiment")
+                cites = ex.get("citedDomains") or []
+                cooccur = ex.get("competitorMentions") or []
+                how = "LLM抽取"
+            else:
+                mention = 1 if (brand and brand in text) else 0
+                senti, cites, cooccur = 0.5, [], []
+                how = "自动判定（未接大模型，仅查提及）"
+            url = ""
+            for u in web_urls + ["https://" + c for c in cites]:   # 引擎真实检索URL优先，LLM抽取域名兜底
+                if _own_hit(u, own_domains):
+                    url = u
+                    break
+            st["_rows"] = st.get("_rows", []) + [{
+                "date": today, "engine": "豆包", "promptId": p["id"],
+                "mention": mention if mention is not None else 0, "sentiment": senti or 0.5,
+                "url": url, "cooccur": [str(c)[:40] for c in cooccur][:6],
+                "note": f"AI代问·联网检索（{how}）", "src": "api", "raw": text[:400]}]
+            st["items"].append({"promptId": p["id"], "ok": True, "mention": mention,
+                                "cite": "、".join(cites[:3])})
+            added += 1
+            time.sleep(2)   # 串行节流，防引擎风控
+        if added:
+            cur = kv_get(conn, proj_doc_key(pid)) or {"rev": 0, "state": {}}
+            state = dict(cur.get("state") or {})
+            ledger = list(state.get("ledger") or [])
+            for row in st.get("_rows") or []:
+                # 同日同问的旧 AI 行替换（重跑不重复计）；人工行永远不动
+                ledger = [r for r in ledger if not (r.get("src") == "api" and r.get("date") == row["date"]
+                                                    and r.get("engine") == row["engine"] and r.get("promptId") == row["promptId"])]
+                ledger.append(row)
+            state["ledger"] = ledger
+            kv_put(conn, proj_doc_key(pid), {"rev": cur.get("rev", 0) + 1, "state": state})
+        st["status"], st["finished"] = "done", time.strftime("%H:%M:%S")
+        audit_append(conn, "aibot", pid, "AI代问", f"完成 {added}/{len(prompts)}（跳过{skipped}）")
+        log = kv_get(conn, "bot:log") or []
+        log.append({"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "pid": pid, "ok": added,
+                    "fail": len(prompts) - added - skipped, "skip": skipped})
+        kv_put(conn, "bot:log", log[-50:])
+    except Exception as e:
+        st["status"], st["error"] = "error", str(e)[:200]
+    finally:
+        conn.close()
+
 def kv_migrate(conn):
     """旧版整包state → 新版 {rev,state} 文档（一次性迁移）"""
     if kv_get(conn, "doc") is None:
@@ -711,6 +884,17 @@ class Handler(BaseHTTPRequestHandler):
             fname = backup_now(self.conn)
             ok = not str(fname).startswith("备份失败")
             return self._send(200 if ok else 500, {"ok": ok, "file": fname})
+        if path == "/api/answerbot/status":
+            """V0.1.7 AI代问进度轮询"""
+            st = BOT_RUNS.get(qs.get("runId") or "")
+            if not st:
+                return self._send(404, {"error": "runId 不存在（服务可能已重启），请重新发起"})
+            return self._send(200, {k: st.get(k) for k in ("runId", "pid", "status", "done", "total", "items", "current", "error")})
+        if path == "/api/answerbot/config":
+            """V0.1.7 通道配置查看（密钥只回显尾4位）"""
+            c = ark_cfg(self.conn)
+            return self._send(200, {"configured": bool(c["key"]), "model": c["model"],
+                                    "keyTail": mask_key(c["key"]) if c["key"] else "—"})
         if path == "/api/data":
             kv_migrate(self.conn)
             plist = projects_ensure(self.conn)
@@ -915,6 +1099,60 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True})
         if path == "/api/llm/test":
             return self._llm_test()
+        if path == "/api/answerbot/start":
+            """V0.1.7 AI代问：后台线程逐问调用豆包（联网），结构化后写台账；进度走 /status 轮询。
+            prompts 由前端按当前项目问题矩阵下发（[{id,q}]，≤20条）；同项目同时只允许一个运行。"""
+            try:
+                body = self._body() or {}
+            except Exception:
+                return self._send(400, {"error": "请求体不是合法 JSON"})
+            plist = projects_ensure(self.conn)
+            pid = str(body.get("project") or "") or (plist[0]["id"] if plist else "")
+            if not any(p["id"] == pid for p in plist):
+                return self._send(404, {"error": f"project 不存在: {pid}"})
+            if not ark_cfg(self.conn)["key"] or not ark_cfg(self.conn)["model"]:
+                return self._send(400, {"error": "豆包通道未配置——先在「AI 代问 · 通道设置」里保存密钥与联网接入点 ID（ep-…）"})
+            prompts = []
+            for x in (body.get("prompts") or [])[:20]:
+                q = str(x.get("q") or "").strip()[:200]
+                i = str(x.get("id") or "").strip()[:10]
+                if q and i:
+                    prompts.append({"id": i, "q": q})
+            if not prompts:
+                return self._send(400, {"error": "prompts 为空（每项需含 id 与 q）"})
+            with BOT_LOCK:
+                for r in BOT_RUNS.values():
+                    if r.get("pid") == pid and r.get("status") == "running":
+                        return self._send(409, {"error": "该项目已有 AI 代问在运行", "runId": r["runId"]})
+                rid = uuid.uuid4().hex[:12]
+                BOT_RUNS[rid] = {"runId": rid, "pid": pid, "status": "running", "done": 0,
+                                 "total": len(prompts), "items": [], "current": "",
+                                 "started": time.strftime("%H:%M:%S")}
+            threading.Thread(target=answerbot_worker,
+                             args=(DB_PATH, rid, pid, prompts,
+                                   str(body.get("brand") or "")[:60],
+                                   [str(c)[:40] for c in (body.get("competitors") or [])][:8],
+                                   [str(d)[:80] for d in (body.get("ownDomains") or [])][:20]),
+                             daemon=True).start()
+            audit_append(self.conn, geo_user(self.headers), pid, "AI代问", f"启动 {len(prompts)} 问")
+            return self._send(200, {"runId": rid, "total": len(prompts)})
+        if path == "/api/answerbot/config":
+            """V0.1.7 通道配置保存：密钥只存服务器 SQLite，响应只回显尾4位；留空=沿用已存密钥"""
+            try:
+                b = self._body() or {}
+            except Exception:
+                return self._send(400, {"error": "请求体不是合法 JSON"})
+            key = str(b.get("apiKey") or "").strip()[:200]
+            model = str(b.get("model") or "").strip()[:100]
+            if key:
+                kv_put(self.conn, "bot:ark:key", key)
+            if model:
+                kv_put(self.conn, "bot:ark:model", model)
+            audit_append(self.conn, geo_user(self.headers), None, "AI代问配置",
+                         f"模型={model or '未改'} 密钥={'更新' if key else '未改'}")
+            c = ark_cfg(self.conn)
+            return self._send(200, {"configured": bool(c["key"]), "model": c["model"],
+                                    "keyTail": mask_key(c["key"]) if c["key"] else "—"})
         if path == "/api/chat":
             return self._chat()
         return self._send(404, {"error": "not found"})

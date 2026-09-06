@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>招商产园 GEO 智控台</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
-<link rel="stylesheet" href="css/tokens.css?v=6.2.1">
-<link rel="stylesheet" href="css/app.css?v=6.2.1">
-<link rel="stylesheet" href="css/tour.css?v=6.2.1">
+<link rel="stylesheet" href="css/tokens.css?v=0.1.8">
+<link rel="stylesheet" href="css/app.css?v=0.1.8">
+<link rel="stylesheet" href="css/tour.css?v=0.1.8">
 </head>
 <body>
 
@@ -132,7 +132,7 @@
         <a class="btn btn-primary" href="#/act/toolkit" style="width:100%">去拿优化文件 →</a>
       </div>
       <div class="wizard-col">
-        <p style="font-size:var(--text-sm)"><b>③ 跑一轮监测</b>：点「跑一轮 30 问」——逐条真实搜索 30 问并自动写入台账，统计官网/公众号等自有渠道的命中率；双周一轮看趋势。</p>
+        <p style="font-size:var(--text-sm)"><b>③ 跑一轮监测</b>：点「AI 代问」让系统替你问豆包并自动记录，再点「跑一轮 30 问」查信源命中；双周一轮看趋势。</p>
         <a class="btn btn-primary" href="#/monitor" style="width:100%">去跑监测 →</a>
       </div>
     </div>
@@ -163,36 +163,31 @@
   <div class="subnav" data-subnav="diag">
     <button data-sub="scan" class="on"><i class="sn-step">1</i>一键诊断</button>
     <button data-sub="report"><i class="sn-step">2</i>诊断报告</button>
-    <button data-sub="audit"><i class="sn-step">3</i>30项体检</button>
+    <button data-sub="audit"><i class="sn-step">3</i><span class="audit-nav-txt">30项体检</span></button>
     <button data-sub="caliber"><i class="sn-step">4</i>口径表</button>
     <button data-sub="score"><i class="sn-step">5</i>内容评分</button>
     <button data-sub="evidence"><i class="sn-step">6</i>证据库</button>
   </div>
 
-  <!-- 子页：一键诊断（真实探测） -->
+  <!-- 子页：一键诊断（真实探测）——V0.1.8 布局重构：表单横置成「发射台」，结果区占满全宽按维度分组；
+       空态显示预检清单（只预告将查什么，不出示任何未测结果） -->
   <div class="sub-view" id="sub-scan">
-    <div class="grid grid-2">
-      <div class="card">
-        <h3>发起诊断 <span class="hint">真实联网检查 + 真实搜索，约10–30秒</span></h3>
-        <div class="seg" id="dgModeBar" role="tablist" aria-label="体检方式" style="margin-bottom:12px">
+    <div class="card dg-launch">
+      <div class="dg-launch-row">
+        <div class="seg" id="dgModeBar" role="tablist" aria-label="体检方式">
           <button class="seg-item on" id="dgModeSite" role="tab">官网体检</button>
           <button class="seg-item" id="dgModeEntity" role="tab">实体体检</button>
         </div>
-        <div class="form-grid" id="dgSiteForm">
-          <label class="full lb">官方承载页域名（本项目自己的官网；若园区挂在上级单位官网下，填上级官网域名）<input id="dgUrl" class="inp" placeholder="如：www.你的官网域名.com"></label>
+        <div class="dg-fields" id="dgSiteForm">
+          <label class="lb">官方承载页域名<small class="dg-lb-sub">本项目自己的官网；挂在上级单位官网下就填上级域名</small><input id="dgUrl" class="inp" placeholder="如：www.你的官网域名.com"></label>
         </div>
-        <div class="form-grid">
-          <label class="full lb">品牌词（官网体检用于搜索验证；实体体检以它为检查对象）<input id="dgBrand" class="inp" placeholder="如：蛇口网谷"></label>
-        </div>
-        <button class="btn btn-primary" id="dgRun" style="margin-top:12px">开始一键诊断</button>
-        <p class="muted" style="margin-top:8px" id="dgHelp">官网体检：网站能否被 AI 读取 · 是否允许 AI 爬取 · AI 说明文件 · 内容是否在源码里 · 结构化数据标签 · 图片说明文字 · 品牌词搜索前 10。结果自动填入 30 项体检表。</p>
-        <p class="muted" style="margin-top:8px" id="dgHelpEntity" hidden>实体体检：用品牌词做真实搜索，查我们的信息在网上的存在感——自有渠道是否进前 10、百科词条、企业信息平台、权威信源覆盖。没有官网的项目（如单楼宇/新园区）从这里开始，结果自动填入体检表，并附 12 项实体资产核对清单。</p>
+        <label class="lb dg-brand-lb">品牌词<small class="dg-lb-sub">官网体检用于搜索验证；实体体检以它为检查对象</small><input id="dgBrand" class="inp" placeholder="如：蛇口网谷"></label>
+        <button class="btn btn-primary" id="dgRun">开始一键诊断</button>
       </div>
-      <div class="card">
-        <h3>诊断结果（附证据）</h3>
-        <div id="dgOut"><p class="muted">点击左侧「开始一键诊断」后，这里逐项显示真实探测结果与证据（网页数据/搜索前10域名），可直接下载报告发给网站管理员或外包执行整改。</p></div>
-      </div>
+      <p class="muted dg-launch-help" id="dgHelp">官网体检：网站能否被 AI 读取 · 是否允许 AI 爬取 · AI 说明文件 · 内容是否在源码里 · 结构化数据标签 · 图片说明文字 · 品牌词搜索前 10。真实联网检查 + 真实搜索，约 10–30 秒，结果自动填入体检表。</p>
+      <p class="muted dg-launch-help" id="dgHelpEntity" hidden>实体体检：用品牌词做真实搜索，查我们的信息在网上的存在感——自有渠道是否进前 10、百科词条、企业信息平台、权威信源覆盖。没有官网的项目（如单楼宇/新园区）从这里开始，约 5–15 秒，结果自动填入体检表，并附 12 项实体资产核对清单。</p>
     </div>
+    <div id="dgOut" class="dg-out"><div id="dgPreview"></div></div>
   </div>
 
   <!-- 子页：诊断报告（查阅） -->
@@ -216,18 +211,20 @@
     </div>
   </div>
 
-  <!-- 子页：体检 -->
+  <!-- 子页：体检——V0.1.8 布局重构：总结栏 sticky 随行（总分/雷达/维度得分条/操作），
+       明细 5 张维度卡两列网格 + 单行工作表式体检项，长表滚动时参照常在 -->
   <div class="sub-view" id="sub-audit" hidden>
-    <div class="grid-side grid">
-      <div>
+    <div class="audit-grid">
+      <aside class="audit-rail" id="auditRail">
         <div class="card">
           <h3>总分</h3>
           <div id="scoreRing" style="display:flex;justify-content:center"></div>
           <p class="muted" style="text-align:center;margin-top:6px"><b id="scoreLevel">未开始</b></p>
         </div>
         <div class="card" style="margin-top:16px">
-          <h3>五维雷达</h3>
+          <h3>五维雷达 <span class="hint">点维度名跳到对应卡</span></h3>
           <div id="radarBox" style="display:flex;justify-content:center"></div>
+          <div id="dimBars" style="margin-top:10px"></div>
         </div>
         <div class="card" style="margin-top:16px">
           <h3>操作</h3>
@@ -235,8 +232,8 @@
           <button class="btn btn-ghost" id="auditReset" style="width:100%">清空重评</button>
           <p class="muted" style="margin-top:8px">逐项 0/1/2 打分；技术项请结合技术核查。</p>
         </div>
-      </div>
-      <div id="auditChecklist"></div>
+      </aside>
+      <div id="auditChecklist" class="audit-cols"></div>
     </div>
   </div>
 
@@ -400,7 +397,7 @@
           <thead><tr><th>阶段</th><th>关键动作</th><th>里程碑</th></tr></thead>
           <tbody>
             <tr><td><b>一 · 体检建基线</b><br><span class="muted num">第1–4周</span></td>
-              <td>30问基线监测（含豆包双端口）；30项审计；口径表V1；官网技术整改（robots/WAF/HTTPS）；选定2–3试点</td>
+              <td>问题矩阵基线监测（含豆包双端口）；体检审计（无官网项目按24项口径）；口径表V1；官网项目同步技术整改；选定2–3试点</td>
               <td>基线报告；口径表V1</td></tr>
             <tr><td><b>二 · 建库布源</b><br><span class="muted num">第5–9周</span></td>
               <td>一园一档；FAQ 50问；官网改造+Schema；百科按口径表更新；公众号/知乎/头条/百家号开播；首批数字PR</td>
@@ -503,7 +500,7 @@
       </div>
       <span class="num" id="batchPct" style="font-size:12px;color:var(--color-ink-2);white-space:nowrap">0%</span>
     </div>
-    <p class="muted" id="batchTxt"><b class="num">0/30</b> · 待运行。逐条真实搜索30问并自动写入台账（引擎=搜索通道，记录前10域名），约2–4分钟；运行中此条实时显示「N/30 · 当前问题」。AI引擎无公开问答API，豆包/DeepSeek等最终提及率仍需人工提问录入（下方②区）。</p>
+    <p class="muted" id="batchTxt"><b class="num">0/30</b> · 待运行。逐条真实搜索30问并自动写入台账（引擎=搜索通道，记录前10域名），约2–4分钟；运行中此条实时显示「N/30 · 当前问题」。豆包支持「AI 代问」自动提问录入（下方⑥区）；元宝等暂无公开接口的引擎仍需人工提问录入。</p>
   </div>
   <div class="card" style="margin-top:16px">
     <h3>⑥ 本轮人工采样 <span class="tag tag-ok">预计 ≤20 分钟</span></h3>
@@ -559,7 +556,7 @@
     <div class="tbl-wrap tbl-cards"><table class="tbl">
       <thead><tr><th>五步法</th><th>动作</th><th>系统位置</th><th>节奏</th></tr></thead>
       <tbody>
-        <tr><td data-col="五步法"><b>审</b>（体检）</td><td data-col="动作">30项检查 + 30问基线监测</td><td data-col="位置">诊断 → 体检 / 监测</td><td data-col="节奏">第1–2周，此后双周</td></tr>
+        <tr><td data-col="五步法"><b>审</b>（体检）</td><td data-col="动作">体检（24/30项按形态） + 问题矩阵基线监测</td><td data-col="位置">诊断 → 体检 / 监测</td><td data-col="节奏">第1–2周，此后双周</td></tr>
         <tr><td data-col="五步法"><b>建</b>（建库）</td><td data-col="动作">一园一档 + FAQ + 口径表治理</td><td data-col="位置">诊断 → 口径表</td><td data-col="节奏">第3–6周</td></tr>
         <tr><td data-col="五步法"><b>布</b>（布源）</td><td data-col="动作">四大渠道：官网/知识实体/产业内容/生态矩阵</td><td data-col="位置">行动 → 90天方案</td><td data-col="节奏">第4–10周</td></tr>
         <tr><td data-col="五步法"><b>造</b>（造势）</td><td data-col="动作">RE网站管理员/榜单/资质素材化 + 数字PR + 企业引言</td><td data-col="位置">行动 → 内容选题单</td><td data-col="节奏">贯穿</td></tr>
@@ -766,10 +763,10 @@
   </div>
 </div>
 
-<script src="js/data.js?v=6.2.1"></script>
-<script src="js/app.js?v=6.2.1"></script>
-<script src="js/ops.js?v=6.2.1"></script>
-<script src="js/tour.js?v=6.2.1"></script>
+<script src="js/data.js?v=0.1.8"></script>
+<script src="js/app.js?v=0.1.8"></script>
+<script src="js/ops.js?v=0.1.8"></script>
+<script src="js/tour.js?v=0.1.8"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -784,7 +781,7 @@
     } catch (e) {}
   })();
 </script>
-<script src="js/chat-kb.js?v=6.2.1"></script>
-<script src="js/chat.js?v=6.2.1"></script>
+<script src="js/chat-kb.js?v=0.1.8"></script>
+<script src="js/chat.js?v=0.1.8"></script>
 </body>
 </html>
