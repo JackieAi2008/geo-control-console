@@ -736,6 +736,57 @@ function auditDims() {
     return { dim: d.dim, got, full: items.length * 2, pct: items.length ? Math.round(got / (items.length * 2) * 100) : 0, skipped: d.items.length - items.length };
   });
 }
+/* V0.2.4 体检读分说明：按当前打分实时生成的大白话诊断叙述——分数怎么来 / 说明了什么 / 优先补哪里。
+   全部由数据推导（无预置结论），分数变叙述跟着变；品宣岗不用问人也能读懂这份分数。 */
+function auditStory(s, dims) {
+  const skip = noSite() ? (GEO.SITE_IDS || []) : [];
+  const flat = GEO.audit.flatMap(d => d.items.filter(i => !skip.includes(i.id))
+    .map(i => ({ dim: d.dim, id: i.id, t: esc(i.t), v: +(state.audit[i.id] || 0) })));
+  const scored = flat.filter(i => i.v > 0), zeros = flat.filter(i => i.v === 0);
+  const autoN = Object.keys(state.autoAudit || {}).filter(k => flat.some(i => i.id === k)).length;
+  const lv = s.pct >= 80 ? "优秀" : s.pct >= 60 ? "良好" : s.pct >= 40 ? "待改进" : s.pct > 0 ? "起步" : "未开始";
+  const LV_SAY = {
+    未开始: "还没有起始数据。先跑一次诊断或实体体检，系统会自动填入一部分分，再逐项补。",
+    起步: "分数很低，该做的事大部分还没做。AI 回答选址类问题时基本不会提到这个园区，也没有可引用的出处。",
+    待改进: "有基础了。AI 有时会提到这个园区，但信息零散，排位常在竞品和中介后面。",
+    良好: "AI 能比较稳定地提到这个园区，各处说法基本一致。差的是覆盖面：被提到的场景和可引用的权威出处还不够多。",
+    优秀: "AI 回答选址类问题时会稳定提到这个园区，各处口径一致。接下来是日常维护：保持内容更新，双周跑一轮监测。",
+  };
+  /* ① 分数怎么来 */
+  let p1 = `计分 ${flat.length} 项 × 每项 0/1/2 分，满分 ${flat.length * 2}；左边环上的大数字是同一分数的百分制（${s.pct}/100）。`;
+  p1 += s.got === 0 ? "目前 0 分：所有计分项都未得分。"
+    : `现在的 ${s.got} 分来自${scored.length > 4
+        ? scored.slice(0, 4).map(i => `「${i.t}」${i.v} 分`).join("、") + ` 等 ${scored.length} 项`
+        : scored.map(i => `「${i.t}」${i.v} 分`).join("、")}；其余 ${zeros.length} 项还是 0 分。`;
+  if (autoN) p1 += `其中 ${autoN} 项由诊断自动填入（重跑诊断自动更新，人工点分即转为人工）。`;
+  if (noSite()) p1 += "本项目无官网：「技术可达」6 项不计数、不拖分，有官网后回来补测。";
+  /* ② 说明了什么 */
+  const counted = dims.filter(d => d.full > 0), zeroDims = counted.filter(d => d.got === 0);
+  let p2 = `当前等级「${lv}」：${LV_SAY[lv]}`;
+  if (zeroDims.length && zeroDims.length < counted.length) {
+    p2 += ` 完全空白的是${zeroDims.slice(0, 3).map(d => `「${d.dim}」：${(GEO.dimMeans || {})[d.dim] || ""}`).join("；")}${zeroDims.length > 3 ? ` 等 ${zeroDims.length} 组` : ""}。`;
+  } else if (zeroDims.length) {
+    p2 += " 五个方向都还是 0 分。";
+  }
+  const lead = counted.filter(d => d.got > 0).sort((a, b) => a.pct - b.pct)[0];
+  if (lead && lead.pct <= 50) p2 += ` 开了头的「${lead.dim}」也只有 ${lead.got}/${lead.full}，刚起步。`;
+  /* ③ 优先补哪里（按最空白优先；同分按方法论顺序） */
+  const TIE = noSite() ? ["实体与权威", "内容可摘录", "生态布源", "监测治理"] : ["技术可达", "内容可摘录", "实体与权威", "生态布源", "监测治理"];
+  const todo = counted.filter(d => d.pct < 100)
+    .sort((a, b) => a.pct - b.pct || TIE.indexOf(a.dim) - TIE.indexOf(b.dim)).slice(0, 2);
+  const act = d => (GEO.dimActions || {})[d.dim] || "对照该组各项小字标准逐项补齐";
+  const p3 = todo.length
+    ? `按「最空白、最影响被 AI 引用」排序，先补这两组：<br>① 「${todo[0].dim}」（${todo[0].got}/${todo[0].full}）：${act(todo[0])}` +
+      (todo[1] ? `<br>② 「${todo[1].dim}」（${todo[1].got}/${todo[1].full}）：${act(todo[1])}` : "") +
+      `<br>每完成一组回来逐项打分，分数如实上涨；带「自动」标的项重跑诊断即自动更新。`
+    : "五个方向都已满分——保持双周监测与季度复盘即可。";
+  return `<div class="card audit-story">
+    <h3>这份分数说明什么 <span class="hint">随打分实时更新 · 数字怎么读 / 问题在哪 / 先补哪里</span></h3>
+    <p><span class="st-lb">分数怎么来：</span>${p1}</p>
+    <p><span class="st-lb">说明了什么：</span>${p2}</p>
+    <p><span class="st-lb">优先补哪里：</span>${p3}</p>
+  </div>`;
+}
 function ledgerStats() {
   /* V4.2 口径分层：答案侧=六引擎人工轮；信源侧=搜索通道自动轮（channel="src"）。
      所有指标只统计答案侧；信源命中单独由快照/computeSnapshot 的 mentionSrc 表达，禁止混均。
@@ -1878,9 +1929,10 @@ render.audit = () => {
   /* V0.1.10：「去体检表看填入」带一次性聚焦——自动填入项加金框+顶部说明条（阅后即焚） */
   const autoFocus = typeof window !== "undefined" && window.__auditAuto;
   if (typeof window !== "undefined") window.__auditAuto = 0;
+  const s = auditScore(), dims = auditDims();   /* V0.2.4 读分说明与环/雷达同源取数 */
   const autoNote = autoFocus && state.autoAudit && Object.keys(state.autoAudit).length
     ? `<div class="auto-note">金框「自动」项 = 最近一次一键诊断自动填入（含实测 0 分项）——人工复核后点任意分值即转为人工评分。</div>` : "";
-  $("#auditChecklist").innerHTML = autoNote + GEO.audit.map((d, di) => {
+  $("#auditChecklist").innerHTML = auditStory(s, dims) + autoNote + GEO.audit.map((d, di) => {
     const dimSkip = noSite() && d.dim === "技术可达";   /* V4.5：无官网项目这6项不适用，灰显不计分 */
     return `
     <div class="card audit-dim" id="dimcard-${di}"${dimSkip ? ' style="opacity:.55"' : ""}>
@@ -1900,7 +1952,6 @@ render.audit = () => {
     if (state.autoAudit) delete state.autoAudit[b.dataset.audit];   /* 人工点分=转人工，移除自动痕 */
     save(); render.audit();
   }));
-  const s = auditScore(), dims = auditDims();
   const color = s.pct >= 70 ? "var(--color-ok)" : s.pct >= 40 ? "var(--color-warn)" : "var(--color-accent)";
   $("#scoreRing").innerHTML = `<div class="ring-box">${ringSvg(s.pct, color)}
     <span class="ring-cap">总分 ${s.got} / ${s.full}</span></div>`;
@@ -2692,7 +2743,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "0.2.3";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.2.4";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }

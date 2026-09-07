@@ -44,7 +44,14 @@ def main():
                             "--port", str(PORT), "--db", "/tmp/geodesk_e2e.db"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                            env=dict(os.environ, GEO_MOCK_ARK="1"))   # V0.1.7：AI代问走罐头通道，e2e 绝不外呼豆包
-    time.sleep(1.2)
+    # 就绪等待（2026-09-07：本机偶发启动 >1.2s，固定 sleep 会让首 ping 落空；
+    # 落空在本环境会被网关回成 502 而非拒连，urllib 直接抛 HTTPError 崩掉整轮）
+    for _ in range(40):
+        try:
+            with urllib.request.urlopen(f"{ROOT}/api/ping", timeout=2) as _r:
+                if _r.status == 200: break
+        except Exception: pass
+        time.sleep(0.3)
     try:
         print("T1 健康检查")
         s, d = req("GET", "/api/ping")
@@ -665,7 +672,7 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V0.1 版本号0.2.3", d.get("version") == "0.2.3", f"v={d.get('version')}")
+        check("V0.1 版本号0.2.4", d.get("version") == "0.2.4", f"v={d.get('version')}")
         with urllib.request.urlopen(ROOT + "/js/chat.js", timeout=10) as _resp:
             _cjs = _resp.read().decode("utf-8", "ignore"); _s2 = _resp.status
         check("V0.2.0 C1 chat项目感知", _s2 == 200 and "projectRecoAnswer" in _cjs and "你的项目实时数据" in _cjs,
@@ -676,7 +683,7 @@ console.log(JSON.stringify({
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V0.1 版本戳统一0.2.3", idx_html.count("?v=0.2.3") >= 9 and "?v=0.1.13" not in idx_html
+        check("V0.1 版本戳统一0.2.4", idx_html.count("?v=0.2.4") >= 9 and "?v=0.1.13" not in idx_html
               and "?v=6.2.0" not in idx_html and "?v=6.1.2" not in idx_html and "?v=6.1.1" not in idx_html
               and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html
               and "?v=4.7.3" not in idx_html,

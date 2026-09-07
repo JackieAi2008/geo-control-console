@@ -759,3 +759,13 @@ pre.prompt-view {
     font-size: var(--text-xs); color: var(--color-ink-2);
   }
 }
+
+/* ── V0.2.4 体检读分说明卡（动态诊断叙述：分数怎么来/说明了什么/优先补哪里）── */
+.audit-story {
+  grid-column: 1 / -1;
+  border: 2px solid var(--color-accent-navy);
+  background: var(--color-paper-2);
+}
+.audit-story p { font-size: var(--text-sm); line-height: 1.75; margin: 0 0 var(--space-xs); }
+.audit-story p:last-child { margin-bottom: 0; }
+.audit-story .st-lb { font-weight: 700; color: var(--color-accent); }
