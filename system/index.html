@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>招商产园 GEO 智控台</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
-<link rel="stylesheet" href="css/tokens.css?v=0.2.4">
-<link rel="stylesheet" href="css/app.css?v=0.2.4">
-<link rel="stylesheet" href="css/tour.css?v=0.2.4">
+<link rel="stylesheet" href="css/tokens.css?v=0.2.5">
+<link rel="stylesheet" href="css/app.css?v=0.2.5">
+<link rel="stylesheet" href="css/tour.css?v=0.2.5">
 </head>
 <body>
 
@@ -240,8 +240,9 @@
     </div>
   </div>
 
-  <!-- 子页：口径表 -->
+  <!-- 子页：口径表——V0.2.5 读表说明卡（动态三段叙述，替换原 V0.1.12 静态大白话行） -->
   <div class="sub-view" id="sub-caliber" hidden>
+    <div id="caliberStory"></div>
     <div class="card">
       <h3>口径总览 <span class="hint" id="caliberSummary"></span>
         <span style="display:flex;gap:8px;flex-wrap:wrap">
@@ -249,8 +250,6 @@
           <button class="btn btn-sm btn-primary" id="calAdd">+ 添加字段</button>
         </span>
       </h3>
-      <!-- V0.1.12 大白话（T1）：「口径」首现处给人话——品宣岗不需要统计行话 -->
-      <p class="muted" style="margin:-4px 0 10px;font-size:var(--text-sm)">口径表 = 园区对外数据的标准答案（面积、租金、企业数都以它为准）。全系统只认这份表：网上和咱们说法不一致的数据，登记到「外部冲突口径」列逐步清理。</p>
       <div class="tbl-wrap tbl-cards"><table class="tbl">
         <thead><tr><th>园区</th><th>字段</th><th>官方口径（唯一权威）</th><th>数据时点</th><th>来源</th><th>外部冲突口径（待清理）</th><th>操作</th></tr></thead>
         <tbody id="caliberBody"></tbody>
@@ -768,10 +767,10 @@
   </div>
 </div>
 
-<script src="js/data.js?v=0.2.4"></script>
-<script src="js/app.js?v=0.2.4"></script>
-<script src="js/ops.js?v=0.2.4"></script>
-<script src="js/tour.js?v=0.2.4"></script>
+<script src="js/data.js?v=0.2.5"></script>
+<script src="js/app.js?v=0.2.5"></script>
+<script src="js/ops.js?v=0.2.5"></script>
+<script src="js/tour.js?v=0.2.5"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -786,7 +785,7 @@
     } catch (e) {}
   })();
 </script>
-<script src="js/chat-kb.js?v=0.2.4"></script>
-<script src="js/chat.js?v=0.2.4"></script>
+<script src="js/chat-kb.js?v=0.2.5"></script>
+<script src="js/chat.js?v=0.2.5"></script>
 </body>
 </html>

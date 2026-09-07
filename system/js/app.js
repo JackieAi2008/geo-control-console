@@ -787,6 +787,46 @@ function auditStory(s, dims) {
     <p><span class="st-lb">优先补哪里：</span>${p3}</p>
   </div>`;
 }
+/* V0.2.5 口径表读表说明：与体检读分说明同范式（数据实时推导、三段式、无预置结论、去 AI 味）。
+   回答「这张表对 GEO 有什么用」：数字统一，AI 引用就稳定；数字打架，AI 随机挑，用户可能看到多年前的旧数。 */
+function caliberStory() {
+  const rows = state.caliber || [];
+  const filled = rows.filter(r => (r.official || "").trim());
+  const pending = rows.filter(r => !(r.official || "").trim());
+  const conflictRows = rows.filter(r => (r.conflicts || []).length);
+  const conflictTotal = conflictRows.reduce((a, r) => a + r.conflicts.length, 0);
+  const noDate = filled.filter(r => !(r.asOf || "").trim() || r.asOf === "待核");
+  const top = conflictRows.slice().sort((a, b) => b.conflicts.length - a.conflicts.length)[0];
+  const field = r => `「${esc(r.field)}」`;
+  /* ① 这张表是什么 */
+  let p1 = "这张表登记园区对外要用的数字（企业数、面积、排名这类），「官方口径」列是唯一标准答案：系统生成的一园一档、公众号稿、结构化数据标签都按这列取数。";
+  if (!rows.length) p1 += "现在表里还没有字段。";
+  else p1 += `现在共 ${rows.length} 个字段：${filled.length} 个已填${pending.length ? `，${pending.length} 个还空着待填` : ""}${conflictRows.length ? `；${conflictRows.length} 个字段的外部说法与官方口径对不上，登记了 ${conflictTotal} 条冲突` : "，外部暂无登记的冲突口径"}。`;
+  /* ② 说明了什么 */
+  let p2 = "";
+  if (!rows.length) p2 = "选址客户和 AI 常问的数字（面积、企业数、租金）还没有标准答案，谁先写谁说了算。";
+  else if (top) {
+    p2 = `${field(top)}一个字段外部就有 ${top.conflicts.length} 种说法（${top.conflicts.slice(0, 4).map(c => esc(c.v)).join("、")}${top.conflicts.length > 4 ? " 等" : ""}）。数字不统一时，AI 答到这个数是随机的：抓到哪条说哪条，用户看到的可能是多年前的旧数。`;
+    if (conflictRows.length > 1) p2 += `此外还有 ${conflictRows.length - 1} 个字段存在同样问题。`;
+  } else if (filled.length) p2 = "登记过的字段外部说法已对齐，AI 引用时只有一个答案可选。";
+  if (noDate.length) p2 += ` ${noDate.slice(0, 2).map(r => field(r)).join("、")}${noDate.length > 2 ? ` 等 ${noDate.length} 个字段` : ""}缺数据时点，没有时点就没法判断数字的新旧。`;
+  if (pending.length) p2 += ` ${pending.length} 个待填字段意味着这些常被问的数字还没有官方答案。`;
+  /* ③ 先做什么 */
+  const acts = [];
+  if (!rows.length) acts.push("点右上「+ 添加字段」，先建 3 个最常被问的数字：面积、入驻企业数、租金区间");
+  if (top) acts.push(`先定稿${field(top)}：台账责任人定一个准数，按下方「口径治理 SOP」两周内同步百科、官网、公众号；旧稿改不了的，用新内容把搜索结果盖过去`);
+  if (pending.length) acts.push(`把 ${pending.length} 个待填字段补上（每行下方标了去哪找数）`);
+  if (noDate.length) acts.push(`给${noDate.length > 1 ? "缺时点的字段" : field(noDate[0])}补上数据时点`);
+  const p3 = acts.length
+    ? "<br>" + acts.slice(0, 4).map((a, i) => `${["①", "②", "③", "④"][i]} ${a}`).join("<br>") + "<br>改完重跑一轮 30 问或一键诊断，看 AI 说的数有没有跟着变。"
+    : "数字已统一：每次数据更新后回来改这张表，并同步百科与公众号，保持对外只有一个说法。";
+  return `<div class="card caliber-story">
+    <h3>这份口径表说明什么 <span class="hint">随口径数据实时更新 · 这张表管什么 / 问题在哪 / 先做什么</span></h3>
+    <p><span class="st-lb">这张表是什么：</span>${p1}</p>
+    <p><span class="st-lb">说明了什么：</span>${p2}</p>
+    <p><span class="st-lb">先做什么：</span>${p3}</p>
+  </div>`;
+}
 function ledgerStats() {
   /* V4.2 口径分层：答案侧=六引擎人工轮；信源侧=搜索通道自动轮（channel="src"）。
      所有指标只统计答案侧；信源命中单独由快照/computeSnapshot 的 mentionSrc 表达，禁止混均。
@@ -1899,6 +1939,7 @@ function caliberRow(r, i) {
   </tr>`;
 }
 render.caliber = () => {
+  $("#caliberStory").innerHTML = caliberStory();   /* V0.2.5 读表说明随数据实时生成 */
   $("#caliberBody").innerHTML = state.caliber.map(caliberRow).join("") ||
     '<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">暂无字段，点击下方添加</td></tr>';
   const nConf = state.caliber.filter(r => (r.conflicts || []).length).length;
@@ -2743,7 +2784,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "0.2.4";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.2.5";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }

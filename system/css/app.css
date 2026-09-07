@@ -769,3 +769,13 @@ pre.prompt-view {
 .audit-story p { font-size: var(--text-sm); line-height: 1.75; margin: 0 0 var(--space-xs); }
 .audit-story p:last-child { margin-bottom: 0; }
 .audit-story .st-lb { font-weight: 700; color: var(--color-accent); }
+
+/* ── V0.2.5 口径表读表说明卡（与体检读分说明同一家族：动态诊断叙述）── */
+.caliber-story {
+  border: 2px solid var(--color-accent-navy);
+  background: var(--color-paper-2);
+  margin-bottom: var(--space-md);
+}
+.caliber-story p { font-size: var(--text-sm); line-height: 1.75; margin: 0 0 var(--space-xs); }
+.caliber-story p:last-child { margin-bottom: 0; }
+.caliber-story .st-lb { font-weight: 700; color: var(--color-accent); }
