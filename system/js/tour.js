@@ -203,6 +203,15 @@ function tourRenderBubble() {
   const dn = $("#tourDone"); if (dn) dn.onclick = () => tourEnd(true, "done");
   $$("#tourBubble [data-tdot]").forEach(b => b.onclick = () => tourShow(+b.dataset.tdot));
 }
+/* V0.2.12 聚光定位三原则（真机反馈修复）：
+   ① 滚动留出 sticky 报头安全区——scrollIntoView 会把目标顶到视口最顶被报头盖住，框就画在报头上；
+   ② elementFromPoint 遮挡检测——目标中心被报头/浮层盖住时先补偿滚动，补偿不了就降级居中讲解：
+      宁可不指，不能乱指（指着一个看不见的目标比不指更糟）；
+   ③ ring 与目标留白 10px——金框贴着按钮描边画会成"框叠框"。 */
+function tourHeadBottom() {
+  const mast = document.querySelector(".masthead");
+  return mast ? mast.getBoundingClientRect().bottom : 0;
+}
 function tourPosition() {
   if (!Tour.active) return;
   const shade = $("#tourShade"); if (!shade) return;
@@ -214,8 +223,30 @@ function tourPosition() {
   const el = tourTarget(st);
   if (!el) { shade.classList.add("center"); return; }   /* 目标不在场（如回访者无欢迎卡且工具栏隐藏）→ 居中兜底 */
   const mobile = window.matchMedia && window.matchMedia("(max-width:768px)").matches;
-  try { el.scrollIntoView({ block: mobile ? "start" : "center", behavior: "auto" }); } catch (e) {}
-  const r = el.getBoundingClientRect(), pad = 6;
+  try { el.scrollIntoView({ block: "center", behavior: "auto" }); } catch (e) {}
+  /* 补偿 sticky 报头：目标顶边若钻到报头底下，把页面再往下滚，让目标完整露在报头之下 */
+  let r = el.getBoundingClientRect();
+  const need = tourHeadBottom() + 12 - r.top;
+  if (need > 0) { window.scrollBy(0, -need); r = el.getBoundingClientRect(); }
+  /* 遮挡终检：目标中心被盖住时区分两种情况——
+     被我们自己的气泡抽屉盖住（移动端目标落在下半屏）→ 把目标再滚到抽屉上方的可视区；
+     被页面浮层盖住 → 居中降级不画框（宁可不指，不能乱指） */
+  /* 探测穿透 tour 自身层（shade/ring/pointer/气泡都不算遮挡——挖孔只是视觉，shade 元素本体铺满全屏） */
+  const probeReal = () => document.elementsFromPoint(r.left + r.width / 2, r.top + Math.min(r.height / 2, 24))
+    .find(x => !(x.closest && x.closest(".tour-shade")));
+  let hit = probeReal();
+  if (hit && hit.closest && hit.closest(".tour-bubble")) {   /* 目标落进自己的气泡抽屉 → 滚到抽屉上方 */
+    const bt = bub.getBoundingClientRect().top;
+    window.scrollBy(0, r.top + r.height - bt + 14);
+    r = el.getBoundingClientRect();
+    hit = probeReal();
+  }
+  if (hit && hit !== el && !el.contains(hit) && !hit.contains(el)) {
+    shade.classList.add("center");   /* 被页面浮层真盖住：居中降级，宁可不指不能乱指 */
+    tourRenderBubble();
+    return;
+  }
+  const pad = 10;
   ring.style.left = (r.left - pad) + "px"; ring.style.top = (r.top - pad) + "px";
   ring.style.width = (r.width + pad * 2) + "px"; ring.style.height = (r.height + pad * 2) + "px";
   if (mobile) { tourPlacePointer(r, el); return; }   /* 移动端气泡=底部抽屉无需定位；指引签仍定位（固定上方，避开底部抽屉） */
@@ -245,18 +276,26 @@ function tourPlacePointer(r, el) {
   pt.hidden = !st.act;
   if (!st.act) return;
   pt.textContent = "点这里：" + st.act;
-  const pw = pt.offsetWidth, ph = pt.offsetHeight, gap = 10, m = 8;
+  const pw = pt.offsetWidth, ph = pt.offsetHeight + 6, gap = 10, m = 8;   /* +6=弹跳动画 translateY 余量 */
   const mobile = window.matchMedia && window.matchMedia("(max-width:768px)").matches;
   const W = window.innerWidth, H = window.innerHeight;
   const cx = Math.min(Math.max(m, r.left + r.width / 2 - pw / 2), W - pw - m);
   const bub = $("#tourBubble");
   const br = bub ? bub.getBoundingClientRect() : null;
   const hitsBubble = (x, y) => !!br && x < br.right + 4 && x + pw > br.left - 4 && y < br.bottom + 4 && y + ph > br.top - 4;
+  /* 硬约束：签不压目标本体（与目标 rect 上下缘各留 4px）——压住按钮文字是不合格的教学指引 */
+  const clearOfTarget = y => (y + ph <= r.top - 4) || (y >= r.bottom + 4);
   const cands = mobile
-    ? [[cx, Math.min(r.bottom + gap, H * 0.5 - ph)], [cx, Math.max(m, r.top - gap - ph)], [cx, Math.min(r.bottom + gap, H - ph - m)]]
-    : [[cx, r.bottom + gap], [cx, Math.max(m, r.top - gap - ph)]];
-  let pick = cands[cands.length - 1];
-  for (const c of cands) { if (c[1] >= m && c[1] + ph <= H - m && !hitsBubble(c[0], c[1])) { pick = c; break; } }
+    ? [[cx, Math.min(r.bottom + gap, (bub ? bub.getBoundingClientRect().top : H * 0.6) - gap - ph)],
+       [cx, r.top - gap - ph],
+       [cx, r.bottom + gap]]
+    : [[cx, r.bottom + gap], [cx, r.top - gap - ph]];
+  let pick = null;
+  for (const c of cands) { if (c[1] >= m && c[1] + ph <= H - m && clearOfTarget(c[1]) && !hitsBubble(c[0], c[1])) { pick = c; break; } }
+  if (!pick) {   /* 全部候选无效（极端窄屏）：贴目标上方强制放置，允许轻微出视口也不压目标 */
+    pick = [cx, Math.max(2, r.top - gap - ph)];
+  }
+
   pt.classList.toggle("up", pick[1] + ph / 2 < r.top);
   pt.style.left = Math.round(pick[0]) + "px"; pt.style.top = Math.round(Math.max(m, pick[1])) + "px";
 }
