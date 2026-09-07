@@ -35,7 +35,7 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "0.2.6"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（0.2.6=生产实测流程批：示例项目改名引导/设置归档叠印/起步四步深链/监测页自动动作提前+信源答案侧解释/AI代问结果就地展示）
+APP_VERSION = "0.2.7"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（0.2.7=对话助手模型通道 HTTP 错误码人话化：429→【模型限速】稍后再试/401·403→密钥失效提示；配合服务器级魔搭免费通道上线）
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}
@@ -1428,6 +1428,18 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(b"data: [DONE]\n\n"); self.wfile.flush()
                 except Exception:
                     pass
+        except urllib.error.HTTPError as e:
+            # V0.2.7：上游模型通道的 HTTP 错误按码翻成人话（HTTPError 是 URLError 子类，须在其前捕获）
+            if e.code == 429:
+                tip = "【模型限速】模型通道这会儿限流了，稍等十几秒再发一次就好"
+            elif e.code in (401, 403):
+                tip = "【模型通道密钥失效】请联系管理员检查模型配置"
+            else:
+                tip = f"【模型服务异常】HTTP {e.code}，请稍后再试"
+            try: self.wfile.write(f"data: {tip}\n\n".encode("utf-8"))
+            except Exception: pass
+            try: self.wfile.write(b"data: [DONE]\n\n"); self.wfile.flush()
+            except Exception: pass
         except urllib.error.URLError as e:
             try: self.wfile.write(f"data: 【连接模型失败】{e}\n\n".encode("utf-8"))
             except Exception: pass
