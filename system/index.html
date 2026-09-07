@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>招商产园 GEO 智控台</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
-<link rel="stylesheet" href="css/tokens.css?v=0.2.2">
-<link rel="stylesheet" href="css/app.css?v=0.2.2">
-<link rel="stylesheet" href="css/tour.css?v=0.2.2">
+<link rel="stylesheet" href="css/tokens.css?v=0.2.3">
+<link rel="stylesheet" href="css/app.css?v=0.2.3">
+<link rel="stylesheet" href="css/tour.css?v=0.2.3">
 </head>
 <body>
 
@@ -190,14 +190,17 @@
     <div id="dgOut" class="dg-out"></div>
   </div>
 
-  <!-- 子页：诊断报告（查阅） -->
+  <!-- 子页：诊断报告（查阅）——V0.2.3 主从式重排：档案窄轨随行（同「30项体检」rail 范式）+ 报告全宽主区，
+       修复 grid-2 五五等宽+默认拉伸造成的：报告被压半宽（证据列挤、检查项名折行）、档案卡被拉成等高巨幅空白 -->
   <div class="sub-view" id="sub-report" hidden>
-    <div class="grid grid-2">
-      <div class="card">
-        <h3>报告档案 <span class="hint">按时间倒序，点击查阅</span></h3>
-        <div id="reportList"></div>
-      </div>
-      <div class="card">
+    <div class="report-grid">
+      <aside class="report-rail">
+        <div class="card">
+          <h3>报告档案 <span class="hint">按时间倒序，点击查阅</span></h3>
+          <div id="reportList"></div>
+        </div>
+      </aside>
+      <div class="card report-main">
         <h3>报告查阅 <span class="hint" id="rptMeta"></span>
           <span style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-sm btn-ghost" id="rptPrint">打印</button>
@@ -765,10 +768,10 @@
   </div>
 </div>
 
-<script src="js/data.js?v=0.2.2"></script>
-<script src="js/app.js?v=0.2.2"></script>
-<script src="js/ops.js?v=0.2.2"></script>
-<script src="js/tour.js?v=0.2.2"></script>
+<script src="js/data.js?v=0.2.3"></script>
+<script src="js/app.js?v=0.2.3"></script>
+<script src="js/ops.js?v=0.2.3"></script>
+<script src="js/tour.js?v=0.2.3"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -783,7 +786,7 @@
     } catch (e) {}
   })();
 </script>
-<script src="js/chat-kb.js?v=0.2.2"></script>
-<script src="js/chat.js?v=0.2.2"></script>
+<script src="js/chat-kb.js?v=0.2.3"></script>
+<script src="js/chat.js?v=0.2.3"></script>
 </body>
 </html>

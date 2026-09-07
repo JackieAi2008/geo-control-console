@@ -616,12 +616,21 @@ render.report = () => {
   if (new URLSearchParams(location.search).get("rpt") === "wo") RPT_MODE = "wo";
   $("#reportList").innerHTML = H.length ? H.map((e, i) => {
     const c = rptCounts(e);
-    return `<div class="prompt-li" data-rp="${i}" style="cursor:pointer;${i === RPT_IDX ? "background:var(--color-accent-soft);border-radius:6px" : ""}">
-      <span class="code num">${esc(e.ts)}</span>
-      <span style="flex:1;min-width:0">${e.mode === "entity" ? `<span class="tag tag-accent" style="margin-right:4px">实体体检</span>` : ""}${esc(e.url)}${e.brand ? ` ·「${esc(e.brand)}」` : ""}</span>
-      <span class="tag ${c.fail ? "tag-bad" : c.warn ? "tag-warn" : "tag-ok"}">${c.fail ? `未过${c.fail}` : c.warn ? `警${c.warn}` : "全过"}</span></div>`;
-  }).join("") : '<p class="muted" style="padding:16px 0;text-align:center">还没有诊断记录——先到「一键诊断」跑一次。</p>';
-  $$("#reportList [data-rp]").forEach(el => el.addEventListener("click", () => { RPT_IDX = +el.dataset.rp; render.report(); }));
+    const badge = `<span class="tag ${c.fail ? "tag-bad" : c.warn ? "tag-warn" : "tag-ok"}">${c.fail ? `未过${c.fail}` : c.warn ? `警${c.warn}` : "全过"}</span>`;
+    /* V0.2.3 两行制条目（窄轨不挤）；实体体检 url=品牌词，只显示一次（原 url+品牌词连排重复） */
+    const obj = e.mode === "entity"
+      ? `<span class="tag tag-accent">实体体检</span> ${esc(e.brand || e.url)}`
+      : `${esc(e.url)}${e.brand ? ` ·「${esc(e.brand)}」` : ""}`;
+    return `<div class="prompt-li rpt-item${i === RPT_IDX ? " cur" : ""}" data-rp="${i}" role="button" tabindex="0">
+      <span class="rpt-top"><span class="code num">${esc(e.ts)}</span>${badge}</span>
+      <span class="rpt-obj">${obj}</span>
+    </div>`;
+  }).join("") : `<div class="rpt-empty"><p class="muted">还没有诊断记录——先到「一键诊断」跑一次。</p><a class="btn btn-primary" href="#/diag/scan">去一键诊断 →</a></div>`;
+  $$("#reportList [data-rp]").forEach(el => {
+    const open = () => { RPT_IDX = +el.dataset.rp; render.report(); };
+    el.addEventListener("click", open);
+    el.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } });   /* 键盘可达（Tab+Enter 选中档案） */
+  });
   const e = H[RPT_IDX];
   $("#rptMode").innerHTML = `<button class="seg-item ${RPT_MODE === "report" ? "on" : ""}" data-rm="report">查阅报告</button>
     <button class="seg-item ${RPT_MODE === "wo" ? "on" : ""}" data-rm="wo">整改工单</button>`;
@@ -671,11 +680,11 @@ function buildReportHtml(e) {
     <div style="font-family:var(--font-display);font-weight:700;font-size:var(--text-md)">园区 GEO ${isEnt ? "实体体检" : "一键诊断"}报告</div>
     <div class="muted" style="margin:4px 0 10px">检查对象 <b class="num">${isEnt ? `品牌词「${esc(e.brand || e.url)}」（无官网实体体检）` : esc(e.url)}</b>${e.brand && !isEnt ? ` · 品牌词「${esc(e.brand)}」` : ""} · ${esc(e.ts)} · 真实 联网检查与搜索取证</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:baseline">
-      <span style="font-family:var(--font-mono);font-size:var(--text-xl);font-weight:600;color:${vColor}">${verdict}</span>
+      <span style="font-family:var(--font-display);font-size:var(--text-lg);font-weight:700;color:${vColor}">${verdict}</span>
       <span class="tag tag-ok">通过 ${c.pass}</span><span class="tag tag-warn">警告 ${c.warn}</span><span class="tag tag-bad">未通过 ${c.fail}</span>
     </div>
   </div>
-  <table class="tbl"><thead><tr><th style="width:44px"></th><th style="width:56px">编号</th><th>检查项</th><th>证据（真实探测）</th></tr></thead>
+  <table class="tbl"><thead><tr><th style="width:40px"></th><th style="width:48px">编号</th><th style="width:216px">检查项</th><th>证据（真实探测）</th></tr></thead>
   <tbody>${(e.checks || []).map(x => `
     <tr><td><span class="tag ${LV[x.status]}">${IC[x.status]}</span></td>
     <td class="num">${esc(x.id)}</td><td><b>${esc(x.name)}</b></td>
