@@ -118,33 +118,33 @@ const TOUR_STEPS = [
     body: `当租户在 AI（DeepSeek、豆包、元宝）里问「蛇口甲级写字楼哪里租」，AI 会不会提到你、引用谁的话介绍你——这个系统就是管这件事的。<br>接下来以<b>深圳南山·蛇口「南山大厦」</b>为案例走一遍完整路径：建项目 → 建档案 → 体检 → 行动 → 监测。`,
     demo: `<span class="tag tag-gold">全程只读演示</span> 不动你的真实数据；随时可点「我知道了，不用再学了」退出。${REPLAY_HINT}` },
   { phase: "A", chap: "第一章 · 认识系统", view: "projects", target: ["#pjWelcomeNew", "#pjNew"],
-    title: "一切从一个项目开始",
+    title: "一切从一个项目开始", act: "点「＋新建项目」",
     body: `系统里一个项目 = 一个要管网上形象的<b>楼宇、园区或品牌</b>。你看到的「南山大厦」卡片就是示例项目。建项目只需填几个字段：名称、是楼宇还是园区、所在城市片区、主导产业、主要竞品——2 分钟建好。`,
     demo: `<span class="tag tag-gold">示例</span> 新建弹窗这样填：南山大厦 · 楼宇 · <b>轻量版 14 问</b>档（含区位词探针） · 深圳市南山区蛇口 · 竞品：新时代广场等。` },
   { phase: "A", chap: "第二章 · 建立档案", view: "diag/caliber", target: ["#caliberBody tr"],
-    title: "先把「官方口径」定下来",
+    title: "先把「官方口径」定下来", act: "补齐骨架里的待填字段",
     body: `新建后系统自动生成这张<b>口径骨架表</b>。锚定区三项（全称/地址/片区）防止和其他城市同名项目混淆；再把租金区间、入驻率等关键数字补齐——每个数字带时点和来源，AI 才敢引用。这张表是全系统唯一事实源：优化物料、百科词条更新稿的数字全部取自这里，对外发布前逐个数字对照本表。顶部「这份口径表说明什么」说明卡随数据实时解读：数字打架时 AI 会随机挑、先定稿哪个字段。`,
     demo: `<span class="tag tag-gold">示例</span> 租金区间 120–180 元/㎡/月 · 入驻率 82%（2026-H1）——来源列均标注「示例数据」。` },
   { phase: "A", chap: "第二章 · 建立档案", view: "dashboard", target: ["#dashOnboard"],
-    title: "新建之后，四步起步清单自动亮起",
+    title: "新建之后，四步起步清单自动亮起", act: "按 ①→④ 逐项执行",
     body: `填口径骨架（10 分钟）→ 跑体检（2 分钟）→ 下载百科词条更新稿（15 分钟）→ 三大地图认领（10 分钟）。③④点「前往」直达对应物料的下载位置。做完这四步，项目在网上就有「自己的家」了——<b>你以后建的每个新项目，都会看到这张卡</b>。` },
   { phase: "A", chap: "系统地图", view: "dashboard", target: ["#mainNav"],
-    title: "顶部导航就是全流程地图",
+    title: "顶部导航就是全流程地图", act: "记住这条地图",
     body: `<b>工作台</b>看状态与下一步 · <b>诊断Ⅰ</b>做体检与口径 · <b>执行Ⅱ</b>拿物料与方案 · <b>监测Ⅲ</b>看数据与曲线 · <b>知识库</b>查方法论。左上角芯片随时切换/返回项目。以后迷路了，看这一条就够。` },
   { phase: "B", chap: "第三章 · 体检", view: "diag/scan", target: ["#dgRun"],
-    title: "体检：AI 眼里你存在吗？",
+    title: "体检：AI 眼里你存在吗？", act: "点「开始实体体检」",
     body: `没有官网也能做——「<b>实体体检</b>」用品牌词做真实搜索（约 5–15 秒），查我们的信息在网上的存在感。下方是南山大厦的示例结果：搜「南山大厦」，前 10 条里官方阵地 0 条。`,
     onEnter: function () { try { renderDiagResult(state.lastDiag, 4, 0); } catch (e) {} } },
   { phase: "B", chap: "第三章 · 体检", view: "diag/scan", target: ["#dgRefCard"],
-    title: "关键一问：现在网上谁在替你说话？",
+    title: "关键一问：现在网上谁在替你说话？", act: "认领「是我们的」阵地",
     body: `引用被分成六类：自有阵地 / 集团信源 / 权威平台 / 网友点评 / 中介平台 / 其他网站。看示例——南山大厦前 10 条：<b>中介 5 · 百科与政府 2 · 集团 1 · 自己 0</b>。也就是说，网上介绍它的主要是房产中介，旧租金、空置信息会被 AI 当作官方数据引用。发现陌生阵地可点「是我们的」归位。`,
     demo: `<span class="tag tag-gold">示例</span> 这张分析卡由真实组件渲染；整改动作可到「诊断 → 诊断报告」一键生成工单。`,
     onEnter: function () { try { renderDiagResult(state.lastDiag, 4, 0); } catch (e) {} } },
   { phase: "C", chap: "第四章 · 行动与验证", view: "act/toolkit", target: ["#tkBuild"],
-    title: "知道问题了，就动手改",
+    title: "知道问题了，就动手改", act: "点「一键生成优化文件」",
     body: `一个按钮生成全套<b>拿来就能用</b>的物料：百科词条更新稿、地图信息核对清单、一园一档（公众号版）、选址 FAQ、渠道分发指南——不依赖官网，品宣自己就能执行。下方「资产追踪」登记每次部署，改了什么一目了然。` },
   { phase: "C", chap: "第四章 · 行动与验证", view: "monitor", target: ["#curveBox"],
-    title: "改了有没有用，看曲线说话",
+    title: "改了有没有用，看曲线说话", act: "点 ①「AI 代问」",
     body: `监测页最上方就是两个自动动作：<b>①「AI 代问」</b>系统替你向豆包逐条提问，跑完结果就地显示在按钮下方（每问提及/未提及一目了然）；<b>②「跑一轮14问」</b>真实搜索（含 2 个区位词探针）查前列信源——工作台首屏也有这两个按钮直达。元宝暂需人工抽查 2 条。双周跑一轮 14 问真实搜索，系统自动画曲线。示例故事：8/24 基线几乎无人提及 → 8/28 部署百科稿和公众号一园一档 → 9/6 豆包、元宝开始提及，引用落在公众号与百科词条。曲线每点带样本量，起始数据自动锁定。` },
   { center: true, phase: "C", chap: "完成", title: "轮到你了", cta: true,
     body: `以上全部是只读示例——真实结果以你自己的项目实际诊断为准。三件事现在就能做：<br>① 新建你的第一个项目（2 分钟）；② 想重看本指引：顶栏「?」；③ 卡住了：右下角「问」直接问助手（服务器已配默认模型，开箱即用；想换自己的模型再点对话窗 ⚙）。` },
@@ -166,6 +166,7 @@ function tourBuildDom() {
   const shade = document.createElement("div");
   shade.className = "tour-shade"; shade.id = "tourShade";
   shade.innerHTML = '<div class="tour-ring" id="tourRing"></div>' +
+    '<div class="tour-pointer" id="tourPointer" hidden></div>' +
     '<div class="tour-bubble" id="tourBubble" role="dialog" aria-label="操作指引"></div>';
   document.body.appendChild(shade);
 }
@@ -207,6 +208,7 @@ function tourPosition() {
   const shade = $("#tourShade"); if (!shade) return;
   const st = TOUR_STEPS[Tour.idx];
   const ring = $("#tourRing"), bub = $("#tourBubble");
+  const pt0 = $("#tourPointer"); if (pt0) pt0.hidden = true;
   if (st.center) { shade.classList.add("center"); return; }
   shade.classList.remove("center");
   const el = tourTarget(st);
@@ -216,7 +218,7 @@ function tourPosition() {
   const r = el.getBoundingClientRect(), pad = 6;
   ring.style.left = (r.left - pad) + "px"; ring.style.top = (r.top - pad) + "px";
   ring.style.width = (r.width + pad * 2) + "px"; ring.style.height = (r.height + pad * 2) + "px";
-  if (mobile) return;   /* 移动端气泡=底部抽屉（CSS fixed 定位），无需计算 */
+  if (mobile) { tourPlacePointer(r, el); return; }   /* 移动端气泡=底部抽屉无需定位；指引签仍定位（固定上方，避开底部抽屉） */
   const bw = bub.offsetWidth, bh = bub.offsetHeight, m = 12, gap = 16;
   const clampX = v => Math.min(Math.max(m, v), window.innerWidth - bw - m);
   const clampY = v => Math.min(Math.max(m, v), window.innerHeight - bh - m);
@@ -233,6 +235,30 @@ function tourPosition() {
     x = clampX(r.left + r.width / 2 - bw / 2); y = Math.max(m, window.innerHeight - bh - m);
   }
   bub.style.left = Math.round(x) + "px"; bub.style.top = Math.round(y) + "px";
+  tourPlacePointer(r, el);
+}
+/* V0.2.11 指引签定位：跟 ring 同源矩形；候选位（下/上）逐一试——须在视口内且不与讲解气泡叠压，
+   桌面气泡常在目标下方 → 签多半落到上方；移动端底部抽屉占下半屏 → 优先目标下方（离抽屉够远时） */
+function tourPlacePointer(r, el) {
+  const pt = $("#tourPointer"); if (!pt) return;
+  const st = TOUR_STEPS[Tour.idx];
+  pt.hidden = !st.act;
+  if (!st.act) return;
+  pt.textContent = "点这里：" + st.act;
+  const pw = pt.offsetWidth, ph = pt.offsetHeight, gap = 10, m = 8;
+  const mobile = window.matchMedia && window.matchMedia("(max-width:768px)").matches;
+  const W = window.innerWidth, H = window.innerHeight;
+  const cx = Math.min(Math.max(m, r.left + r.width / 2 - pw / 2), W - pw - m);
+  const bub = $("#tourBubble");
+  const br = bub ? bub.getBoundingClientRect() : null;
+  const hitsBubble = (x, y) => !!br && x < br.right + 4 && x + pw > br.left - 4 && y < br.bottom + 4 && y + ph > br.top - 4;
+  const cands = mobile
+    ? [[cx, Math.min(r.bottom + gap, H * 0.5 - ph)], [cx, Math.max(m, r.top - gap - ph)], [cx, Math.min(r.bottom + gap, H - ph - m)]]
+    : [[cx, r.bottom + gap], [cx, Math.max(m, r.top - gap - ph)]];
+  let pick = cands[cands.length - 1];
+  for (const c of cands) { if (c[1] >= m && c[1] + ph <= H - m && !hitsBubble(c[0], c[1])) { pick = c; break; } }
+  pt.classList.toggle("up", pick[1] + ph / 2 < r.top);
+  pt.style.left = Math.round(pick[0]) + "px"; pt.style.top = Math.round(Math.max(m, pick[1])) + "px";
 }
 function tourShow(i) {
   if (!Tour.active) return;
@@ -247,7 +273,25 @@ function tourShow(i) {
     tourRenderBubble();
     const nx = $("#tourNext") || $("#tourCta"); if (nx) nx.focus({ preventScroll: true });
     tourPosition();
+    tourDemoClick(st);
   }, 60);
+}
+/* V0.2.11 点击涟漪：每步入场在目标中心演示一次"点这"（600ms 后起跳，让 ring 先落位；reduced-motion 下为静态一闪） */
+function tourDemoClick(st) {
+  const old = document.querySelector(".tour-click"); if (old) old.remove();
+  if (st.center) return;
+  const el = tourTarget(st); if (!el) return;
+  setTimeout(() => {
+    if (!Tour.active || TOUR_STEPS[Tour.idx] !== st) return;   /* 已切步则不演示 */
+    const el2 = tourTarget(st); if (!el2) return;
+    const r = el2.getBoundingClientRect();
+    const dot = document.createElement("div");
+    dot.className = "tour-click";
+    dot.style.left = Math.round(r.left + r.width / 2) + "px";
+    dot.style.top = Math.round(r.top + Math.min(r.height / 2, 44)) + "px";
+    $("#tourShade").appendChild(dot);
+    setTimeout(() => dot.remove(), 1000);
+  }, 600);
 }
 function tourNext() { Tour.idx >= TOUR_STEPS.length - 1 ? tourEnd(true, "finish") : tourShow(Tour.idx + 1); }
 function tourPrev() { if (Tour.idx > 0) tourShow(Tour.idx - 1); }

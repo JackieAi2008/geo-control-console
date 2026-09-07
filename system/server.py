@@ -35,7 +35,7 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "0.2.10"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（0.2.8=对话助手问答质量批：CHAT_SYSTEM 排版硬规则——编号列表独立成行/星号成对/禁发明文档名期限；chat-kb 口径表词条补怎么治理·治理·数不一样·两个渠道、备份词条补误删——用户真实问法「口径表里的冲突怎么治理」此前差1分脱库走LLM产出坏排版堆叠答案）
+APP_VERSION = "0.2.11"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（0.2.8=对话助手问答质量批：CHAT_SYSTEM 排版硬规则——编号列表独立成行/星号成对/禁发明文档名期限；chat-kb 口径表词条补怎么治理·治理·数不一样·两个渠道、备份词条补误删——用户真实问法「口径表里的冲突怎么治理」此前差1分脱库走LLM产出坏排版堆叠答案）
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}

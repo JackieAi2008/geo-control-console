@@ -108,3 +108,52 @@ body.tour-active .chat-fab, body.tour-active .chat-panel { display: none !import
   .tour-bubble .btn-sm { min-height: 36px; }
   .tour-dots button { width: 12px; height: 12px; }
 }
+
+/* ── V0.2.11 动画教学层 ──────────────────────────
+   四原语：ring 呼吸脉冲 / 金签弹跳（点这里：动作）/ 步入点击涟漪 / CTA 轻脉冲。
+   pointer-events 全 none——教学动画不挡真实点击；reduced-motion 由 app.css 全局降级为静态。 */
+.tour-ring::after {
+  content: ""; position: absolute; inset: -2px; border-radius: inherit;
+  border: 2px solid var(--color-gold); pointer-events: none;
+  animation: tour-ring-pulse 1.8s var(--ease-out) infinite;
+}
+@keyframes tour-ring-pulse {
+  0% { opacity: .9; transform: scale(1); }
+  70%, 100% { opacity: 0; transform: scale(1.09); }
+}
+.tour-pointer {
+  position: absolute; z-index: 201; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--color-gold-bright); color: oklch(30% 0.04 80);
+  font-size: 12px; font-weight: 600; line-height: 1.4;
+  padding: 4px 10px; border-radius: var(--radius-s);
+  box-shadow: 0 4px 12px rgba(8, 20, 32, .28);
+  white-space: nowrap; max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis;
+  animation: tour-pointer-bounce 1.2s var(--ease-in-out) infinite;
+}
+.tour-pointer::before { content: "👆"; font-size: 13px; }
+.tour-pointer.up::before { content: "👇"; }
+@keyframes tour-pointer-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(5px); }
+}
+.tour-click {
+  position: absolute; z-index: 201; pointer-events: none;
+  width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
+  background: var(--color-gold-bright); box-shadow: 0 0 0 2px rgba(217, 185, 124, .9);
+  animation: tour-click .9s var(--ease-out) forwards;
+}
+@keyframes tour-click {
+  0% { transform: scale(.4); opacity: 0; }
+  25% { transform: scale(1); opacity: 1; }
+  60% { transform: scale(1.15); opacity: .9; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+.tour-foot .btn-primary { animation: tour-cta 2.2s var(--ease-in-out) infinite; }
+@keyframes tour-cta {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(10, 74, 130, 0); }
+  50% { box-shadow: 0 0 0 5px rgba(10, 74, 130, .18); }
+}
+@media (max-width: 768px) {
+  .tour-pointer { font-size: 13px; padding: 6px 12px; }   /* 触控场景字号可读性 */
+}
