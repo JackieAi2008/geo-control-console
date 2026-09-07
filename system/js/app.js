@@ -700,7 +700,18 @@ function route() {
   window.scrollTo(0, 0);
   if (v === "projects") render.projects();
   else if (v === "dashboard") render.dashboard();
-  else if (v === "monitor") render.monitor();
+  else if (v === "monitor") {
+    render.monitor();
+    /* V0.2.9：#/monitor/ai|src 深链——工作台直达条滚到对应卡并高亮（brief 同款手法） */
+    if (subRaw === "ai" || subRaw === "src") setTimeout(() => {
+      const el = subRaw === "ai" ? ($("#sampleCard")?.closest(".card") || $("#sampleCard"))
+        : ($("#batchH3")?.closest(".card"));
+      if (!el) return;
+      el.scrollIntoView({ behavior: "auto", block: "start" });
+      el.style.outline = "2px solid var(--color-accent)";
+      setTimeout(() => { el.style.outline = ""; }, 2200);
+    }, 200);
+  }
   else if (v === "knowledge") render.knowledge();
   else if (v === "diag") {
     if (sub === "scan") render.scan && render.scan();
@@ -2817,7 +2828,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "0.2.8";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.2.9";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }
