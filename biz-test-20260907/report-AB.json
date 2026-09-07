@@ -1,0 +1,268 @@
+{
+  "pass": 26,
+  "issueRounds": 0,
+  "errorRounds": 0,
+  "total": 26,
+  "results": [
+    {
+      "id": "R01",
+      "name": "全新账号首访：欢迎区/示例项目/导航",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3922
+    },
+    {
+      "id": "R02",
+      "name": "首登操作指引：逐步带看→退出→只读不落库",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 6421
+    },
+    {
+      "id": "R03",
+      "name": "新建项目：必填校验/取消清草稿/ESC",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 2862
+    },
+    {
+      "id": "R04",
+      "name": "新建有官网项目：字段生效+30问矩阵+落工作台",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3157
+    },
+    {
+      "id": "R05",
+      "name": "新建挂上级官网项目：徽标与默认诊断模式",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4064
+    },
+    {
+      "id": "R06",
+      "name": "新建无官网轻量项目：14问/实体体检/lite骨架",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3423
+    },
+    {
+      "id": "R07",
+      "name": "项目库搜索：名称/品牌词/域名/无结果",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3330
+    },
+    {
+      "id": "R08",
+      "name": "形态/状态筛选与统计条一致性",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3219
+    },
+    {
+      "id": "R09",
+      "name": "排序：最近活动/最久未测/体检分/创建时间/名称",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4419
+    },
+    {
+      "id": "R10",
+      "name": "项目设置：改形态/城市/竞品生效+分母切换",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 5103
+    },
+    {
+      "id": "R11",
+      "name": "归档项目→含已归档→恢复",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3729
+    },
+    {
+      "id": "R12",
+      "name": "上次处理直达条与操作留痕（大白话）",
+      "area": "项目库与项目管理",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3381
+    },
+    {
+      "id": "R13",
+      "name": "一键诊断（官网体检）：结果分组+自动填入+档案",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3742
+    },
+    {
+      "id": "R14",
+      "name": "诊断报告：查阅/整改工单/状态流转/下载",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4690
+    },
+    {
+      "id": "R15",
+      "name": "报告打印按钮：窗口路径无 JS 错误",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3262
+    },
+    {
+      "id": "R16",
+      "name": "体检表：打分联动雷达/自动转人工/清空重评",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4241
+    },
+    {
+      "id": "R17",
+      "name": "无官网体检：技术可达 6 项不进分母",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 2928
+    },
+    {
+      "id": "R18",
+      "name": "实体体检：12项清单/分析卡/归位",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3362
+    },
+    {
+      "id": "R19",
+      "name": "口径表：骨架/编辑自动保存/加删字段/冲突登记",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 6649
+    },
+    {
+      "id": "R20",
+      "name": "口径表导出数据文件",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3080
+    },
+    {
+      "id": "R21",
+      "name": "内容评分：营销腔低分/规范文高分/堆砌检测",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4268
+    },
+    {
+      "id": "R22",
+      "name": "证据库：引言必填校验/核验/注入一园一档",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 5056
+    },
+    {
+      "id": "R23",
+      "name": "证据库：撤销核验/删除 confirm",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4560
+    },
+    {
+      "id": "R24",
+      "name": "跨项目切换：诊断结果/报告档案不串页",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 6487
+    },
+    {
+      "id": "R25",
+      "name": "诊断表单预填：本项目上次诊断 URL 优先",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3389
+    },
+    {
+      "id": "R26",
+      "name": "评分器跨项目隔离：切项目清空旧文与旧分",
+      "area": "诊断",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4790
+    }
+  ]
+}

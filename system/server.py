@@ -35,7 +35,7 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "0.2.0"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（V0.1.x 序列：0.1.7=AI代问；旧 6.x 序列已封存）
+APP_VERSION = "0.2.2"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（0.2.2=业务测试12项缺陷三轮修复批）
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}
@@ -205,15 +205,40 @@ AUDIT_MAX = 500
 DB_PATH = None  # main() 注入，备份目录据此定位
 
 def audit_append(conn, actor, project, action, detail=""):
-    """操作留痕（server 侧追加，前端不直写，避免并发整键覆盖）"""
+    """操作留痕（server 侧追加，前端不直写，避免并发整键覆盖）
+    V0.2.2 F12 降噪：同项目连续「保存数据」在 10 分钟窗口内聚合为一条（ts 取最新、detail
+    累计次数）——高频日常保存不再把归档/恢复/新建等里程碑顶出最近100条可视范围；
+    其余动作（新建/更新/归档/恢复/AI代问/LLM配置/带 action 名的聚合留痕）永不聚合。"""
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
     with _db_lock:
         row = conn.execute("SELECT v FROM kv WHERE k='audit'").fetchone()
         log = json.loads(row[0]) if row else []
-        log.append({"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "actor": actor or "未知操作员",
-                    "project": project, "action": action, "detail": str(detail)[:200]})
+        if action == "保存数据":
+            prev = next((a for a in reversed(log[-3:]) if a.get("project") == project and a.get("action") == "保存数据"), None)
+            if prev and _within_minutes(prev.get("ts", ""), ts, 10):
+                m = re.search(r"（含近段 (\d+) 次）", prev.get("detail", ""))
+                n = (int(m.group(1)) if m else 1) + 1
+                prev["ts"] = ts
+                prev["actor"] = actor or prev.get("actor") or "未知操作员"
+                prev["detail"] = (str(detail)[:180]) + f"（含近段 {n} 次）"
+            else:
+                log.append({"ts": ts, "actor": actor or "未知操作员",
+                            "project": project, "action": action, "detail": str(detail)[:200]})
+        else:
+            log.append({"ts": ts, "actor": actor or "未知操作员",
+                        "project": project, "action": action, "detail": str(detail)[:200]})
         conn.execute("INSERT INTO kv(k,v,ts) VALUES(?,?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v, ts=excluded.ts",
                      ("audit", json.dumps(log[-AUDIT_MAX:], ensure_ascii=False), time.time()))
         conn.commit()
+
+def _within_minutes(ts_old, ts_new, minutes):
+    """两条留痕时间戳（%Y-%m-%d %H:%M:%S）间隔是否 ≤ minutes 分钟"""
+    try:
+        t0 = time.mktime(time.strptime(ts_old, "%Y-%m-%d %H:%M:%S"))
+        t1 = time.mktime(time.strptime(ts_new, "%Y-%m-%d %H:%M:%S"))
+        return 0 <= (t1 - t0) <= minutes * 60
+    except Exception:
+        return False
 
 def proj_doc_key(pid):
     return "doc:project:" + str(pid)
@@ -1031,8 +1056,11 @@ class Handler(BaseHTTPRequestHandler):
                 pid = str(body.get("id") or "").strip() or ("p_" + uuid.uuid4().hex[:10])
                 if any(p["id"] == pid for p in plist):
                     return self._send(409, {"error": f"项目 id 已存在: {pid}"})
+                _name = str(body.get("name") or "").strip()[:60]
+                if not _name:   # V0.2.2 F7：空名（含纯空白）拒绝——此前 strip 后为空仍建库，空名项目进入列表
+                    return self._send(400, {"error": "项目名称不能为空"})
                 proj = {"id": pid,
-                        "name": str(body.get("name") or "未命名项目").strip()[:60],
+                        "name": _name,
                         "url": str(body.get("url") or "").strip()[:120],
                         "brand": str(body.get("brand") or "").strip()[:60],
                         "operator": str(body.get("operator") or "").strip()[:60],

@@ -1,0 +1,250 @@
+{
+  "pass": 24,
+  "issueRounds": 0,
+  "errorRounds": 0,
+  "total": 24,
+  "results": [
+    {
+      "id": "R27",
+      "name": "优化文件：有官网 7 件+下载登记资产追踪",
+      "area": "执行",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4311
+    },
+    {
+      "id": "R28",
+      "name": "优化文件：无官网 5 件（百科/地图/公众号）",
+      "area": "执行",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3880
+    },
+    {
+      "id": "R29",
+      "name": "物料取数：口径表数字进百科稿/一园一档",
+      "area": "执行",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3933
+    },
+    {
+      "id": "R30",
+      "name": "资产追踪：补 URL/无探针守卫/删除",
+      "area": "执行",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 5131
+    },
+    {
+      "id": "R31",
+      "name": "渠道分发图：11 卡+入口链接+项目名替换",
+      "area": "执行",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 2949
+    },
+    {
+      "id": "R32",
+      "name": "内容选题单：场景生成/下载/空口径占位",
+      "area": "执行",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3652
+    },
+    {
+      "id": "R33",
+      "name": "90天方案：预填/差距联动/布防持久",
+      "area": "执行",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 6043
+    },
+    {
+      "id": "R34",
+      "name": "Agent 提示词：本地化替换+复制",
+      "area": "执行",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3405
+    },
+    {
+      "id": "R35",
+      "name": "对话助手：打开窗口+FAQ 问答",
+      "area": "执行",
+      "status": "PASS",
+      "issues": [],
+      "notes": [
+        "回复摘要: 你好，我是本系统的使用助手（已接入你的实时数据）。可以问我「怎么用这个系统」「解读诊断结果」「下一步做什么」，或任何园区GEO问题。 先打开【项目库】，搜索项目"
+      ],
+      "errors": [],
+      "ms": 13193
+    },
+    {
+      "id": "R36",
+      "name": "手工录入：全字段保存→台账/KPI 联动",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4564
+    },
+    {
+      "id": "R37",
+      "name": "同日同引擎同问题重复录入：是否有防呆",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 5471
+    },
+    {
+      "id": "R38",
+      "name": "批量粘贴：解析预览→导入→快照推进",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4810
+    },
+    {
+      "id": "R39",
+      "name": "批量粘贴：坏行提示/只导有效行",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4870
+    },
+    {
+      "id": "R40",
+      "name": "批量粘贴：重复行跳过提示",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4033
+    },
+    {
+      "id": "R41",
+      "name": "贴答案自动填：解析结果人工核对后才入库",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 9226
+    },
+    {
+      "id": "R42",
+      "name": "跑一轮30问（信源侧）：进度条/台账/探针/停止",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 10643
+    },
+    {
+      "id": "R43",
+      "name": "AI 代问：自动录入+AI标+统计另计",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 81017
+    },
+    {
+      "id": "R44",
+      "name": "台账：删行/清空（confirm）→KPI 归零",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4936
+    },
+    {
+      "id": "R45",
+      "name": "引用诊断：域名榜/诊断矩阵/工单生成/下钻",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3699
+    },
+    {
+      "id": "R46",
+      "name": "修复队列：排序视图下编辑/删除是否作用错对象",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4788
+    },
+    {
+      "id": "R47",
+      "name": "业务结果：月度登记/删除/IT说明复制",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4478
+    },
+    {
+      "id": "R48",
+      "name": "发展曲线：chips/引擎筛选/记事件/口径脚注",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4076
+    },
+    {
+      "id": "R49",
+      "name": "问题矩阵管理：编辑/添加/删除/批量替换",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 6073
+    },
+    {
+      "id": "R50",
+      "name": "快速检测：任意词搜索前列信源+自有标绿",
+      "area": "监测",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 3065
+    }
+  ]
+}

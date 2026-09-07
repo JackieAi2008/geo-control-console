@@ -1,0 +1,138 @@
+{
+  "pass": 13,
+  "issueRounds": 0,
+  "errorRounds": 0,
+  "total": 13,
+  "results": [
+    {
+      "id": "R51",
+      "name": "完整业务流：无官网新项目从建到看变化",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 7600
+    },
+    {
+      "id": "R52",
+      "name": "完整业务流：有官网项目体检→工单→方案→物料",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 6762
+    },
+    {
+      "id": "R53",
+      "name": "双项目切换：诊断/矩阵/物料/渠道图全不串",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4810
+    },
+    {
+      "id": "R54",
+      "name": "工作台「下一步」按状态推导",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 4479
+    },
+    {
+      "id": "R55",
+      "name": "导航：5 tab/hash 直达/legacy 路由/项目 chip 两态",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 5989
+    },
+    {
+      "id": "R56",
+      "name": "本地模式兜底：页脚导出/导入+模式徽标",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 2751
+    },
+    {
+      "id": "R57",
+      "name": "备份与恢复：API 备份→restore 校验",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 1730
+    },
+    {
+      "id": "R58",
+      "name": "LLM 设置：服务商预填/连接测试/密钥脱敏",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 2833
+    },
+    {
+      "id": "R59",
+      "name": "API 边界：乐观锁/空项目名/归档不存在项",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 1696
+    },
+    {
+      "id": "R60",
+      "name": "操作留痕：本会话关键动作均有大白话记录",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 1688
+    },
+    {
+      "id": "R61",
+      "name": "项目库内改他项目形态：快照分母口径是否同步",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 7293
+    },
+    {
+      "id": "R62",
+      "name": "非当前项目改形态：体检页与快照分母一致",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 5913
+    },
+    {
+      "id": "R63",
+      "name": "改动后立即刷新：pagehide flush 不丢数据",
+      "area": "跨流程与系统层",
+      "status": "PASS",
+      "issues": [],
+      "notes": [],
+      "errors": [],
+      "ms": 7720
+    }
+  ]
+}

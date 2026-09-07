@@ -97,7 +97,11 @@ async function saveProjMeta(partial) {
 function loadCurrentState() {
   try { state = Object.assign(defaultState(), JSON.parse(localStorage.getItem(projKey(CUR)) || "{}")); }
   catch (e) { state = defaultState(); }
-  if (!state.entityMode) state.entityMode = entMode();   /* V4.5：老项目按项目形态推导（有url→parent，无url→none） */
+  /* V0.2.2 F3：承载形态唯一真相=项目元数据——每次装载无条件对齐 state.entityMode。
+     此前仅在为空时回填：项目库内改非当前项目形态后，该项目 state 残留旧值，
+     computeSnapshot（工作台体检成熟度/发展曲线分母）按 30 项计，与体检页 24 项口径不一致 */
+  const _mode = entMode();
+  if (state.entityMode !== _mode) { state.entityMode = _mode; try { save(); } catch (e) {} }
   migrateProbes();
   migrateStatsV2();
 }
@@ -521,6 +525,20 @@ const save = (opts) => {
   try { localStorage.setItem(projKey(CUR), JSON.stringify(state)); } catch (e) {}
   if (SERVER_MODE) { clearTimeout(saveTimer); saveTimer = setTimeout(serverSave, 400); }
 };
+/* V0.2.2 F4：页面卸载/切后台时强制 flush 防抖中的保存（keepalive）——
+   此前 400ms 防抖窗口内刷新/关闭，服务器旧态会在下次装载时整包覆盖本地新态，最后一次改动丢失 */
+async function serverSaveFlush(keepalive) {
+  if (!SERVER_MODE || !saveTimer) return;
+  clearTimeout(saveTimer); saveTimer = null;
+  try {
+    const body = { project: CUR, state, base_rev: REV_BASE, operator: (localStorage.getItem("geodesk.operator") || "") };
+    if (SAVE_AUDIT && SAVE_AUDIT.silent) body.auditSilent = true;
+    if (SAVE_AUDIT && SAVE_AUDIT.action) { body.auditAction = SAVE_AUDIT.action; body.auditDetail = SAVE_AUDIT.detail || ""; }
+    await fetch("/api/data", { method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body), keepalive: !!keepalive });
+    SAVE_AUDIT = null;
+  } catch (e) { /* flush 失败不打断卸载；localStorage 仍保有数据 */ }
+}
 async function loadProjectFromServer() {
   const remote = await API.load(CUR);
   if (!remote || typeof remote !== "object") return;
@@ -541,6 +559,10 @@ async function loadProjectFromServer() {
     migrateStatsV2();  /* V4.2：服务器分支同样执行口径迁移（channel标记+快照重算） */
     SERVER_BASE = JSON.parse(JSON.stringify(state));
   }
+  /* V0.2.2 F3：服务器态装载后再对齐承载形态——此刻 PROJECTS 元数据已从服务器刷新，
+     项目库内改非当前项目形态后进入该项目，state.entityMode 不再残留旧值（快照/体检分母一致） */
+  const _mode2 = entMode();
+  if (state.entityMode !== _mode2) { state.entityMode = _mode2; try { save(); } catch (e) {} }
 }
 async function initServerMode() {
   if (!(await API.ping())) return;
@@ -609,12 +631,13 @@ async function runProbe() {
   btn.classList.remove("is-busy"); btn.textContent = "检测";
   if (res.error) { out.innerHTML = `<p class="muted" style="color:var(--color-bad)">检测失败：${esc(res.error)}</p>`; return; }
   const OWN = curOwn();   /* V4：自有渠道判定用当前项目的域名 */
-  out.innerHTML = (res.results || []).map((r, i) => {
+  /* V0.2.2 F10：括号修复——原 `join("") || '<p>' + 脚注` 因 || 优先于 + 生效，有结果时口径脚注被短路永不渲染 */
+  out.innerHTML = ((res.results || []).map((r, i) => {
     const own = OWN.some(d => (r.url || "").includes(d));
     return `<div class="prompt-li"><span class="code num">${String(i + 1).padStart(2, "0")}</span>
       <span style="flex:1;min-width:0">${own ? '<span class="tag tag-ok">自有渠道</span> ' : ""}${esc(r.title || "(无标题)")}<br>
       <a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--color-info);font-size:12px;word-break:break-all">${esc(r.url)}</a></span></div>`;
-  }).join("") || '<p class="muted">无结果</p>' +
+  }).join("") || '<p class="muted">无结果</p>') +
     `<p class="muted" style="margin-top:8px">信源口径：这是实时检索通道的素材池。若前10无自有渠道，AI 引用时只能依赖第三方信源——与 2026-09-04 起始数据同方法。</p>`;
 }
 
@@ -1181,7 +1204,7 @@ function fixPriority(f) {
 function addFixOrder(o) {
   state.fixQueue = state.fixQueue || [];
   state.fixQueue.push(Object.assign({
-    id: "W" + Date.now().toString(36).slice(-5), created: today(), status: FIX_STATUS[0],
+    id: "W" + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 4), created: today(), status: FIX_STATUS[0],
     owner: "", due: "", factors: { biz: 3, gap: 4, fix: 3, acc: 3, effort: 2 },
     verified: false, verifiedNote: "",
   }, o));
@@ -1190,7 +1213,7 @@ function addFixOrder(o) {
 function renderFixQueue() {
   const box = $("#fixQueueBox"); if (!box) return;
   const q = (state.fixQueue || []).slice().sort((a, b) => fixPriority(b.factors) - fixPriority(a.factors));
-  box.innerHTML = q.length ? q.map((o, i) => `
+  box.innerHTML = q.length ? q.map(o => `
     <div class="prompt-li" style="align-items:flex-start">
       <span style="flex:1;min-width:0">
         <b>${esc(o.title)}</b> <span class="tag ${o.status === "已验证" ? "tag-ok" : ""}">${o.status}</span>
@@ -1198,28 +1221,30 @@ function renderFixQueue() {
         <span class="muted num" style="font-size:11px">${esc(o.channel || "")} · ${o.created}${o.prompts && o.prompts.length ? ` · 覆盖${o.prompts.length}问(${o.prompts.slice(0, 4).join(",")}${o.prompts.length > 4 ? "…" : ""})` : ""}</span><br>
         <span class="muted" style="font-size:11px">${esc(o.detail || "")}</span>
         <span style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center">
-          <input class="inp fq-in" data-fq="owner|${i}" placeholder="责任人" value="${esc(o.owner)}" style="max-width:90px;min-height:32px">
-          <input class="inp fq-in" type="date" data-fq="due|${i}" value="${esc(o.due)}" style="max-width:140px;min-height:32px">
+          <input class="inp fq-in" data-fq="owner|${esc(o.id)}" placeholder="责任人" value="${esc(o.owner)}" style="max-width:90px;min-height:32px">
+          <input class="inp fq-in" type="date" data-fq="due|${esc(o.id)}" value="${esc(o.due)}" style="max-width:140px;min-height:32px">
           ${[["biz", "价值"], ["gap", "缺口"], ["fix", "可修"], ["acc", "风险"], ["effort", "工作量"]].map(([k, n]) =>
-            `<select class="sel fq-in" data-fq="${k}|${i}" title="${n}(1-5)" style="min-width:52px;min-height:32px">${[1,2,3,4,5].map(v => `<option${v == o.factors[k] ? " selected" : ""}>${v}</option>`).join("")}</select>`).join("")}
-          <button class="btn btn-sm btn-ghost" data-fqst="${i}">${o.status === "已整改" ? "✓标记已验证(被引/收录)" : "状态→下一档"}</button>
-          <button class="btn btn-sm btn-danger" data-fqdel="${i}">删</button>
+            `<select class="sel fq-in" data-fq="${k}|${esc(o.id)}" title="${n}(1-5)" style="min-width:52px;min-height:32px">${[1,2,3,4,5].map(v => `<option${v == o.factors[k] ? " selected" : ""}>${v}</option>`).join("")}</select>`).join("")}
+          <button class="btn btn-sm btn-ghost" data-fqst="${esc(o.id)}">${o.status === "已整改" ? "✓标记已验证(被引/收录)" : "状态→下一档"}</button>
+          <button class="btn btn-sm btn-danger" data-fqdel="${esc(o.id)}">删</button>
         </span>
         ${o.verified ? `<span class="tag tag-ok" style="margin-top:4px">部署后验证通过：${esc(o.verifiedNote || "已确认被收录/被引用")}</span>` : ""}
       </span>
     </div>`).join("") : '<p class="muted" style="font-size:12px">队列为空——从上方诊断矩阵「生成工单」，或手动 <button class="btn btn-sm btn-ghost" id="fqAdd">＋添加工单</button></p>';
   const addBtn = $("#fqAdd");
   if (addBtn) addBtn.addEventListener("click", () => { addFixOrder({ title: prompt("工单标题？") || "未命名工单", channel: "手动" }); renderFixQueue(); });
+  /* V0.2.2 F1：排序视图下按工单 id 定位（此前按排序序号取 state 数组索引——排序序≠存储序时编辑/删除作用到错误工单） */
+  const byId = id => (state.fixQueue || []).find(x => x.id === id);
   $$("#fixQueueBox [data-fq]").forEach(inp => inp.addEventListener("change", () => {
-    const [k, i] = inp.dataset.fq.split("|");
-    const o = (state.fixQueue || [])[+i]; if (!o) return;
+    const [k, id] = inp.dataset.fq.split("|");
+    const o = byId(id); if (!o) return;
     if (k === "owner") o.owner = inp.value.trim();
     else if (k === "due") o.due = inp.value;
     else o.factors[k] = +inp.value;
     save(); renderFixQueue();
   }));
   $$("#fixQueueBox [data-fqst]").forEach(b => b.addEventListener("click", () => {
-    const o = (state.fixQueue || [])[+b.dataset.fqst]; if (!o) return;
+    const o = byId(b.dataset.fqst); if (!o) return;
     const cur = FIX_STATUS.indexOf(o.status);
     o.status = FIX_STATUS[(cur + 1) % FIX_STATUS.length];
     if (o.status === "已验证") { o.verified = true; o.verifiedNote = prompt("验证依据（如：已在豆包P20回答中被引/已被百度收录）", o.verifiedNote || "") || ""; addEvent("wo", `修复验证：${o.title}`, today()); }
@@ -1227,7 +1252,7 @@ function renderFixQueue() {
   }));
   $$("#fixQueueBox [data-fqdel]").forEach(b => b.addEventListener("click", () => {
     if (!confirm("删除该工单？")) return;
-    state.fixQueue.splice(+b.dataset.fqdel, 1); save(); renderFixQueue();
+    state.fixQueue = (state.fixQueue || []).filter(x => x.id !== b.dataset.fqdel); save(); renderFixQueue();
   }));
 }
 
@@ -1454,21 +1479,22 @@ render.dashboard = () => {
     <span class="muted" style="font-size:11px">口径表 ${state.caliber.length} 字段 · ${state.caliber.filter(r => (r.conflicts || []).length).length} 冲突</span></p>
     <a href="#/diag/caliber" class="mini-link">去治理 →</a>`;
 
-  /* V6 1.6 四步起步向导卡（三空项目：口径空 或 未体检） */
+  /* V6 1.6 四步起步向导卡（新项目起步路径）
+     V0.2.2 F2：显示条件改「四步未全部完成」——原「口径空||未体检||已填<3」在完成①②后即隐藏，
+     ③下载百科稿/④地图认领永远失去引导，进度不可能到 4/4 */
   const ob = $("#dashOnboard");
   const filledCal = state.caliber.filter(r => (r.official || "").trim()).length;
-  const calEmpty = !state.caliber.length, diagEmpty = !state.lastDiag;
   if (ob) {
-    const isFresh = calEmpty || diagEmpty || filledCal < 3;
+    const hasTk = ((state.watchPages || state.fixQueue || []).length > 0) || !!(state.planInputs || {}).everBuilt;   /* V0.2.2：state.watch→watchPages（③ 完成判定此前恒 false 的笔误同修） */
+    const steps = [
+      { ok: filledCal >= 3, t: "① 填口径骨架", d: "锚定实体全称/地址，填 3 个最关键数字（10 分钟）", href: "#/diag/caliber", est: "10 分钟" },
+      { ok: !!state.lastDiag, t: "② 跑体检 + 看谁在替你说话", d: "一键真实搜索，看这个项目在网上现在是什么样子（2 分钟）", href: "#/diag/scan", est: "2 分钟" },
+      { ok: hasTk, t: "③ 下载《百科词条更新稿》", d: "按稿提交创建/更新词条——没有官网的项目，百科就是第一官方门面（15 分钟）", href: "#/act/toolkit", est: "15 分钟" },
+      { ok: !!(state.onboard || {}).mapDone, t: "④ 三大地图认领", d: "按《地图信息核对清单》在高德/百度/腾讯认领（清单已生成）", href: "#/act/toolkit", est: "10 分钟" },
+    ];
+    const isFresh = steps.some(x => !x.ok);
     ob.hidden = !isFresh;
     if (isFresh) {
-      const hasTk = (state.watch || state.fixQueue || []).length > 0 || !!(state.planInputs || {}).everBuilt;
-      const steps = [
-        { ok: filledCal >= 3, t: "① 填口径骨架", d: "锚定实体全称/地址，填 3 个最关键数字（10 分钟）", href: "#/diag/caliber", est: "10 分钟" },
-        { ok: !!state.lastDiag, t: "② 跑体检 + 看谁在替你说话", d: "一键真实搜索，看这个项目在网上现在是什么样子（2 分钟）", href: "#/diag/scan", est: "2 分钟" },
-        { ok: hasTk, t: "③ 下载《百科词条更新稿》", d: "按稿提交创建/更新词条——没有官网的项目，百科就是第一官方门面（15 分钟）", href: "#/act/toolkit", est: "15 分钟" },
-        { ok: !!(state.onboard || {}).mapDone, t: "④ 三大地图认领", d: "按《地图信息核对清单》在高德/百度/腾讯认领（清单已生成）", href: "#/act/toolkit", est: "10 分钟" },
-      ];
       const done = steps.filter(x => x.ok).length;
       $("#obSteps").innerHTML = steps.map(x => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--color-paper-2);border:1px solid var(--color-line)">
@@ -1709,11 +1735,16 @@ async function saveProjEdit() {
   const p = PROJECTS.find(x => x.id === pid);
   if (!p) return;
   const modeEl = document.querySelector('input[name="peMode"]:checked');
+  const mode = modeEl ? modeEl.value : p.entityMode;
+  const urlVal = (mode === "none") ? "" : $("#peUrl").value.trim().slice(0, 120);
+  /* V0.2.2 F6：own/parent 形态空域名拦截（与新建弹窗同一校验）——此前可静默保存空域名：
+     形态来回切换后域名丢失无提示，一键诊断预填随之为空 */
+  if (mode !== "none" && !urlVal) { toast("请填官网承载页域名；确实没有官网就选「无官网（实体体检路线）」"); return; }
   const partial = {
     name: $("#peName").value.trim().slice(0, 60) || p.name,
     brand: $("#peBrand").value.trim().slice(0, 60),
-    entityMode: modeEl ? modeEl.value : p.entityMode,
-    url: (modeEl && modeEl.value === "none") ? "" : $("#peUrl").value.trim().slice(0, 120),
+    entityMode: mode,
+    url: urlVal,
     city: $("#peCity").value.trim().slice(0, 40),
     industries: $("#peInd").value.split(/[,，、;；\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 5),
     competitors: $("#peComp").value.split(/[,，、;；\s]+/).map(s => s.trim()).filter(Boolean).slice(0, 5),
@@ -1737,7 +1768,7 @@ async function rebuildPromptsByTier() {
   const tier = $("#peTier").value === "lite" ? "lite" : "park";
   /* 保存当前表单值（重建矩阵要用最新元数据） */
   await saveProjEdit();
-  if (!confirm(`按「${tier === "lite" ? "轻量版 12 问" : "完整版 30 问"}」重新生成问题矩阵？\n（会覆盖问题矩阵里的手动编辑；已录台账与曲线不受影响）`)) return;
+  if (!confirm(`按「${tier === "lite" ? "轻量版 14 问" : "完整版 30 问"}」重新生成问题矩阵？\n（会覆盖问题矩阵里的手动编辑；已录台账与曲线不受影响）`)) return;
   if (CUR === pid) {
     state.prompts = instPrompts(Object.assign({}, p, { district: caliberDistrict() }), tier);
     save();
@@ -2111,6 +2142,10 @@ function saveRecord() {
     cooccur: $("#mCooccur").value.split(/[、,，;；\s]+/).map(s => s.trim()).filter(Boolean),   /* V4：竞品同时出现 */
   };
   if (!r.engine) { toast("请选择引擎"); return; }
+  /* V0.2.2 F11：同日+同引擎+同问题重复录入防呆——批量导入有去重提示，手工保存此前无任何提示，
+     误按两下即产生重复行稀释提及率均值 */
+  const dup = state.ledger.some(x => x.date === r.date && x.engine === r.engine && x.promptId === r.promptId);
+  if (dup && !confirm("今天已录过同引擎同问题的一条记录。\n\n· 重跑复核 → 确定（两条都保留，统计按两条计）\n· 误触重复 → 取消（不保存）")) return;
   state.ledger.push(r); save(); pushSnapshot("round"); render.monitor(); toast("已保存记录 ✓");
   $("#mUrl").value = ""; $("#mNote").value = ""; $("#mCooccur").value = "";
 }
@@ -2544,7 +2579,8 @@ ${GEO.audit.map(d => {
     download(`园区GEO体检报告-${today()}.md`, md, "text/markdown");
   });
   $("#auditReset").addEventListener("click", () => {
-    if (confirm(`清空全部${auditN()}项打分？`)) { state.audit = defaultState().audit; save(); render.audit(); toast("已清空"); }
+    /* V0.2.2 F8：清空重评一并清「自动填入」痕——否则体检表仍满标「自动」，且下次诊断会静默重填旧值 */
+    if (confirm(`清空全部${auditN()}项打分？`)) { state.audit = defaultState().audit; state.autoAudit = {}; save(); render.audit(); toast("已清空"); }
   });
   $("#scorerRun").addEventListener("click", runScorer);
   $("#briefGen").addEventListener("click", gen选题单);
@@ -2579,6 +2615,9 @@ ${GEO.audit.map(d => {
     rd.readAsText(f);
   });
   $("#mDate").value = today();
+  /* V0.2.2 F4：卸载/切后台 flush 防抖保存（pagehide 覆盖刷新/关闭/跳转；visibilitychange 覆盖切标签页与移动端切后台） */
+  window.addEventListener("pagehide", () => { serverSaveFlush(true); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") serverSaveFlush(true); });
 }
 
 initProjects();   /* V4：模块级装载项目层（置于文件末尾：此时 save/API 等常量均已定义，migrateProbes 可安全调用；node harness 亦适用） */
@@ -2653,7 +2692,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "0.2.0";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.2.2";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }
