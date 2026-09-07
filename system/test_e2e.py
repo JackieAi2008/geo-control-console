@@ -672,7 +672,7 @@ console.log(JSON.stringify({
         check("V6.1.1 引导漏斗记录", d.get("record", {}).get("exit") == "skip" and d.get("record", {}).get("maxStep") == 6
               and d.get("show") is False, f"record={d.get('record')}")
         s, d = reqh("GET", "/api/ping")
-        check("V0.1 版本号0.2.5", d.get("version") == "0.2.5", f"v={d.get('version')}")
+        check("V0.1 版本号0.2.6", d.get("version") == "0.2.6", f"v={d.get('version')}")
         with urllib.request.urlopen(ROOT + "/js/chat.js", timeout=10) as _resp:
             _cjs = _resp.read().decode("utf-8", "ignore"); _s2 = _resp.status
         check("V0.2.0 C1 chat项目感知", _s2 == 200 and "projectRecoAnswer" in _cjs and "你的项目实时数据" in _cjs,
@@ -683,7 +683,7 @@ console.log(JSON.stringify({
             check(f"V6.1 静态资源 {path}", resp.status == 200 and mark in body, f"含「{mark}」")
         with urllib.request.urlopen(ROOT + "/", timeout=10) as resp:
             idx_html = resp.read().decode("utf-8", "ignore")
-        check("V0.1 版本戳统一0.2.5", idx_html.count("?v=0.2.5") >= 9 and "?v=0.1.13" not in idx_html
+        check("V0.1 版本戳统一0.2.6", idx_html.count("?v=0.2.6") >= 9 and "?v=0.1.13" not in idx_html
               and "?v=6.2.0" not in idx_html and "?v=6.1.2" not in idx_html and "?v=6.1.1" not in idx_html
               and "?v=6.1.0" not in idx_html and "?v=6.0.0" not in idx_html and "?v=4.7.7" not in idx_html
               and "?v=4.7.3" not in idx_html,

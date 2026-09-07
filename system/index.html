@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>招商产园 GEO 智控台</title>
 <meta name="description" content="招商蛇口产业园区（招商产园）生成式引擎优化工作台：诊断、行动、监测三阶段闭环">
-<link rel="stylesheet" href="css/tokens.css?v=0.2.5">
-<link rel="stylesheet" href="css/app.css?v=0.2.5">
-<link rel="stylesheet" href="css/tour.css?v=0.2.5">
+<link rel="stylesheet" href="css/tokens.css?v=0.2.6">
+<link rel="stylesheet" href="css/app.css?v=0.2.6">
+<link rel="stylesheet" href="css/tour.css?v=0.2.6">
 </head>
 <body>
 
@@ -320,7 +320,7 @@
 
   <!-- 子页：一键优化文件（真实可部署物料 + 渠道分发图） -->
   <div class="sub-view" id="sub-toolkit">
-    <div class="card">
+    <div class="card" id="tkFormCard">
       <h3>生成优化文件 <span class="hint">数据取自口径表，【待填】处发布前补齐</span></h3>
       <div class="form-grid">
         <label class="lb">园区名<input id="tkPark" class="inp" placeholder="如：蛇口网谷"></label>
@@ -453,9 +453,36 @@
     <p>双周一轮，统计各引擎提及率与自有渠道命中率。</p>
   </div>
   <div class="grid grid-3" id="monStats"></div>
+  <!-- V0.2.6 监测页重排：两个自动动作（AI代问/30问）提到最前——用户最高频的真实动作不该藏在⑤⑥；
+       顶部导引卡回答「这两个有什么区别」：答案侧 vs 信源侧 -->
+  <div class="card" style="margin-top:16px">
+    <h3>先跑两个自动动作 <span class="hint">共约 5 分钟，跑完下方图表与台账自动出数</span></h3>
+    <p style="font-size:var(--text-sm);margin:0 0 6px"><b>「AI 代问」查答案侧：</b>系统替你向豆包逐条提问（联网检索），自动记录 AI 的回答里提不提这个园区，约 1–3 分钟，结果就在下方①卡。</p>
+    <p style="font-size:var(--text-sm);margin:0 0 6px"><b>「一键跑 30 问」查信源侧：</b>系统对 30 个问题做真实搜索，记录每个问题前 10 名被哪些网站占着，约 2–4 分钟。</p>
+    <p class="muted" style="margin:0">一个看 AI 说了什么，一个看 AI 能引用到谁，两边都跑。腾讯元宝等暂无接口的引擎用②卡人工采样补。</p>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3>① AI 代问 + 本轮人工采样 <span class="tag tag-ok">人工部分预计 ≤20 分钟</span></h3>
+    <div id="sampleCard"></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3><span id="batchH3">② 一键跑30问（信源侧真实搜索）</span>
+      <span style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary btn-sm" id="batchRun">跑一轮30问（真实搜索）</button>
+        <button class="btn btn-danger btn-sm" id="batchStop" hidden>停止</button>
+      </span>
+    </h3>
+    <div style="display:flex;align-items:center;gap:10px;margin:8px 0 4px">
+      <div style="flex:1;height:10px;background:var(--color-paper-3);border:1px solid var(--color-line);border-radius:5px;overflow:hidden">
+        <div id="batchBar" style="height:100%;width:0;background:var(--color-accent);transition:width .3s var(--ease-out)"></div>
+      </div>
+      <span class="num" id="batchPct" style="font-size:12px;color:var(--color-ink-2);white-space:nowrap">0%</span>
+    </div>
+    <p class="muted" id="batchTxt"><b class="num">0/30</b> · 待运行。逐条真实搜索30问并自动写入台账（引擎=搜索通道，记录前10域名），约2–4分钟；运行中此条实时显示「N/30 · 当前问题」。豆包用上方「AI 代问」自动录入；元宝等暂无公开接口的引擎，在上方①卡的人工采样区逐条录入。</p>
+  </div>
   <div class="grid grid-2" style="margin-top:16px">
     <div class="card">
-      <h3><span class="h3-title">① 提问矩阵</span> <span class="hint">按重要程度优先提问 · 点击「复制」到各引擎提问
+      <h3><span class="h3-title">③ 提问矩阵</span> <span class="hint">按重要程度优先提问 · 点击「复制」到各引擎提问
         <span style="display:flex;gap:6px;margin-top:4px"><button class="btn btn-sm btn-ghost" id="paToggle">管理问题矩阵</button></span></span>
       </h3>
       <div class="filter-row" id="promptFilter"></div>
@@ -463,7 +490,7 @@
       <div id="promptList"></div>
     </div>
     <div class="card">
-      <h3>② 录入一条监测结果</h3>
+      <h3>④ 录入一条监测结果</h3>
       <div class="form-grid">
         <label class="lb">监测日期<input type="date" id="mDate" class="inp"></label>
         <label class="lb">引擎<select id="mEngine" class="sel"></select></label>
@@ -484,31 +511,12 @@
     </div>
   </div>
   <div class="grid grid-2" style="margin-top:16px">
-    <div class="card"><h3>③ 引擎 × 类别 提及率图表</h3><div id="heatBox"></div></div>
+    <div class="card"><h3>⑤ 引擎 × 类别 提及率图表</h3><div id="heatBox"></div></div>
     <div class="card">
-      <h3>④ GEO 发展曲线 <span class="hint">快照自动积累 · 悬浮看点位值与样本量</span></h3>
+      <h3>⑥ GEO 发展曲线 <span class="hint">快照自动积累 · 悬浮看点位值与样本量</span></h3>
       <div class="filter-row" id="curveChips" style="margin-bottom:8px"></div>
       <div id="curveBox"></div>
     </div>
-  </div>
-  <div class="card" style="margin-top:16px">
-    <h3><span id="batchH3">⑤ 一键跑30问（信源侧真实搜索）</span>
-      <span style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-primary btn-sm" id="batchRun">跑一轮30问（真实搜索）</button>
-        <button class="btn btn-danger btn-sm" id="batchStop" hidden>停止</button>
-      </span>
-    </h3>
-    <div style="display:flex;align-items:center;gap:10px;margin:8px 0 4px">
-      <div style="flex:1;height:10px;background:var(--color-paper-3);border:1px solid var(--color-line);border-radius:5px;overflow:hidden">
-        <div id="batchBar" style="height:100%;width:0;background:var(--color-accent);transition:width .3s var(--ease-out)"></div>
-      </div>
-      <span class="num" id="batchPct" style="font-size:12px;color:var(--color-ink-2);white-space:nowrap">0%</span>
-    </div>
-    <p class="muted" id="batchTxt"><b class="num">0/30</b> · 待运行。逐条真实搜索30问并自动写入台账（引擎=搜索通道，记录前10域名），约2–4分钟；运行中此条实时显示「N/30 · 当前问题」。豆包支持「AI 代问」自动提问录入（下方⑥区）；元宝等暂无公开接口的引擎仍需人工提问录入。</p>
-  </div>
-  <div class="card" style="margin-top:16px">
-    <h3>⑥ 本轮人工采样 <span class="tag tag-ok">预计 ≤20 分钟</span></h3>
-    <div id="sampleCard"></div>
   </div>
   <div class="card" id="probeCard" style="margin-top:16px" hidden>
     <h3>快速检测 <span class="hint">任意词真实搜索看前列信源</span></h3>
@@ -767,10 +775,10 @@
   </div>
 </div>
 
-<script src="js/data.js?v=0.2.5"></script>
-<script src="js/app.js?v=0.2.5"></script>
-<script src="js/ops.js?v=0.2.5"></script>
-<script src="js/tour.js?v=0.2.5"></script>
+<script src="js/data.js?v=0.2.6"></script>
+<script src="js/app.js?v=0.2.6"></script>
+<script src="js/ops.js?v=0.2.6"></script>
+<script src="js/tour.js?v=0.2.6"></script>
 <!-- V4.3：绕强缓存——如果浏览器带的是 V4.2 之前的 chat.js（LLM_PROVIDERS 只有 1 个 key），
      自动在 URL 加 ?v=4.3 强制刷新一次，下一次正常加载 -->
 <script>
@@ -785,7 +793,7 @@
     } catch (e) {}
   })();
 </script>
-<script src="js/chat-kb.js?v=0.2.5"></script>
-<script src="js/chat.js?v=0.2.5"></script>
+<script src="js/chat-kb.js?v=0.2.6"></script>
+<script src="js/chat.js?v=0.2.6"></script>
 </body>
 </html>

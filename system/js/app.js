@@ -602,7 +602,7 @@ async function initServerMode() {
     const fresh = await API.projects();
     /* V4.6 活跃/归档分离：PROJECTS=可进入项目；ARCHIVED_PROJS=项目库「含已归档」开关下灰显+可恢复 */
     const mapP = p => ({ id: p.id, name: p.name, url: p.url || "", brand: p.brand || "",
-                         operator: p.operator || "", entityMode: p.entityMode || "", archived: !!p.archived,
+                         operator: p.operator || "", entityMode: p.entityMode || "", archived: !!p.archived, sample: !!p.sample,   /* V0.2.6：sample 标记随投影下传（此前客户端丢弃→项目卡「示例·可改名」标永不显示）*/
                          city: p.city || "", industries: p.industries || [], competitors: p.competitors || [],
                          matrixTier: p.matrixTier || "park",
                          groupDomains: p.groupDomains || [],
@@ -668,6 +668,20 @@ function route() {
     sub = subs.includes(subRaw) ? subRaw : subs[0];
     $$(".sub-view", $("#view-" + v)).forEach(s => s.hidden = s.id !== "sub-" + sub);
     $$("[data-subnav=" + v + "] button").forEach(b => b.classList.toggle("on", b.dataset.sub === sub));
+  }
+  /* V0.2.6：#/act/toolkit/baike|map 深链——起步四步「前往」直达具体物料：生成过就滚到那张卡并高亮，
+     没生成先落到「一键生成」表单并指路（否则用户落地只见表单，不知道下载的东西在哪） */
+  if (v === "act" && (subRaw === "toolkit/baike" || subRaw === "toolkit/map")) {
+    const kw = subRaw === "toolkit/baike" ? "百科" : "地图";
+    setTimeout(() => {
+      const card = [...document.querySelectorAll("#tkOut .card")].find(c => (c.querySelector("h3")?.textContent || "").includes(kw));
+      const el = card || $("#tkFormCard");
+      if (!el) return;
+      el.scrollIntoView({ behavior: "auto", block: "start" });
+      el.style.outline = "2px solid var(--color-accent)";
+      setTimeout(() => { el.style.outline = ""; }, 2200);
+      if (!card) toast(`《${kw === "百科" ? "百科词条更新稿" : "地图信息核对清单"}》在优化文件里：先点「一键生成优化文件」（10 秒，数据取口径表），生成后列表里即可下载`);
+    }, 150);
   }
   /* V4.2：#/act/brief 直达「内容选题单」卡（原为死路由，只落到子页顶部） */
   if (v === "act" && subRaw === "brief") {
@@ -1580,8 +1594,8 @@ render.dashboard = () => {
     const steps = [
       { ok: filledCal >= 3, t: "① 填口径骨架", d: "锚定实体全称/地址，填 3 个最关键数字（10 分钟）", href: "#/diag/caliber", est: "10 分钟" },
       { ok: !!state.lastDiag, t: "② 跑体检 + 看谁在替你说话", d: "一键真实搜索，看这个项目在网上现在是什么样子（2 分钟）", href: "#/diag/scan", est: "2 分钟" },
-      { ok: hasTk, t: "③ 下载《百科词条更新稿》", d: "按稿提交创建/更新词条——没有官网的项目，百科就是第一官方门面（15 分钟）", href: "#/act/toolkit", est: "15 分钟" },
-      { ok: !!(state.onboard || {}).mapDone, t: "④ 三大地图认领", d: "按《地图信息核对清单》在高德/百度/腾讯认领（清单已生成）", href: "#/act/toolkit", est: "10 分钟" },
+      { ok: hasTk, t: "③ 下载《百科词条更新稿》", d: "按稿提交创建/更新词条——没有官网的项目，百科就是第一官方门面（15 分钟）", href: "#/act/toolkit/baike", est: "15 分钟" },
+      { ok: !!(state.onboard || {}).mapDone, t: "④ 三大地图认领", d: "按《地图信息核对清单》在高德/百度/腾讯认领（清单已生成）", href: "#/act/toolkit/map", est: "10 分钟" },
     ];
     const isFresh = steps.some(x => !x.ok);
     ob.hidden = !isFresh;
@@ -1601,6 +1615,10 @@ render.dashboard = () => {
 
   /* 下一步清单（按状态推导） */
   const todo = [];
+  /* V0.2.6：真实动作已发生在「示例项目」里——置顶提醒改名（品牌词/问题矩阵/物料署名都跟着项目名走） */
+  { const cp = curProject();
+    if ((cp.sample || cp.name === "示例项目") && (state.ledger.length || state.lastDiag || state.caliber.some(r => (r.official || "").trim())))
+      todo.unshift(["项目", "这个项目还叫「示例项目」——回项目库点卡片右下「设置」改成你的园区名（品牌词、问题矩阵、物料署名都会跟着改）", "#/projects"]); }
   if (!state.caliber.length) todo.push(["口径", "先建口径：骨架已生成（锚定实体/地址/片区+关键数字），填 3 个最关键字段即可开始", "#/diag/caliber"]);
   if (s.pct === 0) todo.push(["体检", (curProject() || {}).matrixTier === "lite" ? "完成实体资产清单打分，建立起始数据" : `完成${auditN()}项园区GEO体检，建立成熟度起始数据`, "#/diag/audit"]);
   /* V4.2：冲突提示带出真实字段名，不再写死蛇口网谷案例 */
@@ -1702,8 +1720,8 @@ function renderProjectCards(useServer) {
       ${woPending ? `<span class="pc-todo">⚠ ${woPending} 件整改任务待确认</span>` : ""}
       ${warn.length ? `<span class="pc-warn">${warn.slice(0, 2).map(w => `<span class="tag tag-warn">⚠ ${esc(w)}</span>`).join("")}</span>` : ""}
       <span class="pc-go">进入工作台 →</span>
-      <span class="pc-arch" data-set="${esc(p.id)}" title="修改项目信息（形态/城市/产业/竞品等）" role="button" tabindex="0">设置</span>
-      <span class="pc-arch" data-arch="${esc(p.id)}" title="归档（数据保留，可恢复）" role="button" tabindex="0">归档</span>
+      <span class="pc-acts"><span class="pc-arch" data-set="${esc(p.id)}" title="修改项目信息（名称/形态/城市/产业/竞品等）" role="button" tabindex="0">设置</span>
+      <span class="pc-arch" data-arch="${esc(p.id)}" title="归档（数据保留，可恢复）" role="button" tabindex="0">归档</span></span>
     </button>`;
   }).join("");
   /* 空库时欢迎区的大按钮负责新建；有项目时筛选无结果给明确提示（不再误显"新建第一个"） */
@@ -1735,7 +1753,7 @@ async function refreshProjectsFromServer() {
   if (d && Array.isArray(d.projects)) {
     SERVER_SUM = d.projects;
     const mapP = p => ({ id: p.id, name: p.name, url: p.url || "", brand: p.brand || "",
-                         operator: p.operator || "", entityMode: p.entityMode || "", archived: !!p.archived,
+                         operator: p.operator || "", entityMode: p.entityMode || "", archived: !!p.archived, sample: !!p.sample,   /* V0.2.6：sample 标记随投影下传（此前客户端丢弃→项目卡「示例·可改名」标永不显示）*/
                          city: p.city || "", industries: p.industries || [], competitors: p.competitors || [],
                          matrixTier: p.matrixTier || "park",
                          groupDomains: p.groupDomains || [],
@@ -2146,10 +2164,10 @@ ${plat}
 /* ══ 5. 监测 ══ */
 const ENGINE_LIST = ["豆包","DeepSeek","腾讯元宝","通义千问","文心一言","Kimi","百度AI搜索","秘塔","ChatGPT","Perplexity"];
 render.monitor = () => {
-  /* V5.1：⑤ 区文案跟档位（轻量版 12 问，不再硬编码"30问"） */
+  /* V5.1：30问卡文案跟档位（轻量版 12 问，不再硬编码"30问"）；V0.2.6 卡片重排后序号=② */
   const nQ = P_prompts().length;
   const bh5 = document.querySelector("#batchH3"), bb = $("#batchRun");
-  if (bh5) bh5.textContent = `⑤ 一键跑${nQ}问（信源侧真实搜索）`;   /* 只改 span（V5.1 误用 h3.textContent 抹掉过按钮，已隔离） */
+  if (bh5) bh5.textContent = `② 一键跑${nQ}问（信源侧真实搜索）`;   /* 只改 span（V5.1 误用 h3.textContent 抹掉过按钮，已隔离） */
   if (bb) bb.textContent = `跑一轮${nQ}问（真实搜索）`;
   const st = ledgerStats();
   $("#monStats").innerHTML = `
@@ -2280,6 +2298,8 @@ async function runAnswerBot() {
       toast(`AI 代问完成：${okN}/${st.total} 问已自动记入台账${fail.length ? `；${fail.length} 问未录：${fail[0].note}` : ""}`);
       const spot = qs.slice(0, 2).map(p => p.id).join("、");
       if (stat) stat.textContent = `本轮自动完成 ${okN}/${st.total}。腾讯元宝暂不能自动——请在元宝 App 里人工抽查 2 题（建议 ${spot}），点对应引擎名录入。`;
+      const rb = $("#botResult");   /* V0.2.6：结果块就在按钮下方，滚到位让用户看得见 */
+      if (rb) setTimeout(() => rb.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }), 200);
     }
   }, 2500);
 }
@@ -2295,7 +2315,7 @@ function renderSampleCard() {
   const rows = qs.map(p => {
     const cells = engs.map(e => {
       const ok = logged(p.id, e); if (ok) done++;
-      return `<button class="chip ${ok ? "on" : ""}" data-sample="${p.id}|${e}" title="点击选入②区表单：${e} · ${esc(p.q)}">${ok ? "✓ " : ""}${e}</button>`;
+      return `<button class="chip ${ok ? "on" : ""}" data-sample="${p.id}|${e}" title="点击选入④区表单：${e} · ${esc(p.q)}">${ok ? "✓ " : ""}${e}</button>`;
     }).join("");
     return `<div class="prompt-li"><span class="code">${p.id}</span>
       <span class="cat"><span class="tag">${esc(p.cat)} · 重要度${({ 5: "极高", 4: "高", 3: "中", 2: "低", 1: "低" })[p.severity || 3] || "中"}</span></span>
@@ -2312,12 +2332,25 @@ function renderSampleCard() {
     if (days > 90) stale = `距上次人工记录（${last}）已 ${days} 天，超过季度线——建议本季度补一次全量起始数据。`;
   }
   const total = qs.length * engs.length;
+  /* V0.2.6：最近一轮 AI 代问结果就地展示（此前只 toast 一句，答案散在台账里要自己找） */
+  const aiDates = state.ledger.filter(r => r.src === "api").map(r => r.date).sort();
+  const aiLast = aiDates[aiDates.length - 1];
+  const aiRows = aiLast ? state.ledger.filter(r => r.src === "api" && r.date === aiLast) : [];
+  const aiBlock = aiRows.length ? `
+    <div id="botResult" style="border:1px solid var(--color-line-2);border-radius:var(--radius-m);padding:10px 12px;margin:0 0 10px;background:var(--color-paper-2)">
+      <b style="font-size:var(--text-sm)">最近一轮 AI 代问结果（${esc(aiLast)} · ${aiRows.length} 条，已自动入台账）</b>
+      ${aiRows.map(r => { const q = P_prompts().find(x => x.id === r.promptId); const hit = +r.mention > 0;
+        return `<div class="prompt-li"><span class="code">${esc(r.promptId)}</span>
+          <span style="flex:1;min-width:0">${esc(q ? q.q : "")} → <b style="color:${hit ? "var(--color-ok)" : "var(--color-bad)"}">${hit ? "提及" : +r.mention === 0.5 ? "相似表述" : "未提及"}</b>${r.url ? ` · 引用 ${esc(hostOf2(r.url))}` : ""}</span></div>`; }).join("")}
+      <p class="muted" style="margin:6px 0 0;font-size:12px">完整记录在下方⑦监测台账（行带「AI」标）；跑一轮 30 问可对照看这些回答引用了哪些信源。</p>
+    </div>` : "";
   box.innerHTML = `
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px">
       <button class="btn btn-sm btn-primary" id="botRun">▶ AI 代问（豆包·自动录入）</button>
       <span class="muted" id="botStat" style="font-size:12px;flex:1;min-width:220px">系统替你向豆包逐条提问（联网检索），自动记入台账并打「AI」标，约 1–3 分钟；腾讯元宝暂不能自动，仍需人工。</span>
     </div>
-    <p class="muted" style="margin-top:0">本轮只测 <b class="num">${qs.length}</b> 个高严重度问题 × <b class="num">${engs.length}</b> 个引擎（${engs.join("、")}，人工覆盖最少的引擎优先轮换）＝ <b class="num">${total}</b> 条，今日已录 <b class="num" style="color:${done >= total ? "var(--color-ok)" : "var(--color-accent)"}">${done}/${total}</b>。每条动作用：复制问题 → 去引擎提问 → 点对应引擎名自动选入②区 → 保存。全量 30×6 留给季度起始数据。</p>
+    ${aiBlock}
+    <p class="muted" style="margin-top:0">本轮只测 <b class="num">${qs.length}</b> 个高严重度问题 × <b class="num">${engs.length}</b> 个引擎（${engs.join("、")}，人工覆盖最少的引擎优先轮换）＝ <b class="num">${total}</b> 条，今日已录 <b class="num" style="color:${done >= total ? "var(--color-ok)" : "var(--color-accent)"}">${done}/${total}</b>。每条动作用：复制问题 → 去引擎提问 → 点对应引擎名自动选入④区 → 保存。全量 30×6 留给季度起始数据。</p>
     ${stale ? `<p style="font-size:var(--text-sm);color:var(--color-warn);margin-top:4px">⚠ ${stale}</p>` : ""}
     ${rows}`;
   const botBtn = $("#botRun");
@@ -2784,7 +2817,7 @@ async function updateServerBadge() {
   const av = $("#appVer");
   if (!SERVER_MODE) {
     el.textContent = "本地模式（数据存浏览器）";
-    if (av) av.textContent = "0.2.5";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
+    if (av) av.textContent = "0.2.6";   /* 本地模式无后端可询，读前端内置版本（与 server APP_VERSION 同步维护） */
     if (se) se.hidden = false; if (si) si.hidden = false;
     return;
   }

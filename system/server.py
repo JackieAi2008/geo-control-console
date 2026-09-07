@@ -35,7 +35,7 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
 CHAT_MODELS_PREF = ["qwen3:4b-instruct-2507-q4_K_M", "qwen3.5:9b"]
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "0.2.5"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（0.2.5=口径表读表说明卡 caliberStory，与体检读分说明同范式）
+APP_VERSION = "0.2.6"   # 唯一版本源：页脚/接口自动跟随，发版时改这一处（0.2.6=生产实测流程批：示例项目改名引导/设置归档叠印/起步四步深链/监测页自动动作提前+信源答案侧解释/AI代问结果就地展示）
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json"}

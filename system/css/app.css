@@ -573,7 +573,8 @@ pre.prompt-view {
 
 /* ── V4 四期：组合视图 / 业务结果 ── */
 .pc-warn { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
-.pc-arch { position: absolute; right: 10px; bottom: 8px; font-size: 11px; color: var(--color-ink-3); border: 1px solid var(--color-line); border-radius: var(--radius-s); padding: 2px 8px; cursor: pointer; background: transparent; }
+.pc-acts { position: absolute; right: 10px; bottom: 8px; display: flex; gap: 6px; }   /* V0.2.6：设置/归档同位叠印修复——容器并排 */
+.pc-arch { font-size: 11px; color: var(--color-ink-3); border: 1px solid var(--color-line); border-radius: var(--radius-s); padding: 2px 8px; cursor: pointer; background: transparent; }
 .pc-arch:hover { color: var(--color-bad); border-color: var(--color-bad); }
 .proj-card { position: relative; }
 #cvEngine { margin-left: 4px; }
